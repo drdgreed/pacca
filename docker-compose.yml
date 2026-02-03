@@ -1,0 +1,115 @@
+# =============================================================================
+# PACCA Docker Compose Configuration
+# Local development environment setup
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PACCA API Service
+  # ---------------------------------------------------------------------------
+  pacca-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: pacca-api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=pacca
+      - APP_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DATABASE_URL=postgresql+asyncpg://pacca:pacca_dev@postgres:5432/pacca
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=true
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+      - ENABLE_AUTONOMOUS_DECISIONS=true
+      - ENABLE_RAG=true
+      - DEMO_MODE=true
+    volumes:
+      - ./src:/app/src:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - pacca-network
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: pacca-postgres
+    environment:
+      - POSTGRES_USER=pacca
+      - POSTGRES_PASSWORD=pacca_dev
+      - POSTGRES_DB=pacca
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pacca -d pacca"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pacca-network
+
+  # ---------------------------------------------------------------------------
+  # Redis Cache
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: pacca-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pacca-network
+
+  # ---------------------------------------------------------------------------
+  # ChromaDB Vector Store (for local RAG)
+  # ---------------------------------------------------------------------------
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: pacca-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=false
+    networks:
+      - pacca-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  pacca-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+  redis_data:
+  chroma_data:
