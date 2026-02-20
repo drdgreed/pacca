@@ -1,61 +1,81 @@
-import React, { useState } from 'react';
-import { AdminDashboard } from './components/AdminDashboard';
+import React, { useState, useEffect } from 'react';
 import { ProviderDashboard } from './components/ProviderDashboard';
-import { Login } from './components/Login';
+// We will build these two components next!
+import { LoginScreen } from './components/LoginScreen'; 
+import { DirectorQueue } from './components/DirectorQueue'; 
+import { AdminDashboard } from './components/AdminDashboard';
 
 function App() {
-  const [view, setView] = useState<'provider' | 'admin'>('provider');
-  // Check if token exists on initial load
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'));
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentView, setCurrentView] = useState<'provider' | 'director' | 'admin'>('provider');
 
-  // If not logged in, render ONLY the login screen
-  if (!isAuthenticated) {
-    return <Login onLoginSuccess={() => setIsAuthenticated(true)} />;
-  }
+  // Check if we already have a token when the app loads
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     setIsAuthenticated(false);
   };
 
-  return (
-    <div className="min-h-screen bg-gray-100 font-sans">
-      <nav className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg shadow-sm"></div>
-          <span className="text-xl font-bold text-gray-800 tracking-tight">PACCA <span className="text-indigo-600">Level 5</span></span>
-        </div>
-        
-        <div className="flex bg-gray-100 p-1 rounded-lg">
-          <button
-            onClick={() => setView('provider')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-              view === 'provider' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Provider View
-          </button>
-          <button
-            onClick={() => setView('admin')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-              view === 'admin' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Dark Factory Admin
-          </button>
-        </div>
+  // If not logged in, only show the login screen
+  if (!isAuthenticated) {
+    return <LoginScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
 
-        {/* Quick logout button */}
-        <button 
-          onClick={handleLogout}
-          className="text-sm font-medium text-gray-500 hover:text-red-600 transition-colors"
-        >
-          Logout
-        </button>
+  // If logged in, show the full app with Navigation
+  return (
+    <div className="min-h-screen bg-gray-100">
+      {/* Navigation Bar */}
+      <nav className="bg-indigo-700 text-white shadow-md">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center gap-6">
+            <h1 className="text-2xl font-bold tracking-tight">PACCA</h1>
+            <div className="space-x-1">
+              <button 
+                onClick={() => setCurrentView('provider')}
+                className={`px-4 py-2 rounded-md transition-colors ${currentView === 'provider' ? 'bg-indigo-800 font-semibold' : 'hover:bg-indigo-600'}`}
+              >
+                Submit Case
+              </button>
+              <button 
+                onClick={() => setCurrentView('director')}
+                className={`px-4 py-2 rounded-md transition-colors ${currentView === 'director' ? 'bg-indigo-800 font-semibold' : 'hover:bg-indigo-600'}`}
+              >
+                Director Queue
+              </button>
+            </div>
+          </div>
+          
+<button 
+  onClick={() => setCurrentView('admin')}
+  className={`px-4 py-2 rounded-md transition-colors ${currentView === 'admin' ? 'bg-indigo-800 font-semibold' : 'hover:bg-indigo-600'}`}
+>
+  Admin Panel
+</button>
+
+          <button 
+            onClick={handleLogout}
+            className="text-sm bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded border border-indigo-500 transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
       </nav>
 
+<main className="py-8">
+  {currentView === 'provider' && <ProviderDashboard />}
+  {currentView === 'director' && <DirectorQueue />}
+  {currentView === 'admin' && <AdminDashboard />}
+</main>
+
+      {/* Main Content Area */}
       <main className="py-8">
-        {view === 'admin' ? <AdminDashboard /> : <ProviderDashboard />}
+        {currentView === 'provider' ? <ProviderDashboard /> : <DirectorQueue />}
       </main>
     </div>
   );
