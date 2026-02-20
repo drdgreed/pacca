@@ -1,3 +1,21 @@
+# Node/React
+node_modules/
+dist/
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+env/
+
+# Databases (NEVER push these to GitHub!)
+pacca.db
+pacca_db/
+
+# OS Files
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -1,91 +1,62 @@
-import { useState, useEffect } from 'react';
-import { Dashboard } from './components/Dashboard';
-import { AuthorizationList } from './components/AuthorizationList';
-import { AuthorizationDetail } from './components/AuthorizationDetail';
-import { NewAuthorizationForm } from './components/NewAuthorizationForm';
-import { Header } from './components/Header';
-import { useHealth } from './hooks/useApi';
-import type { Authorization } from './types';
-
-type View = 'dashboard' | 'list' | 'detail' | 'new';
+import React, { useState } from 'react';
+import { AdminDashboard } from './components/AdminDashboard';
+import { ProviderDashboard } from './components/ProviderDashboard';
+import { Login } from './components/Login';
 
 function App() {
-  const [view, setView] = useState<View>('dashboard');
-  const [selectedAuth, setSelectedAuth] = useState<Authorization | null>(null);
-  const { data: health, fetch: fetchHealth } = useHealth();
+  const [view, setView] = useState<'provider' | 'admin'>('provider');
+  // Check if token exists on initial load
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'));
 
-  useEffect(() => {
-    fetchHealth();
-    // Refresh health every 30 seconds
-    const interval = setInterval(fetchHealth, 30000);
-    return () => clearInterval(interval);
-  }, [fetchHealth]);
+  // If not logged in, render ONLY the login screen
+  if (!isAuthenticated) {
+    return <Login onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
 
-  const handleSelectAuthorization = (auth: Authorization) => {
-    setSelectedAuth(auth);
-    setView('detail');
-  };
-
-  const handleBack = () => {
-    setSelectedAuth(null);
-    setView('list');
-  };
-
-  const handleNewSubmitted = (auth: Authorization) => {
-    setSelectedAuth(auth);
-    setView('detail');
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setIsAuthenticated(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        currentView={view}
-        onNavigate={setView}
-        isHealthy={health?.status === 'healthy'}
-      />
-      
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {view === 'dashboard' && (
-          <Dashboard
-            onViewAll={() => setView('list')}
-            onNewRequest={() => setView('new')}
-          />
-        )}
-        
-        {view === 'list' && (
-          <AuthorizationList
-            onSelect={handleSelectAuthorization}
-            onNew={() => setView('new')}
-          />
-        )}
-        
-        {view === 'detail' && selectedAuth && (
-          <AuthorizationDetail
-            authorization={selectedAuth}
-            onBack={handleBack}
-          />
-        )}
-        
-        {view === 'new' && (
-          <NewAuthorizationForm
-            onSubmitted={handleNewSubmitted}
-            onCancel={() => setView('dashboard')}
-          />
-        )}
-      </main>
-      
-      <footer className="bg-white border-t mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-center text-sm text-gray-500">
-            PACCA - Prior Authorization & Care Coordination Agent Platform
-            {health && (
-              <span className="ml-2">
-                | v{health.version} | {health.environment}
-              </span>
-            )}
-          </p>
+    <div className="min-h-screen bg-gray-100 font-sans">
+      <nav className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg shadow-sm"></div>
+          <span className="text-xl font-bold text-gray-800 tracking-tight">PACCA <span className="text-indigo-600">Level 5</span></span>
         </div>
-      </footer>
+        
+        <div className="flex bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setView('provider')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              view === 'provider' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Provider View
+          </button>
+          <button
+            onClick={() => setView('admin')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              view === 'admin' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Dark Factory Admin
+          </button>
+        </div>
+
+        {/* Quick logout button */}
+        <button 
+          onClick={handleLogout}
+          className="text-sm font-medium text-gray-500 hover:text-red-600 transition-colors"
+        >
+          Logout
+        </button>
+      </nav>
+
+      <main className="py-8">
+        {view === 'admin' ? <AdminDashboard /> : <ProviderDashboard />}
+      </main>
     </div>
   );
 }

@@ -1,158 +1,97 @@
-"""
-PACCA FastAPI Application.
+# 1. Standard Python tools
+from datetime import datetime, timedelta
 
-Main entry point for the Prior Authorization & Care Coordination
-Agent Platform REST API.
-"""
-
-from contextlib import asynccontextmanager
-from datetime import datetime
-from typing import Any
-
-from fastapi import FastAPI, Request
+# 2. Third-party libraries
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from jose import jwt # We use 'jose' here to perfectly match what we used in auth.py
 
-from pacca import __version__
-from pacca.api.routes import authorizations, health
-from pacca.config import get_logger, get_settings, setup_logging
+# 3. Your local project files
+from .database import SessionLocal, engine, Base
+from .models import User
+from .routes import authorizations, admin
+from .auth import verify_password, get_password_hash, verify_token, SECRET_KEY, ALGORITHM
 
-logger = get_logger(__name__)
+app = FastAPI(title="PACCA Level 5")
 
+# This line looks at models.py and actually creates the pacca.db file and the users table!
+Base.metadata.create_all(bind=engine)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Application lifespan manager.
+# This is a "Dependency". It opens a database session for a request, and closes it when done.
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-    Handles startup and shutdown events.
-    """
-    # Startup
-    settings = get_settings()
-    setup_logging()
+# ALLOW THE FRONTEND TO TALK TO THE BACKEND
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins (good for local demo)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    logger.info(
-        "application_starting",
-        app_name=settings.app_name,
-        environment=settings.app_env,
-        version=__version__,
-    )
+class UserCreate(BaseModel):
+    username: str
+    password: str
 
-    # Initialize resources (database, cache, etc.)
-    # In production, this would initialize:
-    # - Database connection pool
-    # - Redis connection
-    # - Vector store client
+@app.post("/api/v1/register/")
+async def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    # 1. Check if the username already exists in the database
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    # 2. Scramble the password
+    hashed_password = get_password_hash(user.password)
+    
+    # 3. Create the new User object
+    new_user = User(username=user.username, hashed_password=hashed_password)
+    
+    # 4. Save it to the database!
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {"message": "User created successfully! You can now log in."}
 
-    yield
+app.include_router(
+    authorizations.router, 
+    prefix="/api/v1/authorizations",
+    dependencies=[Depends(verify_token)] # <-- This locks the door
+)
+app.include_router(admin.router, prefix="/api/v1/admin")
 
-    # Shutdown
-    logger.info("application_shutting_down")
-    # Clean up resources
+# 1. Define the format we expect from the React frontend
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
-
-def create_app() -> FastAPI:
-    """
-    Create and configure the FastAPI application.
-
-    Returns:
-        Configured FastAPI application instance
-    """
-    settings = get_settings()
-
-    app = FastAPI(
-        title="PACCA API",
-        description=(
-            "Prior Authorization & Care Coordination Agent Platform API. "
-            "A multi-agent AI system for healthcare prior authorization workflows."
-        ),
-        version=__version__,
-        docs_url="/docs" if settings.debug else None,
-        redoc_url="/redoc" if settings.debug else None,
-        openapi_url="/openapi.json" if settings.debug else None,
-        lifespan=lifespan,
-    )
-
-    # Configure CORS
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Add request logging middleware
-    @app.middleware("http")
-    async def log_requests(request: Request, call_next):
-        """Log all incoming requests."""
-        start_time = datetime.utcnow()
-        request_id = request.headers.get("X-Request-ID", str(datetime.utcnow().timestamp()))
-
-        # Add request context for logging
-        logger.info(
-            "request_started",
-            request_id=request_id,
-            method=request.method,
-            path=request.url.path,
+# 2. Create the endpoint to generate the token
+@app.post("/api/v1/login/")
+async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+    # 1. Look up the user in the database by their username
+    user = db.query(User).filter(User.username == credentials.username).first()
+    
+    # 2. If the user doesn't exist, OR the password doesn't match the scrambled one, kick them out
+    if not user or not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Incorrect username or password"
         )
+    
+    # 3. If they passed the check, build the token just like before!
+    expire = datetime.utcnow() + timedelta(minutes=60)
+    to_encode = {"sub": user.username, "exp": expire}
+    access_token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    
+    return {"access_token": access_token, "token_type": "bearer"}
 
-        response = await call_next(request)
-
-        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
-
-        logger.info(
-            "request_completed",
-            request_id=request_id,
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration_ms=round(duration_ms, 2),
-        )
-
-        response.headers["X-Request-ID"] = request_id
-        response.headers["X-Response-Time-Ms"] = str(round(duration_ms, 2))
-
-        return response
-
-    # Global exception handler
-    @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        """Handle unhandled exceptions."""
-        logger.exception(
-            "unhandled_exception",
-            path=request.url.path,
-            method=request.method,
-            error=str(exc),
-        )
-
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": "internal_server_error",
-                "message": "An unexpected error occurred",
-                "detail": str(exc) if settings.debug else None,
-            },
-        )
-
-    # Include routers
-    app.include_router(health.router, tags=["Health"])
-    app.include_router(authorizations.router, prefix="/api/v1", tags=["Authorizations"])
-
-    return app
-
-
-# Create the application instance
-app = create_app()
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    settings = get_settings()
-    uvicorn.run(
-        "pacca.api.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.debug,
-    )
+    
+@app.get("/health")
+async def health(): return {"status": "ok"}
