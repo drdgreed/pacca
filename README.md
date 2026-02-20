@@ -24,7 +24,9 @@
 
 ## Overview
 
-PACCA is a **multi-agent AI system** designed to automate healthcare prior authorization workflows. It combines the reasoning capabilities of large language models with structured clinical guidelines to make transparent, evidence-based authorization recommendations while maintaining human oversight for complex cases.
+PACCA is a **secure, multi-agent AI workflow** designed to automate healthcare prior authorization reviews. It solves one of healthcare's biggest bottlenecks by combining the reasoning capabilities of Large Language Models (LLMs) with strict, deterministic grading rubrics and local vector databases. 
+
+Unlike basic "ChatGPT wrappers," PACCA grounds every decision in factual medical guidelines using Retrieval-Augmented Generation (RAG) and features built-in escalation routing to mimic a real-world hospital administration hierarchy.
 
 ### The Problem
 
@@ -42,7 +44,11 @@ PACCA automates the prior authorization workflow using a multi-agent architectur
 2. **Clinical Classification** - Assesses complexity and routes appropriately
 3. **Decision Support** - Evaluates against guidelines with explainable reasoning
 4. **Human-in-the-Loop** - Escalates complex cases for human review
-
+5. **Secure Access** - JWT-authenticated provider dashboard.
+6. **Contextual Retrieval** - Instantly fetches relevant CPT/ICD-10 guidelines via vector embeddings.
+7. **Chain-of-Thought Reasoning** - AI evaluates clinical notes step-by-step against strict criteria.
+8. **Hierarchical Escalation** - Frontline AI handles routine cases; complex cases are routed to a specialized Medical Director AI or flagged for human review.
+9. **Institutional Memory** - The system learns from human overrides, saving past precedents to the vector database to guide future decisions.
 ---
 
 ## Features
@@ -65,6 +71,20 @@ PACCA automates the prior authorization workflow using a multi-agent architectur
 - Human review interface with AI-generated summaries
 - Complete audit trail for compliance
 
+### 📚 RAG & Institutional Memory
+- **ChromaDB Vector Store:** Houses thousands of medical guidelines (e.g., CMS, NCCN) for semantic search.
+- **Dual-Collection Strategy:** Maintains one database for rigid "Official Rules" and a second for "Case Precedents" (human overrides), allowing the AI to learn dynamically without code changes.
+
+### 🤖 Multi-Agent Orchestration
+- **Decision Support Agent (Frontline Nurse):** Evaluates clear-cut cases. Capable of auto-approving if strict confidence thresholds (>= 95%) are met.
+- **Medical Director Agent (Specialist):** Steps in when the frontline agent is unsure. Evaluates clinical nuance and gray areas before routing to a human queue.
+- **Deterministic Prompting:** Agents utilize persona-based, Chain-of-Thought prompting to prevent hallucinations and enforce strict compliance.
+
+### 🔐 Secure Full-Stack Architecture
+- **JWT Authentication:** End-to-end secured endpoints using `bcrypt` password hashing and stateless JSON Web Tokens.
+- **Relational Database:** Local SQLite database managed via **SQLAlchemy ORM** for provider and user credential management.
+- **Modern Frontend:** Responsive React 18 Provider Dashboard built with Vite and Tailwind CSS.
+
 ### 🔧 Production-Ready Architecture
 - FastAPI backend with async support
 - React frontend with real-time updates
@@ -72,29 +92,54 @@ PACCA automates the prior authorization workflow using a multi-agent architectur
 - Docker and Kubernetes ready
 - Comprehensive test coverage
 
----
-
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     React Frontend (SPA)                        │
-├─────────────────────────────────────────────────────────────────┤
-│                     FastAPI Backend (REST)                      │
-├─────────────────────────────────────────────────────────────────┤
-│              Agent Orchestration Layer                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
-│  │   Evidence   │─▶│Classification│─▶│   Decision   │         │
-│  │    Agent     │  │    Agent     │  │    Agent     │         │
-│  └──────────────┘  └──────────────┘  └──────────────┘         │
-├─────────────────────────────────────────────────────────────────┤
-│  PostgreSQL  │  ChromaDB (RAG)  │  Redis  │  Claude API        │
-└─────────────────────────────────────────────────────────────────┘
-```
+```mermaid
+graph TD
+    %% Styling
+    classDef frontend fill:#61dafb,stroke:#333,stroke-width:2px,color:#000
+    classDef backend fill:#009688,stroke:#333,stroke-width:2px,color:#fff
+    classDef auth fill:#e91e63,stroke:#333,stroke-width:2px,color:#fff
+    classDef agent fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+    classDef database fill:#607d8b,stroke:#333,stroke-width:2px,color:#fff
 
-For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+    %% Nodes
+    React[React Frontend SPA]:::frontend
+    Auth[JWT Auth Bouncer]:::auth
+    API[FastAPI Backend]:::backend
+    
+    SQL[(SQLite / SQLAlchemy\nUser Credentials)]:::database
+    Chroma[(ChromaDB Vector Store\nMedical Guidelines)]:::database
+    
+    Orchestrator{Multi-Agent\nOrchestrator}:::agent
+    Agent1[Frontline Nurse Agent]:::agent
+    Agent2[Medical Director Agent]:::agent
+    LLM((LLM API\nClaude/OpenAI)):::database
+
+    %% Flow
+    React -- "POST /login" --> Auth
+    Auth -- "Verify/Hash" --> SQL
+    Auth -- "Returns JWT" --> React
+    
+    React -- "Submit Case + JWT" --> API
+    API -- "Semantic Search" --> Chroma
+    Chroma -- "Returns Guidelines" --> API
+    API -- "Clinical Context" --> Orchestrator
+    
+    Orchestrator -- "Tier 1 Review" --> Agent1
+    Agent1 -- "Evaluate" --> LLM
+    Agent1 -- "Ambiguous Case (<95%)" --> Orchestrator
+    Orchestrator -- "Tier 2 Escalation" --> Agent2
+    Agent2 -- "Evaluate Nuance" --> LLM
+    
+    Agent1 -. "Auto-Approve" .-> API
+    Agent2 -. "Approve / In Review" .-> API
+    API -- "JSON Decision & Rationale" --> React
+
+```
 
 ---
+For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quick Start
 
