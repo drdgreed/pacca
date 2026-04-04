@@ -1,0 +1,459 @@
+"""
+Tests for LLM retry logic and OpenTelemetry instrumentation — Week 3.
+
+These tests verify:
+  1. Retriable errors (429, 5xx, connection errors) are retried
+  2. Non-retriable errors (400, 401, ValueError) are NOT retried
+  3. After max_attempts, the last error is re-raised
+  4. OTel spans are created for every agent call
+  5. Span attributes (agent name, model, tokens, duration) are recorded
+  6. Span errors are recorded when the LLM call fails
+
+Teaching note — what we're testing here vs. what we're NOT testing:
+
+  We ARE testing the retry and tracing WIRING — the mechanism that decides
+  when to retry and whether spans are opened/closed correctly.
+
+  We are NOT testing the Anthropic API itself — we mock it completely.
+  We are NOT testing whether the retry waits the right number of seconds —
+  that would make tests take 30+ seconds. We verify retry COUNT, not timing.
+
+  The golden rule of unit tests: test the behavior of YOUR code, not the
+  behavior of libraries you depend on. tenacity's backoff math is tenacity's
+  problem to test. Your problem is: does your code call tenacity correctly?
+
+Teaching note — how to test retry logic without waiting:
+
+  tenacity's wait parameter controls how long to sleep between attempts.
+  In tests, we don't want to sleep. We use tenacity's testing utilities to
+  override the wait strategy with wait_none() — zero wait between retries.
+  This lets us test "did it retry 3 times?" in milliseconds, not seconds.
+"""
+
+from unittest.mock import AsyncMock, MagicMock, patch, call
+from typing import Type
+
+import pytest
+from anthropic import (
+    APIConnectionError,
+    APITimeoutError,
+    RateLimitError,
+    BadRequestError,
+    AuthenticationError,
+)
+from pydantic import BaseModel
+
+from pacca.agents.base import BaseAgent, AgentConfig, RETRIABLE_ERRORS
+from pacca.models.enums import ReviewTier
+from pacca.models.authorization import AuthorizationDecision
+from pacca.models.enums import AuthorizationStatus
+
+
+# =============================================================================
+# Minimal concrete agent for testing
+# =============================================================================
+
+class _TestOutput(BaseModel):
+    """Minimal Pydantic output model for agent testing."""
+    result: str
+    score: float = 0.9
+
+
+class _ConcreteAgent(BaseAgent):
+    """
+    A concrete implementation of BaseAgent for testing purposes.
+
+    In production, only specific agents (DecisionAgent, MedicalDirectorAgent,
+    etc.) inherit from BaseAgent. For tests, we need a concrete class — we
+    can't instantiate the ABC directly because it has abstract methods.
+    """
+    @property
+    def name(self) -> str:
+        return "TestAgent"
+
+    @property
+    def system_prompt(self) -> str:
+        return "You are a test agent."
+
+
+def make_mock_response(result: str = "approved", score: float = 0.97) -> MagicMock:
+    """
+    Build a mock Anthropic API response that looks like a real tool_use response.
+
+    Teaching note: the Anthropic API returns a Message object with a `.content`
+    list. Each item in the list is a content block. When tool_choice forces
+    tool use, there will be exactly one block with type="tool_use" and
+    an `.input` dict matching the tool's schema.
+
+    We need our mock to mirror this structure exactly so our parsing code
+    (which looks for content_block.type == "tool_use") works correctly.
+    """
+    mock_content = MagicMock()
+    mock_content.type = "tool_use"
+    mock_content.input = {"result": result, "score": score}
+
+    mock_usage = MagicMock()
+    mock_usage.input_tokens = 450
+    mock_usage.output_tokens = 120
+
+    mock_response = MagicMock()
+    mock_response.content = [mock_content]
+    mock_response.usage = mock_usage
+    return mock_response
+
+
+# =============================================================================
+# Retry behavior tests
+# =============================================================================
+
+class TestRetryLogic:
+    """
+    Tests for tenacity retry behavior in BaseAgent._call_with_retry().
+
+    Each test mocks the Anthropic client to raise specific errors on the
+    first N calls, then succeed (or raise a non-retriable error).
+    """
+
+    @pytest.fixture
+    def agent(self):
+        """Create a test agent with fast retry settings (no real waiting)."""
+        cfg = AgentConfig(model="claude-test", temperature=0.0, max_tokens=100)
+        a = _ConcreteAgent(config=cfg)
+        # Override settings to use 3 max attempts
+        a._settings = MagicMock()
+        a._settings.llm_retry_max_attempts = 3
+        a._settings.llm_retry_wait_min_seconds = 0.0   # No real waiting in tests
+        a._settings.llm_retry_wait_max_seconds = 0.0
+        return a
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_error_is_retried(self, agent):
+        """
+        A 429 RateLimitError on the first attempt should cause a retry,
+        with the second attempt succeeding and returning the result.
+
+        Real-world meaning: Anthropic returned 429 because we're sending
+        too many requests. Wait and retry — it will succeed shortly.
+        """
+        success_response = make_mock_response()
+
+        # First call: 429 error. Second call: success.
+        agent.client.messages.create = AsyncMock(
+            side_effect=[
+                RateLimitError(
+                    message="Rate limit exceeded",
+                    response=MagicMock(status_code=429),
+                    body={"error": {"type": "rate_limit_error"}},
+                ),
+                success_response,
+            ]
+        )
+
+        with patch("pacca.agents.base.wait_exponential", return_value=MagicMock(sleep=0)):
+            result = await agent.execute("test prompt", _TestOutput)
+
+        assert result.result == "approved"
+        # The API was called twice: once failed, once succeeded
+        assert agent.client.messages.create.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_connection_error_is_retried(self, agent):
+        """
+        A network connection error should trigger retry.
+
+        Real-world meaning: the network hiccupped. Try again.
+        """
+        success_response = make_mock_response()
+
+        agent.client.messages.create = AsyncMock(
+            side_effect=[
+                APIConnectionError(message="Connection failed", request=MagicMock()),
+                success_response,
+            ]
+        )
+
+        with patch("pacca.agents.base.wait_exponential", return_value=MagicMock(sleep=0)):
+            result = await agent.execute("test prompt", _TestOutput)
+
+        assert result.result == "approved"
+        assert agent.client.messages.create.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_reraises_last_error(self, agent):
+        """
+        After max_attempts failures, the last error must be re-raised.
+
+        Real-world meaning: the API is consistently unavailable. After 3
+        attempts we give up and let the route handler return a 500 error.
+        The error IS the correct outcome — we don't silently swallow it.
+        """
+        rate_limit_error = RateLimitError(
+            message="Rate limit exceeded",
+            response=MagicMock(status_code=429),
+            body={"error": {"type": "rate_limit_error"}},
+        )
+        # All 3 attempts fail
+        agent.client.messages.create = AsyncMock(
+            side_effect=[rate_limit_error, rate_limit_error, rate_limit_error]
+        )
+
+        with patch("pacca.agents.base.wait_exponential", return_value=MagicMock(sleep=0)):
+            with pytest.raises(RateLimitError):
+                await agent.execute("test prompt", _TestOutput)
+
+        # All 3 attempts were made before giving up
+        assert agent.client.messages.create.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_bad_request_error_not_retried(self, agent):
+        """
+        A 400 BadRequestError must NOT be retried.
+
+        Real-world meaning: we sent invalid data to the API. Retrying with
+        the same invalid data will just fail again. Fail fast.
+        """
+        bad_request_error = BadRequestError(
+            message="Invalid request",
+            response=MagicMock(status_code=400),
+            body={"error": {"type": "invalid_request_error"}},
+        )
+        agent.client.messages.create = AsyncMock(side_effect=bad_request_error)
+
+        with pytest.raises(BadRequestError):
+            await agent.execute("test prompt", _TestOutput)
+
+        # Only called once — no retry for 400 errors
+        assert agent.client.messages.create.call_count == 1, (
+            "BadRequestError (400) must not be retried. "
+            "The request is invalid and retrying will not fix it."
+        )
+
+    @pytest.mark.asyncio
+    async def test_auth_error_not_retried(self, agent):
+        """
+        A 401 AuthenticationError must NOT be retried.
+
+        Real-world meaning: the API key is wrong. Retrying with the same
+        wrong key is pointless and could lock the account.
+        """
+        auth_error = AuthenticationError(
+            message="Invalid API key",
+            response=MagicMock(status_code=401),
+            body={"error": {"type": "authentication_error"}},
+        )
+        agent.client.messages.create = AsyncMock(side_effect=auth_error)
+
+        with pytest.raises(AuthenticationError):
+            await agent.execute("test prompt", _TestOutput)
+
+        assert agent.client.messages.create.call_count == 1, (
+            "AuthenticationError (401) must not be retried. "
+            "Retrying with the same invalid API key will always fail."
+        )
+
+    @pytest.mark.asyncio
+    async def test_successful_call_not_retried(self, agent):
+        """
+        A successful API call must be called exactly once — no unnecessary retries.
+
+        This test guards against an accidental misconfiguration where the
+        retry logic triggers even on success.
+        """
+        agent.client.messages.create = AsyncMock(return_value=make_mock_response())
+
+        result = await agent.execute("test prompt", _TestOutput)
+
+        assert result.result == "approved"
+        assert agent.client.messages.create.call_count == 1
+
+
+# =============================================================================
+# OpenTelemetry span tests
+# =============================================================================
+
+class TestOtelSpans:
+    """
+    Tests that OTel spans are created, attributed, and closed correctly.
+
+    Teaching note on mocking OTel:
+      We don't need a real OTel backend to test span creation. We mock the
+      tracer's start_as_current_span() method and verify it was called with
+      the right span name, and that the right attributes were set.
+
+      This is valid because we're testing OUR code (does it call the OTel
+      API correctly?), not OTel's code (does start_as_current_span work?).
+    """
+
+    @pytest.fixture
+    def agent_with_mock_tracer(self):
+        """Create a test agent with a mocked OTel tracer."""
+        cfg = AgentConfig(model="claude-test", temperature=0.0, max_tokens=100)
+        a = _ConcreteAgent(config=cfg)
+        a._settings = MagicMock()
+        a._settings.llm_retry_max_attempts = 1
+        a._settings.llm_retry_wait_min_seconds = 0.0
+        a._settings.llm_retry_wait_max_seconds = 0.0
+        return a
+
+    @pytest.mark.asyncio
+    async def test_span_created_for_successful_call(self, agent_with_mock_tracer):
+        """
+        A span named 'agent.TestAgent' must be opened for every successful call.
+
+        This tests the naming convention: 'agent.<AgentName>' so all agent
+        spans are filterable in the trace backend.
+        """
+        agent = agent_with_mock_tracer
+        agent.client.messages.create = AsyncMock(return_value=make_mock_response())
+
+        # Track span names opened
+        opened_spans = []
+
+        original_start = agent._tracer.start_as_current_span
+
+        def capturing_start(name, **kwargs):
+            opened_spans.append(name)
+            return original_start(name, **kwargs)
+
+        with patch.object(agent._tracer, "start_as_current_span",
+                          side_effect=capturing_start):
+            await agent.execute("test prompt", _TestOutput)
+
+        assert "agent.TestAgent" in opened_spans, (
+            f"Expected span 'agent.TestAgent' to be opened. Got: {opened_spans}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_span_attributes_include_agent_name(self, agent_with_mock_tracer):
+        """
+        The span must have 'agent.name' attribute set to the agent's name.
+
+        This is how you filter traces by agent in Langfuse:
+        'show me all spans from DecisionAgent'.
+        """
+        agent = agent_with_mock_tracer
+        agent.client.messages.create = AsyncMock(return_value=make_mock_response())
+
+        set_attributes = {}
+
+        # Create a mock span that records attribute calls
+        mock_span = MagicMock()
+        mock_span.__enter__ = MagicMock(return_value=mock_span)
+        mock_span.__exit__ = MagicMock(return_value=False)
+
+        def capture_attribute(key, value):
+            set_attributes[key] = value
+
+        mock_span.set_attribute = capture_attribute
+
+        with patch.object(agent._tracer, "start_as_current_span",
+                          return_value=mock_span):
+            await agent.execute("test prompt", _TestOutput)
+
+        assert set_attributes.get("agent.name") == "TestAgent", (
+            f"Expected span attribute 'agent.name' = 'TestAgent'. "
+            f"Got attributes: {set_attributes}"
+        )
+        assert "llm.model" in set_attributes, (
+            "Span must include 'llm.model' attribute for filtering by model."
+        )
+
+    @pytest.mark.asyncio
+    async def test_token_usage_recorded_on_span(self, agent_with_mock_tracer):
+        """
+        Token usage (input_tokens, output_tokens) must be recorded on the span.
+
+        This is critical for cost analysis: in Langfuse, you can sum
+        llm.total_tokens across all spans to compute total API cost.
+        """
+        agent = agent_with_mock_tracer
+        agent.client.messages.create = AsyncMock(return_value=make_mock_response())
+
+        set_attributes = {}
+        mock_span = MagicMock()
+        mock_span.__enter__ = MagicMock(return_value=mock_span)
+        mock_span.__exit__ = MagicMock(return_value=False)
+        mock_span.set_attribute = lambda k, v: set_attributes.update({k: v})
+
+        with patch.object(agent._tracer, "start_as_current_span",
+                          return_value=mock_span):
+            await agent.execute("test prompt", _TestOutput)
+
+        # make_mock_response() sets input_tokens=450, output_tokens=120
+        assert set_attributes.get("llm.input_tokens") == 450
+        assert set_attributes.get("llm.output_tokens") == 120
+        assert set_attributes.get("llm.total_tokens") == 570
+
+    @pytest.mark.asyncio
+    async def test_span_error_recorded_on_failure(self, agent_with_mock_tracer):
+        """
+        When an agent call fails permanently, the error must be recorded on
+        the span so it shows as a failure in the trace backend.
+
+        Without this, a failed request looks like a successful span that
+        just didn't return a result — confusing and misleading.
+        """
+        agent = agent_with_mock_tracer
+        agent.client.messages.create = AsyncMock(
+            side_effect=ValueError("LLM returned unexpected format")
+        )
+
+        error_recorded = {"called": False, "exc": None}
+        mock_span = MagicMock()
+        mock_span.__enter__ = MagicMock(return_value=mock_span)
+        mock_span.__exit__ = MagicMock(return_value=False)
+        mock_span.set_attribute = MagicMock()
+
+        def capture_record_exception(exc):
+            error_recorded["called"] = True
+            error_recorded["exc"] = exc
+
+        mock_span.record_exception = capture_record_exception
+        mock_span.set_status = MagicMock()
+
+        with patch.object(agent._tracer, "start_as_current_span",
+                          return_value=mock_span):
+            with pytest.raises(ValueError):
+                await agent.execute("test prompt", _TestOutput)
+
+        assert error_recorded["called"], (
+            "span.record_exception() must be called when the agent fails. "
+            "Without this, errors are invisible in the trace backend."
+        )
+
+
+# =============================================================================
+# Tracing configuration tests
+# =============================================================================
+
+class TestTracingConfiguration:
+    """Tests for configure_tracing() setup."""
+
+    def test_configure_tracing_noop_when_disabled(self):
+        """
+        configure_tracing(enabled=False) must install a no-op provider.
+
+        This ensures unit tests can call configure_tracing without setting
+        up a real OTel exporter. All agent tracing calls become no-ops.
+        """
+        from opentelemetry import trace as otel_trace
+        from pacca.config.tracing import configure_tracing, _tracing_configured
+        import pacca.config.tracing as tracing_module
+
+        # Reset the configured flag so we can call configure_tracing in tests
+        tracing_module._tracing_configured = False
+
+        configure_tracing(enabled=False)
+
+        # After disabling, the tracer should be a no-op tracer
+        tracer = otel_trace.get_tracer("test")
+        with tracer.start_as_current_span("test_span") as span:
+            # A no-op span's context should not be recording
+            from opentelemetry.trace import NonRecordingSpan
+            assert isinstance(span, NonRecordingSpan), (
+                "With tracing disabled, spans should be NonRecordingSpan (no-op). "
+                "This ensures tests don't accidentally export real traces."
+            )
+
+        # Reset for subsequent tests
+        tracing_module._tracing_configured = False

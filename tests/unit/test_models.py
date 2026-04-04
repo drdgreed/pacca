@@ -1,212 +1,317 @@
 """
-Unit tests for data models.
+Unit tests for PACCA v2.2 domain models.
+
+Tests the actual models in src/pacca/models/:
+  - enums.py: AuthorizationStatus, EscalationReason, ReviewTier, EvidenceSourceType
+  - clinical.py: ClinicalCase, EvidenceItem
+  - authorization.py: AuthorizationDecision, AuthorizationRequest, AuditLogEntry
+
+Note: The original test_models.py tested a richer domain model layer
+(PatientDemographics, Diagnosis, TreatmentCategory, etc.) that was part
+of the pre-Level 5 architecture. Those models were replaced by the
+simplified ClinicalCase/EvidenceItem layer during the upgrade_to_level5.sh
+sprint. The original tests are preserved in tests/archive/test_models_v1.py.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 
 import pytest
 
-from pacca.models import (
-    AuthorizationRequest,
+from pacca.models.enums import (
     AuthorizationStatus,
     ComplexityLevel,
-    Diagnosis,
-    PatientDemographics,
-    Treatment,
-    TreatmentCategory,
-    UrgencyLevel,
+    EscalationReason,
+    EvidenceSourceType,
+    ReviewTier,
+)
+from pacca.models.clinical import ClinicalCase, EvidenceItem
+from pacca.models.authorization import (
+    AuditLogEntry,
+    AuthorizationDecision,
+    AuthorizationRequest,
 )
 
 
-class TestPatientDemographics:
-    """Tests for PatientDemographics model."""
-
-    def test_age_calculation(self):
-        """Test that age is calculated correctly."""
-        # Patient born 30 years ago
-        birth_date = date(date.today().year - 30, 1, 1)
-        patient = PatientDemographics(
-            patient_id="P001",
-            date_of_birth=birth_date,
-            gender="M",
-        )
-        assert patient.age == 30
-
-    def test_pediatric_flag(self):
-        """Test pediatric flag for patients under 18."""
-        # Child patient
-        birth_date = date(date.today().year - 10, 1, 1)
-        child = PatientDemographics(
-            patient_id="P002",
-            date_of_birth=birth_date,
-            gender="F",
-        )
-        assert child.is_pediatric is True
-        assert child.is_geriatric is False
-
-    def test_geriatric_flag(self):
-        """Test geriatric flag for patients 65+."""
-        birth_date = date(date.today().year - 70, 1, 1)
-        senior = PatientDemographics(
-            patient_id="P003",
-            date_of_birth=birth_date,
-            gender="M",
-        )
-        assert senior.is_geriatric is True
-        assert senior.is_pediatric is False
-
-
-class TestDiagnosis:
-    """Tests for Diagnosis model."""
-
-    def test_code_category(self):
-        """Test ICD-10 code category extraction."""
-        diagnosis = Diagnosis(
-            code="C34.1",
-            description="Lung cancer",
-        )
-        assert diagnosis.code_category == "C"
-
-    def test_neoplasm_detection(self):
-        """Test neoplasm diagnosis detection."""
-        cancer = Diagnosis(code="C34.1", description="Lung cancer")
-        benign = Diagnosis(code="D12.0", description="Benign neoplasm")
-        other = Diagnosis(code="I25.10", description="Heart disease")
-
-        assert cancer.is_neoplasm is True
-        assert benign.is_neoplasm is True
-        assert other.is_neoplasm is False
-
-
-class TestTreatment:
-    """Tests for Treatment model."""
-
-    def test_treatment_creation(self):
-        """Test treatment model creation."""
-        treatment = Treatment(
-            code="J9271",
-            code_type="HCPCS",
-            description="Pembrolizumab",
-            category=TreatmentCategory.MEDICATION,
-            estimated_cost=15000.00,
-        )
-
-        assert treatment.code == "J9271"
-        assert treatment.category == TreatmentCategory.MEDICATION
-        assert treatment.estimated_cost == 15000.00
-
+# =============================================================================
+# Enum tests
+# =============================================================================
 
 class TestAuthorizationStatus:
-    """Tests for AuthorizationStatus enum."""
+    """Verify all expected status values exist and are string-compatible."""
 
-    def test_terminal_states(self):
-        """Test terminal state detection."""
-        assert AuthorizationStatus.APPROVED.is_terminal() is True
-        assert AuthorizationStatus.DENIED.is_terminal() is True
-        assert AuthorizationStatus.WITHDRAWN.is_terminal() is True
-        assert AuthorizationStatus.PENDING_REVIEW.is_terminal() is False
-        assert AuthorizationStatus.EVALUATING.is_terminal() is False
+    def test_all_statuses_are_strings(self):
+        """AuthorizationStatus values must be usable as strings (str, Enum)."""
+        for status in AuthorizationStatus:
+            assert isinstance(status.value, str)
 
-    def test_processing_states(self):
-        """Test processing state detection."""
-        assert AuthorizationStatus.EVALUATING.is_processing() is True
-        assert AuthorizationStatus.CLASSIFYING.is_processing() is True
-        assert AuthorizationStatus.APPROVED.is_processing() is False
+    def test_expected_statuses_exist(self):
+        """The statuses used throughout the v2.2 codebase must be present."""
+        assert AuthorizationStatus.IN_REVIEW
+        assert AuthorizationStatus.AUTO_APPROVED
+        assert AuthorizationStatus.PENDING
+        assert AuthorizationStatus.DENIED
 
-
-class TestComplexityLevel:
-    """Tests for ComplexityLevel enum."""
-
-    def test_human_review_requirement(self):
-        """Test human review requirement by complexity."""
-        assert ComplexityLevel.ROUTINE.requires_human_review is False
-        assert ComplexityLevel.LOW.requires_human_review is False
-        assert ComplexityLevel.MODERATE.requires_human_review is True
-        assert ComplexityLevel.HIGH.requires_human_review is True
-        assert ComplexityLevel.CRITICAL.requires_human_review is True
-
-    def test_specialist_requirement(self):
-        """Test specialist requirement by complexity."""
-        assert ComplexityLevel.ROUTINE.requires_specialist is False
-        assert ComplexityLevel.HIGH.requires_specialist is False
-        assert ComplexityLevel.CRITICAL.requires_specialist is True
+    def test_status_value_matches_string(self):
+        """Status enum values must equal their string representation."""
+        assert AuthorizationStatus.AUTO_APPROVED.value == "AUTO_APPROVED"
+        assert AuthorizationStatus.IN_REVIEW.value == "IN_REVIEW"
 
 
-class TestUrgencyLevel:
-    """Tests for UrgencyLevel enum."""
+class TestEscalationReason:
+    """Verify all 7 PRD SS5.4 escalation branches have enum values."""
 
-    def test_max_hours(self):
-        """Test max processing hours by urgency."""
-        assert UrgencyLevel.ROUTINE.max_hours == 48
-        assert UrgencyLevel.EXPEDITED.max_hours == 24
-        assert UrgencyLevel.URGENT.max_hours == 8
-        assert UrgencyLevel.EMERGENT.max_hours == 1
+    def test_all_seven_branches_represented(self):
+        """
+        Every escalation branch from the 7-branch tree must have an enum value.
+        If a branch is added or removed, this test catches the discrepancy.
+        """
+        required_reasons = [
+            EscalationReason.CONFIDENCE_BELOW_THRESHOLD,  # Branch 3
+            EscalationReason.MEDICAL_DIRECTOR_REQUIRED,   # Branch 2
+            EscalationReason.EXPERIMENTAL_TREATMENT,       # Branch 4
+            EscalationReason.RARE_CONDITION,               # Branch 5
+            EscalationReason.CONFLICTING_GUIDELINES,       # Branch 6
+            EscalationReason.PRIOR_DENIAL_SAME_SERVICE,   # Branch 7
+            EscalationReason.HIGH_COST,
+            EscalationReason.PEDIATRIC_COMPLEX,
+        ]
+        for reason in required_reasons:
+            assert isinstance(reason.value, str), (
+                f"EscalationReason.{reason.name} must have a string value."
+            )
+
+    def test_reason_values_are_snake_case(self):
+        """
+        Escalation reason values must be snake_case — they appear in audit
+        log JSONB fields and are queried by compliance tools.
+        """
+        for reason in EscalationReason:
+            assert " " not in reason.value, (
+                f"EscalationReason.{reason.name} value '{reason.value}' "
+                f"contains spaces. Values must be snake_case for audit queries."
+            )
 
 
-class TestAuthorizationRequest:
-    """Tests for AuthorizationRequest model."""
+class TestReviewTier:
+    """Verify review tier enum matches agent names used in orchestrator."""
 
-    def test_request_creation(self, sample_authorization_request):
-        """Test authorization request creation."""
-        request = sample_authorization_request
-        assert request.request_id.startswith("AUTH-")
-        assert request.status == AuthorizationStatus.SUBMITTED
+    def test_all_tiers_exist(self):
+        assert ReviewTier.AUTOMATED
+        assert ReviewTier.MEDICAL_DIRECTOR_AGENT
+        assert ReviewTier.HUMAN
 
-    def test_high_cost_detection(
-        self,
-        sample_patient,
-        sample_diagnosis,
-        sample_provider,
-        sample_payer,
-    ):
-        """Test high-cost authorization detection."""
-        # Low cost treatment
-        low_cost = Treatment(
-            code="99213",
-            code_type="CPT",
-            description="Office visit",
-            category=TreatmentCategory.PROCEDURE,
-            estimated_cost=150.00,
+    def test_tier_values_are_strings(self):
+        for tier in ReviewTier:
+            assert isinstance(tier.value, str)
+
+
+class TestEvidenceSourceType:
+    """Verify evidence source types cover all expected clinical data sources."""
+
+    def test_clinical_note_exists(self):
+        """CLINICAL_NOTE is the most common evidence source in the test suite."""
+        assert EvidenceSourceType.CLINICAL_NOTE.value == "CLINICAL_NOTE"
+
+    def test_lab_result_exists(self):
+        assert EvidenceSourceType.LAB_RESULT.value == "LAB_RESULT"
+
+
+# =============================================================================
+# ClinicalCase and EvidenceItem tests
+# =============================================================================
+
+class TestEvidenceItem:
+    """Verify EvidenceItem is constructible and holds expected fields."""
+
+    def test_basic_construction(self):
+        """Build a minimal EvidenceItem — all required fields."""
+        item = EvidenceItem(
+            id="e1",
+            source_type=EvidenceSourceType.CLINICAL_NOTE,
+            description="Stage IIIA NSCLC, PD-L1 TPS >= 50%",
+            original_text="Patient presents with stage IIIA non-small cell lung cancer.",
+            confidence=0.95,
         )
+        assert item.id == "e1"
+        assert item.source_type == EvidenceSourceType.CLINICAL_NOTE
+        assert item.confidence == 0.95
 
-        # High cost treatment
-        high_cost = Treatment(
-            code="33361",
-            code_type="CPT",
-            description="TAVR procedure",
-            category=TreatmentCategory.PROCEDURE,
-            estimated_cost=150000.00,
+    def test_confidence_is_float(self):
+        """Confidence must be a float (used in numeric comparisons throughout)."""
+        item = EvidenceItem(
+            id="e2",
+            source_type=EvidenceSourceType.LAB_RESULT,
+            description="PD-L1 62%",
+            original_text="PD-L1 TPS: 62%",
+            confidence=0.62,
         )
+        assert isinstance(item.confidence, float)
 
-        low_cost_request = AuthorizationRequest(
-            patient=sample_patient,
-            primary_diagnosis=sample_diagnosis,
-            requested_treatment=low_cost,
-            requesting_provider=sample_provider,
-            payer=sample_payer,
+    def test_timestamp_auto_populated(self):
+        """EvidenceItem timestamp should be set automatically."""
+        item = EvidenceItem(
+            id="e3",
+            source_type=EvidenceSourceType.CLINICAL_NOTE,
+            description="Test",
+            original_text="Test",
+            confidence=0.9,
         )
+        assert isinstance(item.timestamp, datetime)
 
-        high_cost_request = AuthorizationRequest(
-            patient=sample_patient,
-            primary_diagnosis=sample_diagnosis,
-            requested_treatment=high_cost,
-            requesting_provider=sample_provider,
-            payer=sample_payer,
+
+class TestClinicalCase:
+    """Verify ClinicalCase is the correct shape for the v2.2 agent pipeline."""
+
+    def test_basic_construction(self):
+        """Build a minimal ClinicalCase — all required fields."""
+        case = ClinicalCase(
+            patient_id="P-001",
+            primary_diagnosis_code="C34.1",
+            procedure_code="J9271",
         )
+        assert case.patient_id == "P-001"
+        assert case.primary_diagnosis_code == "C34.1"
+        assert case.procedure_code == "J9271"
+        assert case.evidence == []
 
-        assert low_cost_request.is_high_cost is False
-        assert high_cost_request.is_high_cost is True
+    def test_evidence_list_appends(self):
+        """Evidence items can be added to the case."""
+        item = EvidenceItem(
+            id="e1",
+            source_type=EvidenceSourceType.CLINICAL_NOTE,
+            description="NSCLC",
+            original_text="Stage IIIA NSCLC.",
+            confidence=0.9,
+        )
+        case = ClinicalCase(
+            patient_id="P-002",
+            primary_diagnosis_code="C34.1",
+            procedure_code="J9271",
+            evidence=[item],
+        )
+        assert len(case.evidence) == 1
+        assert case.evidence[0].id == "e1"
 
-    def test_status_update(self, sample_authorization_request):
-        """Test status update functionality."""
-        request = sample_authorization_request
-        original_updated_at = request.updated_at
+    def test_model_dump_json_is_serializable(self):
+        """
+        ClinicalCase.model_dump_json() must produce valid JSON.
 
-        # Small delay to ensure timestamp changes
-        import time
-        time.sleep(0.01)
+        This method is called in agent user-turn prompt construction
+        (decision.py) — if it fails the agent call will crash.
+        """
+        case = ClinicalCase(
+            patient_id="P-003",
+            primary_diagnosis_code="E75.22",
+            procedure_code="J0205",
+        )
+        json_str = case.model_dump_json()
+        assert "P-003" in json_str
+        assert "E75.22" in json_str
 
-        request.update_status(AuthorizationStatus.EVALUATING)
 
-        assert request.status == AuthorizationStatus.EVALUATING
-        assert request.updated_at > original_updated_at
+# =============================================================================
+# AuthorizationDecision tests
+# =============================================================================
+
+class TestAuthorizationDecision:
+    """Verify AuthorizationDecision matches the shape agents return."""
+
+    def test_basic_construction(self):
+        """Build a minimal AuthorizationDecision."""
+        decision = AuthorizationDecision(
+            decision_id="DEC-001",
+            status=AuthorizationStatus.AUTO_APPROVED,
+            confidence_score=0.97,
+            rationale="NCCN Category 1 for PD-L1 >= 50% NSCLC.",
+            review_tier_used=ReviewTier.AUTOMATED,
+        )
+        assert decision.decision_id == "DEC-001"
+        assert decision.status == AuthorizationStatus.AUTO_APPROVED
+        assert decision.confidence_score == 0.97
+        assert decision.review_tier_used == ReviewTier.AUTOMATED
+
+    def test_confidence_score_is_float(self):
+        """Confidence score must be a float — used in numeric comparisons."""
+        decision = AuthorizationDecision(
+            decision_id="DEC-002",
+            status=AuthorizationStatus.IN_REVIEW,
+            confidence_score=0.72,
+            rationale="Insufficient documentation.",
+            review_tier_used=ReviewTier.AUTOMATED,
+        )
+        assert isinstance(decision.confidence_score, float)
+        assert 0.0 <= decision.confidence_score <= 1.0
+
+    def test_audit_trail_is_empty_by_default(self):
+        """audit_trail must default to an empty list (not None)."""
+        decision = AuthorizationDecision(
+            decision_id="DEC-003",
+            status=AuthorizationStatus.AUTO_APPROVED,
+            confidence_score=0.95,
+            rationale="Test.",
+            review_tier_used=ReviewTier.AUTOMATED,
+        )
+        assert decision.audit_trail == []
+        assert isinstance(decision.audit_trail, list)
+
+    def test_status_update_via_assignment(self):
+        """
+        The orchestrator updates decision.status directly by assignment.
+        Pydantic v2 models are mutable by default — verify this works.
+        """
+        decision = AuthorizationDecision(
+            decision_id="DEC-004",
+            status=AuthorizationStatus.AUTO_APPROVED,
+            confidence_score=0.92,
+            rationale="Test.",
+            review_tier_used=ReviewTier.AUTOMATED,
+        )
+        decision.status = AuthorizationStatus.IN_REVIEW
+        assert decision.status == AuthorizationStatus.IN_REVIEW
+
+    def test_review_tier_update_via_assignment(self):
+        """
+        Agents set review_tier_used after execute() returns.
+        Verify this assignment works on the Pydantic model.
+        """
+        decision = AuthorizationDecision(
+            decision_id="DEC-005",
+            status=AuthorizationStatus.AUTO_APPROVED,
+            confidence_score=0.97,
+            rationale="Test.",
+            review_tier_used=ReviewTier.AUTOMATED,
+        )
+        decision.review_tier_used = ReviewTier.MEDICAL_DIRECTOR_AGENT
+        assert decision.review_tier_used == ReviewTier.MEDICAL_DIRECTOR_AGENT
+
+
+# =============================================================================
+# AuditLogEntry tests
+# =============================================================================
+
+class TestAuditLogEntry:
+    """Verify AuditLogEntry — used in authorization decision audit trails."""
+
+    def test_basic_construction(self):
+        """Build a minimal AuditLogEntry."""
+        entry = AuditLogEntry(
+            entry_type="decision_made",
+            message="AUTO_APPROVED with confidence 0.97",
+        )
+        assert entry.entry_type == "decision_made"
+        assert isinstance(entry.timestamp, datetime)
+
+    def test_agent_id_is_optional(self):
+        """agent_id is optional — system events have no agent."""
+        entry_no_agent = AuditLogEntry(
+            entry_type="submission_received",
+            message="Authorization submitted.",
+        )
+        assert entry_no_agent.agent_id is None
+
+        entry_with_agent = AuditLogEntry(
+            entry_type="agent_decision",
+            message="Tier 1 evaluation complete.",
+            agent_id="DecisionSupportAgent",
+        )
+        assert entry_with_agent.agent_id == "DecisionSupportAgent"

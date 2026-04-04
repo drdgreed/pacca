@@ -1,9 +1,39 @@
 # =============================================================================
-# PACCA Docker Compose Configuration
-# Local development environment setup
+# PACCA Docker Compose — Full Production Stack
+#
+# Services:
+#   pacca-api     — FastAPI backend (Python 3.12, async)
+#   postgres      — PostgreSQL 16 (PACCA data: requests, decisions, audit trail)
+#   redis         — Redis 7 (caching and rate limiting)
+#   chromadb      — ChromaDB vector store (RAG: guidelines + case precedents)
+#   langfuse      — LLM observability UI (traces, costs, latency, errors)
+#   langfuse-db   — PostgreSQL 15 dedicated to Langfuse (separate from PACCA db)
+#
+# PostgreSQL is the production database. The application's ORM layer
+# (SQLAlchemy 2.0 + Repository pattern) makes switching to SQLite for local
+# development a single DATABASE_URL env var change — no code changes required.
+#
+# Langfuse integration:
+#   PACCA's OpenTelemetry spans are exported to Langfuse via OTLP/HTTP.
+#   Every agent call produces a trace visible at http://localhost:3001
+#   Spans carry: agent name, model, token counts, latency, errors.
+#   No code changes required to PACCA — only OTEL_ENDPOINT env var.
+#
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose logs -f pacca-api  # Tail API logs
+#   docker-compose down -v            # Stop and remove volumes (clears data)
+#
+# Access:
+#   PACCA API + Swagger:  http://localhost:8000/docs
+#   Langfuse UI:          http://localhost:3001
+#   ChromaDB:             http://localhost:8001
+#   PostgreSQL (PACCA):   localhost:5432
+#   PostgreSQL (Langfuse):localhost:5433
 # =============================================================================
 
 services:
+
   # ---------------------------------------------------------------------------
   # PACCA API Service
   # ---------------------------------------------------------------------------
@@ -28,6 +58,14 @@ services:
       - ENABLE_AUTONOMOUS_DECISIONS=true
       - ENABLE_RAG=true
       - DEMO_MODE=true
+      # OpenTelemetry — route spans to Langfuse's OTLP endpoint
+      - OTEL_ENABLED=true
+      - OTEL_SERVICE_NAME=pacca
+      - OTEL_ENDPOINT=http://langfuse:4318
+      # Retry configuration
+      - LLM_RETRY_MAX_ATTEMPTS=3
+      - LLM_RETRY_WAIT_MIN_SECONDS=1.0
+      - LLM_RETRY_WAIT_MAX_SECONDS=30.0
     volumes:
       - ./src:/app/src:ro
     depends_on:
@@ -35,17 +73,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      langfuse:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
     networks:
       - pacca-network
 
   # ---------------------------------------------------------------------------
-  # PostgreSQL Database
+  # PostgreSQL — PACCA primary database
   # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
@@ -67,7 +107,7 @@ services:
       - pacca-network
 
   # ---------------------------------------------------------------------------
-  # Redis Cache
+  # Redis — caching and rate limiting
   # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
@@ -85,7 +125,7 @@ services:
       - pacca-network
 
   # ---------------------------------------------------------------------------
-  # ChromaDB Vector Store (for local RAG)
+  # ChromaDB — vector store for RAG (guidelines + case precedents)
   # ---------------------------------------------------------------------------
   chromadb:
     image: chromadb/chroma:latest
@@ -96,6 +136,83 @@ services:
       - chroma_data:/chroma/chroma
     environment:
       - ANONYMIZED_TELEMETRY=false
+    networks:
+      - pacca-network
+
+  # ---------------------------------------------------------------------------
+  # Langfuse — LLM observability platform
+  #
+  # Receives OpenTelemetry spans from PACCA via OTLP/HTTP on port 4318.
+  # Provides a web UI at port 3001 for exploring:
+  #   - Per-request traces (full agent call tree with timing)
+  #   - Token usage and estimated cost per agent / per model
+  #   - Error rates and retry patterns
+  #   - Latency distribution across agent types
+  #   - Side-by-side prompt comparisons
+  #
+  # Default credentials (change for any non-local deployment):
+  #   Email:    admin@pacca.local
+  #   Password: pacca_admin_dev
+  #
+  # Architecture note: Langfuse uses its OWN PostgreSQL instance (langfuse-db)
+  # separate from PACCA's database. This separation ensures that observability
+  # data never competes with production data for connections or storage.
+  # ---------------------------------------------------------------------------
+  langfuse:
+    image: langfuse/langfuse:latest
+    container_name: pacca-langfuse
+    ports:
+      - "3001:3000"   # Web UI → http://localhost:3001
+      - "4318:4317"   # OTLP/HTTP receiver (PACCA sends spans here)
+    environment:
+      - DATABASE_URL=postgresql://langfuse:langfuse_dev@langfuse-db:5432/langfuse
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXTAUTH_SECRET=langfuse-dev-secret-change-in-production
+      - SALT=langfuse-dev-salt-change-in-production
+      # Seed an admin account on first startup
+      - LANGFUSE_INIT_USER_EMAIL=admin@pacca.local
+      - LANGFUSE_INIT_USER_PASSWORD=pacca_admin_dev
+      - LANGFUSE_INIT_USER_NAME=PACCA Admin
+      - LANGFUSE_INIT_PROJECT_NAME=PACCA
+      - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=pk-lf-pacca-dev-public
+      - LANGFUSE_INIT_PROJECT_SECRET_KEY=sk-lf-pacca-dev-secret
+      # OTLP receiver configuration
+      - LANGFUSE_OTLP_ENDPOINT_GRPC_ENABLED=false
+      - LANGFUSE_OTLP_ENDPOINT_HTTP_ENABLED=true
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:3000/api/public/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - pacca-network
+
+  # ---------------------------------------------------------------------------
+  # Langfuse PostgreSQL — dedicated database for observability data
+  #
+  # Kept separate from PACCA's PostgreSQL to ensure observability data
+  # never impacts production query performance.
+  # ---------------------------------------------------------------------------
+  langfuse-db:
+    image: postgres:15-alpine
+    container_name: pacca-langfuse-db
+    environment:
+      - POSTGRES_USER=langfuse
+      - POSTGRES_PASSWORD=langfuse_dev
+      - POSTGRES_DB=langfuse
+    ports:
+      - "5433:5432"   # Exposed on 5433 to avoid conflict with PACCA's 5432
+    volumes:
+      - langfuse_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - pacca-network
 
@@ -113,3 +230,4 @@ volumes:
   postgres_data:
   redis_data:
   chroma_data:
+  langfuse_data:

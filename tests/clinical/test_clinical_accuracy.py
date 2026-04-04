@@ -1,0 +1,701 @@
+"""
+Clinical accuracy test suite — Week 4 evaluation framework.
+
+This is the CI gate. If clinical accuracy drops below 80%, this suite
+fails and the pipeline stops. This is the machine-enforceable contract
+that PACCA reasons correctly, not just that it runs.
+
+Teaching note — two kinds of tests in this file:
+
+  FAST TESTS (no API calls, no mocks, pure Python):
+    - Dataset integrity: golden_cases.py is structured correctly
+    - Coverage verification: all escalation branches are represented
+    - Case metadata validation: required fields are populated
+    These run in milliseconds and are part of the standard unit suite.
+
+  SLOW TESTS (@pytest.mark.clinical, real API calls):
+    - Full pipeline evaluation against golden dataset
+    - LLM-as-judge scoring of agent reasoning quality
+    - CI gate assertion: accuracy >= MINIMUM_ACCEPTABLE_ACCURACY
+    These take 2-5 minutes and run in the nightly CI pipeline.
+
+  Separation by marker lets developers run fast tests locally and
+  expensive tests in CI without waiting 5 minutes on every commit.
+
+  Run fast tests:   pytest tests/clinical/test_clinical_accuracy.py -m "not clinical"
+  Run full suite:   pytest tests/clinical/ -m clinical
+  Run everything:   pytest tests/
+
+Teaching note — why the CI gate threshold is 80% and not 100%:
+
+  LLM outputs are inherently probabilistic. Even a correct, well-designed
+  system will occasionally produce suboptimal reasoning on ambiguous cases.
+  Setting the bar at 100% would cause the CI to fail on noise — random
+  variation in LLM outputs that doesn't reflect actual system quality.
+
+  80% means: "at least 16 of 20 cases must be handled correctly." This
+  threshold was chosen to be high enough to catch real degradation while
+  tolerating natural LLM variance on edge cases. In a production system,
+  you would tune this threshold based on observed baseline performance.
+"""
+
+import asyncio
+import os
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from tests.clinical.golden_cases import (
+    GOLDEN_CASES,
+    EscalationBranch,
+    ExpectedOutcome,
+    GoldenCase,
+    get_cases_by_branch,
+    get_dataset_summary,
+    get_hallucination_trap_cases,
+)
+from tests.clinical.evaluator import (
+    MINIMUM_ACCEPTABLE_ACCURACY,
+    MINIMUM_PASSING_SCORE,
+    ClinicalEvaluator,
+    EvaluationReport,
+    JudgeVerdict,
+)
+
+
+# =============================================================================
+# Dataset integrity tests — fast, no API calls
+# These always run as part of the standard unit suite.
+# =============================================================================
+
+class TestGoldenDatasetIntegrity:
+    """
+    Verify the golden dataset is well-formed before running any evaluations.
+
+    These tests catch errors in the golden_cases.py file itself — missing
+    fields, duplicate IDs, empty rationales — that would make the
+    evaluation results meaningless.
+    """
+
+    def test_dataset_has_twenty_cases(self):
+        """The golden dataset must have exactly 20 cases."""
+        assert len(GOLDEN_CASES) == 20, (
+            f"Expected 20 golden cases, found {len(GOLDEN_CASES)}. "
+            "The dataset size is part of the Week 4 specification."
+        )
+
+    def test_all_case_ids_are_unique(self):
+        """No two cases may share a case_id."""
+        ids = [c.case_id for c in GOLDEN_CASES]
+        assert len(ids) == len(set(ids)), (
+            f"Duplicate case IDs found: "
+            f"{[x for x in ids if ids.count(x) > 1]}"
+        )
+
+    def test_all_cases_have_required_fields(self):
+        """Every case must have non-empty required text fields."""
+        for case in GOLDEN_CASES:
+            assert case.title, f"{case.case_id}: title is empty"
+            assert case.diagnosis_code, f"{case.case_id}: diagnosis_code is empty"
+            assert case.procedure_code, f"{case.case_id}: procedure_code is empty"
+            assert case.clinical_notes, f"{case.case_id}: clinical_notes is empty"
+            assert case.guidelines_context, f"{case.case_id}: guidelines_context is empty"
+            assert case.clinical_rationale, f"{case.case_id}: clinical_rationale is empty"
+            assert case.judge_scoring_criteria, f"{case.case_id}: judge_scoring_criteria is empty"
+
+    def test_all_cases_have_expected_outcome(self):
+        """Every case must specify an expected outcome."""
+        for case in GOLDEN_CASES:
+            assert isinstance(case.expected_outcome, ExpectedOutcome), (
+                f"{case.case_id}: expected_outcome must be an ExpectedOutcome enum"
+            )
+
+    def test_all_cases_have_reasoning_must_include(self):
+        """
+        Every case must specify at least one keyword the rationale must include.
+        Cases without reasoning requirements cannot detect shallow reasoning.
+        """
+        for case in GOLDEN_CASES:
+            assert len(case.reasoning_must_include) >= 1, (
+                f"{case.case_id}: reasoning_must_include is empty. "
+                "Every case must specify at least one required reasoning keyword."
+            )
+
+    def test_escalation_branch_coverage(self):
+        """
+        The dataset must cover all 7 escalation branches.
+        Missing a branch means we have no evaluation coverage for it.
+        """
+        covered_branches = {c.expected_branch for c in GOLDEN_CASES}
+
+        required_branches = {
+            EscalationBranch.BRANCH_1_AUTO_APPROVE,
+            EscalationBranch.BRANCH_3_LOW_CONFIDENCE,
+            EscalationBranch.BRANCH_4_EXPERIMENTAL,
+            EscalationBranch.BRANCH_5_RARE,
+            EscalationBranch.BRANCH_6_CONFLICTING,
+            EscalationBranch.BRANCH_7_PRIOR_DENIAL,
+        }
+
+        missing = required_branches - covered_branches
+        assert not missing, (
+            f"Golden dataset missing coverage for branches: "
+            f"{[b.value for b in missing]}. "
+            f"Every escalation branch must have at least one test case."
+        )
+
+    def test_outcome_distribution_is_balanced(self):
+        """
+        The dataset should not be dominated by one outcome type.
+        A dataset that's 90% AUTO_APPROVED doesn't test denial or escalation.
+        """
+        summary = get_dataset_summary()
+        outcomes = summary["by_outcome"]
+
+        # No single outcome should represent more than 60% of cases
+        for outcome, count in outcomes.items():
+            percentage = count / summary["total_cases"]
+            assert percentage <= 0.60, (
+                f"Outcome '{outcome}' represents {percentage:.0%} of cases "
+                f"({count}/{summary['total_cases']}). "
+                f"Dataset is unbalanced — no single outcome should exceed 60%."
+            )
+
+    def test_hallucination_trap_cases_exist(self):
+        """
+        The dataset must include cases specifically designed to catch hallucination.
+        These are the most important safety tests in the suite.
+        """
+        traps = get_hallucination_trap_cases()
+        assert len(traps) >= 2, (
+            f"Found only {len(traps)} hallucination trap cases. "
+            "At least 2 cases should be designed to catch hallucination."
+        )
+
+    def test_prior_denial_cases_have_prior_denial_codes(self):
+        """
+        Cases expecting Branch 7 (prior denial) must have prior_denial_codes set.
+        Without this, the pre-flight check cannot fire.
+        """
+        branch7_cases = get_cases_by_branch(EscalationBranch.BRANCH_7_PRIOR_DENIAL)
+        for case in branch7_cases:
+            assert len(case.prior_denial_codes) > 0, (
+                f"{case.case_id}: Branch 7 case must have prior_denial_codes set. "
+                "The pre-flight check requires prior denial codes to match against."
+            )
+
+    def test_pre_flight_cases_use_correct_codes(self):
+        """
+        Cases expecting Branch 4 (experimental) should use codes from
+        EXPERIMENTAL_PROCEDURE_CODES or have experimental keywords in notes.
+        """
+        from pacca.agents.clinical_risk_detector import EXPERIMENTAL_PROCEDURE_CODES
+
+        branch4_cases = get_cases_by_branch(EscalationBranch.BRANCH_4_EXPERIMENTAL)
+        for case in branch4_cases:
+            code_match    = case.procedure_code.upper() in EXPERIMENTAL_PROCEDURE_CODES
+            keyword_match = any(
+                kw in case.clinical_notes.lower()
+                for kw in ["clinical trial", "investigational", "phase", "experimental"]
+            )
+            assert code_match or keyword_match, (
+                f"{case.case_id}: Branch 4 case has neither an experimental procedure "
+                f"code ({case.procedure_code}) nor experimental keywords in notes. "
+                "The pre-flight check cannot trigger without one of these."
+            )
+
+
+# =============================================================================
+# Escalation pre-flight integration tests — fast, mocked
+# Verify that pre-flight checks fire correctly for the golden cases.
+# =============================================================================
+
+class TestPreFlightOnGoldenCases:
+    """
+    Verify that ClinicalRiskDetector correctly handles the golden dataset
+    pre-flight cases. These use no LLM calls.
+    """
+
+    def test_experimental_cases_trigger_pre_flight(self):
+        """Branch 4 golden cases must trigger pre-flight escalation."""
+        from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
+        from pacca.models.clinical import ClinicalCase, EvidenceItem
+        from pacca.models.enums import EvidenceSourceType, EscalationReason
+
+        detector = ClinicalRiskDetector()
+        branch4_cases = get_cases_by_branch(EscalationBranch.BRANCH_4_EXPERIMENTAL)
+
+        for golden in branch4_cases:
+            clinical_case = ClinicalCase(
+                patient_id="P-TEST",
+                primary_diagnosis_code=golden.diagnosis_code,
+                procedure_code=golden.procedure_code,
+                evidence=[
+                    EvidenceItem(
+                        id="e1",
+                        source_type=EvidenceSourceType.CLINICAL_NOTE,
+                        description=golden.clinical_notes[:200],
+                        original_text=golden.clinical_notes,
+                        confidence=0.9,
+                    )
+                ],
+            )
+            flags = detector.evaluate(
+                case=clinical_case,
+                guidelines_context=golden.guidelines_context,
+            )
+            assert flags.should_pre_escalate, (
+                f"{golden.case_id}: Expected pre-flight escalation for "
+                f"Branch 4 (experimental treatment), but no flags triggered. "
+                f"Procedure code: {golden.procedure_code}"
+            )
+            assert EscalationReason.EXPERIMENTAL_TREATMENT in flags.reasons, (
+                f"{golden.case_id}: Expected EXPERIMENTAL_TREATMENT reason."
+            )
+
+    def test_rare_condition_cases_trigger_pre_flight(self):
+        """Branch 5 golden cases must trigger pre-flight escalation."""
+        from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
+        from pacca.models.clinical import ClinicalCase, EvidenceItem
+        from pacca.models.enums import EvidenceSourceType, EscalationReason
+
+        detector = ClinicalRiskDetector()
+        branch5_cases = get_cases_by_branch(EscalationBranch.BRANCH_5_RARE)
+
+        for golden in branch5_cases:
+            clinical_case = ClinicalCase(
+                patient_id="P-TEST",
+                primary_diagnosis_code=golden.diagnosis_code,
+                procedure_code=golden.procedure_code,
+                evidence=[],
+            )
+            flags = detector.evaluate(clinical_case)
+            assert flags.should_pre_escalate, (
+                f"{golden.case_id}: Expected rare condition pre-flight for "
+                f"diagnosis {golden.diagnosis_code}"
+            )
+            assert EscalationReason.RARE_CONDITION in flags.reasons
+
+    def test_prior_denial_cases_trigger_pre_flight(self):
+        """Branch 7 golden cases must trigger pre-flight escalation."""
+        from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
+        from pacca.models.clinical import ClinicalCase, EvidenceItem
+        from pacca.models.enums import EvidenceSourceType, EscalationReason
+
+        detector = ClinicalRiskDetector()
+        branch7_cases = get_cases_by_branch(EscalationBranch.BRANCH_7_PRIOR_DENIAL)
+
+        for golden in branch7_cases:
+            clinical_case = ClinicalCase(
+                patient_id="P-TEST",
+                primary_diagnosis_code=golden.diagnosis_code,
+                procedure_code=golden.procedure_code,
+                evidence=[],
+            )
+            flags = detector.evaluate(
+                clinical_case,
+                prior_denial_codes=golden.prior_denial_codes,
+            )
+            assert flags.should_pre_escalate, (
+                f"{golden.case_id}: Expected prior denial pre-flight for "
+                f"procedure {golden.procedure_code} with prior denials "
+                f"{golden.prior_denial_codes}"
+            )
+            assert EscalationReason.PRIOR_DENIAL_SAME_SERVICE in flags.reasons
+
+    def test_conflicting_guidelines_cases_trigger_pre_flight(self):
+        """Branch 6 golden cases must trigger pre-flight escalation."""
+        from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
+        from pacca.models.clinical import ClinicalCase
+        from pacca.models.enums import EscalationReason
+
+        detector = ClinicalRiskDetector()
+        branch6_cases = get_cases_by_branch(EscalationBranch.BRANCH_6_CONFLICTING)
+
+        for golden in branch6_cases:
+            clinical_case = ClinicalCase(
+                patient_id="P-TEST",
+                primary_diagnosis_code=golden.diagnosis_code,
+                procedure_code=golden.procedure_code,
+                evidence=[],
+            )
+            flags = detector.evaluate(
+                clinical_case,
+                guidelines_context=golden.guidelines_context,
+            )
+            assert flags.should_pre_escalate, (
+                f"{golden.case_id}: Expected conflicting guidelines pre-flight."
+            )
+            assert EscalationReason.CONFLICTING_GUIDELINES in flags.reasons
+
+
+# =============================================================================
+# LLM-as-judge unit tests — fast, mocked judge
+# Verify evaluator logic without real API calls.
+# =============================================================================
+
+class TestEvaluatorLogic:
+    """
+    Unit tests for the ClinicalEvaluator class.
+    All API calls are mocked — these run instantly.
+    """
+
+    def make_mock_evaluator(self) -> ClinicalEvaluator:
+        """Create an evaluator with a mocked Anthropic client."""
+        evaluator = ClinicalEvaluator(api_key="test-key")
+        evaluator.client = AsyncMock()
+        return evaluator
+
+    def mock_judge_response(self, score: int, correct: bool, hallucination: bool) -> MagicMock:
+        """Build a mock Anthropic response with a judge verdict."""
+        import json
+        verdict = {
+            "score": score,
+            "correct_outcome": correct,
+            "hallucination_detected": hallucination,
+            "missing_citations": [],
+            "judge_reasoning": f"Test score {score} — mock verdict.",
+        }
+        mock_content = MagicMock()
+        mock_content.text = json.dumps(verdict)
+
+        mock_response = MagicMock()
+        mock_response.content = [mock_content]
+        return mock_response
+
+    @pytest.mark.asyncio
+    async def test_evaluate_case_returns_verdict(self):
+        """evaluate_case() must return a JudgeVerdict for any valid case."""
+        evaluator = self.make_mock_evaluator()
+        evaluator.client.messages.create = AsyncMock(
+            return_value=self.mock_judge_response(score=4, correct=True, hallucination=False)
+        )
+
+        case = GOLDEN_CASES[0]
+        verdict = await evaluator.evaluate_case(
+            case=case,
+            system_decision_status="AUTO_APPROVED",
+            system_rationale="NCCN Category 1 for PD-L1 >= 50%.",
+            system_confidence=0.97,
+        )
+
+        assert isinstance(verdict, JudgeVerdict)
+        assert verdict.case_id == case.case_id
+        assert verdict.score == 4
+        assert verdict.passed is True
+        assert verdict.correct_outcome is True
+
+    @pytest.mark.asyncio
+    async def test_score_below_threshold_marks_failed(self):
+        """A score of 2 must mark the verdict as failed."""
+        evaluator = self.make_mock_evaluator()
+        evaluator.client.messages.create = AsyncMock(
+            return_value=self.mock_judge_response(score=2, correct=False, hallucination=True)
+        )
+
+        verdict = await evaluator.evaluate_case(
+            case=GOLDEN_CASES[0],
+            system_decision_status="AUTO_APPROVED",
+            system_rationale="The PD-L1 TPS was 85% which exceeds the threshold.",
+            system_confidence=0.97,
+        )
+
+        assert verdict.passed is False
+        assert verdict.hallucination_detected is True
+
+    @pytest.mark.asyncio
+    async def test_json_parse_failure_returns_score_1(self):
+        """
+        If the judge returns non-JSON, the evaluator must return a score of 1
+        rather than raising an exception. Evaluation errors must not crash CI.
+        """
+        evaluator = self.make_mock_evaluator()
+        mock_content = MagicMock()
+        mock_content.text = "I cannot evaluate this case."
+        mock_response = MagicMock()
+        mock_response.content = [mock_content]
+        evaluator.client.messages.create = AsyncMock(return_value=mock_response)
+
+        verdict = await evaluator.evaluate_case(
+            case=GOLDEN_CASES[0],
+            system_decision_status="AUTO_APPROVED",
+            system_rationale="Some rationale.",
+            system_confidence=0.97,
+        )
+
+        assert verdict.score == 1
+        assert verdict.passed is False
+
+    def test_compile_report_calculates_accuracy(self):
+        """compile_report() must correctly calculate accuracy from verdicts."""
+        evaluator = self.make_mock_evaluator()
+
+        verdicts = [
+            JudgeVerdict("GC-001", 5, True, "Excellent", True, False, []),
+            JudgeVerdict("GC-002", 4, True, "Good", True, False, []),
+            JudgeVerdict("GC-003", 3, True, "Acceptable", True, False, []),
+            JudgeVerdict("GC-004", 2, False, "Wrong", False, False, []),
+            JudgeVerdict("GC-005", 1, False, "Critical", False, True, []),
+        ]
+
+        report = evaluator.compile_report(verdicts)
+
+        assert report.total_cases == 5
+        assert report.passed_cases == 3  # Scores 3, 4, 5 pass
+        assert abs(report.accuracy - 0.6) < 0.01
+        assert report.hallucinations == ["GC-005"]
+        assert "GC-004" in report.failed_cases
+        assert "GC-005" in report.failed_cases
+
+    def test_compile_report_ci_gate_passes_at_threshold(self):
+        """Report must pass CI gate when accuracy == MINIMUM_ACCEPTABLE_ACCURACY."""
+        evaluator = self.make_mock_evaluator()
+        n = 10
+        threshold_passes = int(n * MINIMUM_ACCEPTABLE_ACCURACY)
+
+        verdicts = (
+            [JudgeVerdict(f"GC-{i:03}", 4, True, "Good", True, False, [])
+             for i in range(threshold_passes)]
+            +
+            [JudgeVerdict(f"GC-{i:03}", 1, False, "Bad", False, False, [])
+             for i in range(threshold_passes, n)]
+        )
+
+        report = evaluator.compile_report(verdicts)
+        assert report.passed_ci_gate is True
+
+    def test_compile_report_ci_gate_fails_below_threshold(self):
+        """Report must fail CI gate when accuracy < MINIMUM_ACCEPTABLE_ACCURACY."""
+        evaluator = self.make_mock_evaluator()
+        verdicts = [
+            JudgeVerdict(f"GC-{i:03}", 1, False, "Bad", False, False, [])
+            for i in range(10)
+        ]
+        report = evaluator.compile_report(verdicts)
+        assert report.passed_ci_gate is False
+
+
+# =============================================================================
+# Full clinical evaluation — @pytest.mark.clinical
+# These make REAL API calls and take 2-5 minutes.
+# Run with: pytest tests/clinical/ -m clinical
+# ─────────────────────────────────────────────────────────────────────────────
+# CI pipeline configuration:
+#   Nightly: pytest tests/ -m clinical
+#   Pre-commit: pytest tests/ -m "not clinical"
+# =============================================================================
+
+@pytest.mark.clinical
+class TestFullClinicalEvaluation:
+    """
+    End-to-end clinical evaluation against the full golden dataset.
+
+    IMPORTANT: These tests make real calls to the Anthropic API.
+    They are marked @pytest.mark.clinical and run separately from
+    the fast unit tests.
+
+    Skip these tests locally with: pytest -m "not clinical"
+    Run them in CI with: pytest -m clinical
+    """
+
+    @pytest.mark.asyncio
+    async def test_dataset_summary_is_logged(self):
+        """
+        Log the dataset summary at the start of clinical evaluation.
+        This provides context in CI logs for understanding test coverage.
+        """
+        summary = get_dataset_summary()
+        print(f"\nGolden Dataset Summary: {summary}")
+        assert summary["total_cases"] == 20
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_meets_accuracy_threshold(self):
+        """
+        THE CI GATE: Run all 20 golden cases through the full PACCA pipeline
+        and verify the system meets the MINIMUM_ACCEPTABLE_ACCURACY threshold.
+
+        This test:
+          1. Runs each golden case through ClinicalRiskDetector (pre-flight)
+          2. For cases that pass pre-flight, runs through the Decision Agent
+          3. Passes the decision + rationale to the LLM judge
+          4. Compiles results and asserts accuracy >= 80%
+
+        FAILURE of this test means: the system's reasoning quality has degraded.
+        It does NOT mean a unit test broke — it means the AI is producing
+        worse decisions than the minimum acceptable standard.
+        """
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            pytest.skip("ANTHROPIC_API_KEY not set — skipping live evaluation")
+
+        from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
+        from pacca.agents.decision import DecisionAgent, DecisionContext
+        from pacca.models.clinical import ClinicalCase, EvidenceItem
+        from pacca.models.enums import EvidenceSourceType, AuthorizationStatus
+
+        detector  = ClinicalRiskDetector()
+        agent     = DecisionAgent()
+        evaluator = ClinicalEvaluator()
+        verdicts: list[JudgeVerdict] = []
+
+        for golden in GOLDEN_CASES:
+            clinical_case = ClinicalCase(
+                patient_id=f"P-EVAL-{golden.case_id}",
+                primary_diagnosis_code=golden.diagnosis_code,
+                procedure_code=golden.procedure_code,
+                evidence=[
+                    EvidenceItem(
+                        id="e1",
+                        source_type=EvidenceSourceType.CLINICAL_NOTE,
+                        description=golden.clinical_notes[:200],
+                        original_text=golden.clinical_notes,
+                        confidence=0.9,
+                    )
+                ],
+            )
+
+            # Run pre-flight checks
+            flags = detector.evaluate(
+                case=clinical_case,
+                guidelines_context=golden.guidelines_context,
+                prior_denial_codes=golden.prior_denial_codes,
+            )
+
+            if flags.should_pre_escalate:
+                # Pre-flight fired — build the pre-flight decision
+                status    = AuthorizationStatus.IN_REVIEW.value
+                rationale = (
+                    f"Pre-flight escalation triggered. "
+                    f"Reasons: {[r.value for r in flags.reasons]}. "
+                    f"Details: {flags.details}"
+                )
+                confidence = 0.0
+            else:
+                # Run through Decision Agent
+                try:
+                    ctx = DecisionContext(
+                        case=clinical_case,
+                        relevant_guidelines=golden.guidelines_context,
+                    )
+                    decision   = await agent.run(ctx)
+                    status     = decision.status.value
+                    rationale  = decision.rationale
+                    confidence = decision.confidence_score
+                except Exception as exc:
+                    status     = "ERROR"
+                    rationale  = f"Agent failed: {str(exc)}"
+                    confidence = 0.0
+
+            # Judge the decision
+            verdict = await evaluator.evaluate_case(
+                case=golden,
+                system_decision_status=status,
+                system_rationale=rationale,
+                system_confidence=confidence,
+            )
+            verdicts.append(verdict)
+
+            # Print per-case result for CI log visibility
+            result_icon = "✓" if verdict.passed else "✗"
+            print(
+                f"  {result_icon} {golden.case_id}: score={verdict.score} "
+                f"status={status} correct={verdict.correct_outcome}"
+            )
+
+        # Compile final report
+        report = evaluator.compile_report(verdicts)
+        print(f"\n{report.summary()}")
+
+        if report.hallucinations:
+            print(f"\nHallucinations detected in: {report.hallucinations}")
+
+        if report.failed_cases:
+            print(f"Failed cases: {report.failed_cases}")
+            for v in report.verdicts:
+                if not v.passed:
+                    print(f"  {v.case_id} (score {v.score}): {v.judge_reasoning}")
+
+        # THE CI GATE — this assertion is what makes this a gate, not just a report
+        assert report.passed_ci_gate, (
+            f"\n{'='*60}\n"
+            f"CLINICAL ACCURACY CI GATE FAILED\n"
+            f"{'='*60}\n"
+            f"Accuracy: {report.accuracy:.1%} "
+            f"(required: {MINIMUM_ACCEPTABLE_ACCURACY:.0%})\n"
+            f"Passed: {report.passed_cases}/{report.total_cases} cases\n"
+            f"Failed cases: {report.failed_cases}\n"
+            f"Hallucinations: {report.hallucinations}\n"
+            f"{'='*60}\n"
+            f"This failure means the system's clinical reasoning quality has "
+            f"degraded below the minimum acceptable standard. Review the failed "
+            f"cases above and the agent prompts in agents/decision.py."
+        )
+
+    @pytest.mark.asyncio
+    async def test_zero_hallucinations_on_sparse_cases(self):
+        """
+        Hallucination trap cases must produce zero hallucinations.
+
+        This test runs ONLY the hallucination trap cases (GC-018, GC-019)
+        to verify the system doesn't invent clinical details when notes
+        are sparse. Hallucination in a healthcare system is a patient
+        safety event — zero tolerance is the correct standard.
+        """
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            pytest.skip("ANTHROPIC_API_KEY not set — skipping live evaluation")
+
+        from pacca.agents.decision import DecisionAgent, DecisionContext
+        from pacca.models.clinical import ClinicalCase, EvidenceItem
+        from pacca.models.enums import EvidenceSourceType
+
+        agent     = DecisionAgent()
+        evaluator = ClinicalEvaluator()
+        traps     = get_hallucination_trap_cases()
+        verdicts: list[JudgeVerdict] = []
+
+        for golden in traps:
+            clinical_case = ClinicalCase(
+                patient_id=f"P-TRAP-{golden.case_id}",
+                primary_diagnosis_code=golden.diagnosis_code,
+                procedure_code=golden.procedure_code,
+                evidence=[
+                    EvidenceItem(
+                        id="e1",
+                        source_type=EvidenceSourceType.CLINICAL_NOTE,
+                        description=golden.clinical_notes,
+                        original_text=golden.clinical_notes,
+                        confidence=0.5,
+                    )
+                ],
+            )
+
+            try:
+                ctx      = DecisionContext(case=clinical_case,
+                                           relevant_guidelines=golden.guidelines_context)
+                decision = await agent.run(ctx)
+                status   = decision.status.value
+                rationale  = decision.rationale
+                confidence = decision.confidence_score
+            except Exception as exc:
+                status    = "ERROR"
+                rationale = f"Agent failed: {str(exc)}"
+                confidence = 0.0
+
+            verdict = await evaluator.evaluate_case(
+                case=golden,
+                system_decision_status=status,
+                system_rationale=rationale,
+                system_confidence=confidence,
+            )
+            verdicts.append(verdict)
+
+        hallucinated = [v.case_id for v in verdicts if v.hallucination_detected]
+
+        assert len(hallucinated) == 0, (
+            f"\nHALLUCINATION DETECTED — ZERO TOLERANCE VIOLATION\n"
+            f"Cases with hallucination: {hallucinated}\n"
+            f"Hallucination in a healthcare AI system means the agent invented "
+            f"clinical details not present in the submission. This is a patient "
+            f"safety issue and must be fixed before any production deployment.\n"
+            f"Review agents/decision.py system prompt — add explicit instruction: "
+            f"'Only reference clinical information explicitly present in the notes.'"
+        )

@@ -1,329 +1,399 @@
-# PACCA - Prior Authorization & Care Coordination Agent Platform
+# PACCA — Prior Authorization & Care Coordination Agent Platform
 
 <p align="center">
-  <strong>AI-Powered Healthcare Prior Authorization Platform</strong>
+  <strong>Production-Grade Multi-Agent AI for Healthcare Prior Authorization</strong>
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
+  <a href="#engineering-decisions">Engineering Decisions</a> •
+  <a href="#agent-design">Agent Design</a> •
+  <a href="#database-strategy">Database Strategy</a> •
   <a href="#quick-start">Quick Start</a> •
-  <a href="#api-documentation">API Docs</a> •
-  <a href="#demo-scenarios">Demo</a>
+  <a href="#api-documentation">API Docs</a>
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/version-2.2.0--dev-orange.svg" alt="Version 2.2.0-dev" />
   <img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python 3.12+" />
-  <img src="https://img.shields.io/badge/FastAPI-0.109+-green.svg" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/React-18+-61dafb.svg" alt="React 18" />
+  <img src="https://img.shields.io/badge/FastAPI-async-green.svg" alt="FastAPI async" />
+  <img src="https://img.shields.io/badge/PostgreSQL-16-336791.svg" alt="PostgreSQL 16" />
   <img src="https://img.shields.io/badge/Claude-API-blueviolet.svg" alt="Claude API" />
+  <img src="https://img.shields.io/badge/HIPAA-audit--ready-red.svg" alt="HIPAA audit-ready" />
   <img src="https://img.shields.io/badge/license-MIT-lightgrey.svg" alt="MIT License" />
 </p>
 
+<p align="center">
+  <strong>Active development sprint — targeting v2.2.0 production milestone</strong><br/>
+  <a href="CHANGELOG.md">CHANGELOG</a> •
+  <a href="docs/RELEASE_NOTES_v2.2.md">Release Notes v2.2</a> •
+  <a href="docs/ARCHITECTURE.md">Architecture + ADRs</a>
+</p>
+
 ---
 
-## Overview
+## What This Is
 
-PACCA is a **secure, multi-agent AI workflow** designed to automate healthcare prior authorization reviews. It solves one of healthcare's biggest bottlenecks by combining the reasoning capabilities of Large Language Models (LLMs) with strict, deterministic grading rubrics and local vector databases. 
+PACCA automates healthcare prior authorization using a hierarchical multi-agent AI system. A provider submits a case; four specialized AI agents evaluate it against real clinical guidelines retrieved via RAG; the system returns an explainable decision with a confidence score and a complete audit trail.
 
-Unlike basic "ChatGPT wrappers," PACCA grounds every decision in factual medical guidelines using Retrieval-Augmented Generation (RAG) and features built-in escalation routing to mimic a real-world hospital administration hierarchy.
+**The market problem it addresses:** Prior authorization costs U.S. healthcare $50–100 billion annually in administrative overhead. Providers spend 34+ hours per week on manual authorization workflows. 29% of delayed authorizations directly impact patient outcomes.
 
-### The Problem
+**What makes this technically non-trivial:** The system does not wrap a chat API. It implements deterministic agent contracts, a dual-collection RAG architecture that learns from human overrides without model retraining, a hierarchical escalation tree with clinical trigger conditions, and a full HIPAA-compliant audit trail with correlation-ID-based request tracing.
 
-Prior authorization is a significant pain point in healthcare:
-- **Providers** spend 34+ hours/week on prior authorizations
-- **Patients** face treatment delays averaging 2-3 days
-- **Payers** process millions of requests manually
-- **Errors** lead to inappropriate denials and appeals
-
-### The Solution
-
-PACCA automates the prior authorization workflow using a multi-agent architecture:
-
-1. **Evidence Aggregation** - Gathers and synthesizes clinical data
-2. **Clinical Classification** - Assesses complexity and routes appropriately
-3. **Decision Support** - Evaluates against guidelines with explainable reasoning
-4. **Human-in-the-Loop** - Escalates complex cases for human review
-5. **Secure Access** - JWT-authenticated provider dashboard.
-6. **Contextual Retrieval** - Instantly fetches relevant CPT/ICD-10 guidelines via vector embeddings.
-7. **Chain-of-Thought Reasoning** - AI evaluates clinical notes step-by-step against strict criteria.
-8. **Hierarchical Escalation** - Frontline AI handles routine cases; complex cases are routed to a specialized Medical Director AI or flagged for human review.
-9. **Institutional Memory** - The system learns from human overrides, saving past precedents to the vector database to guide future decisions.
 ---
-
-## Features
-
-### 🤖 Multi-Agent AI System
-- **Evidence Aggregation Agent**: Synthesizes clinical data into coherent narratives
-- **Classification Agent**: Complexity scoring, specialty routing, urgency assessment
-- **Decision Support Agent**: Guideline-based recommendations with chain-of-thought reasoning
-- **Orchestration Agent**: Workflow coordination and escalation logic
-
-### 📋 Clinical Decision Support
-- RAG-powered guideline retrieval using ChromaDB
-- Evidence-based recommendations with confidence scores
-- Transparent decision rationale for explainability
-- Support for step therapy and prior treatment requirements
-
-### 👥 Human Oversight
-- Configurable confidence thresholds for autonomous decisions
-- Automatic escalation for complex/high-risk cases
-- Human review interface with AI-generated summaries
-- Complete audit trail for compliance
-
-### 📚 RAG & Institutional Memory
-- **ChromaDB Vector Store:** Houses thousands of medical guidelines (e.g., CMS, NCCN) for semantic search.
-- **Dual-Collection Strategy:** Maintains one database for rigid "Official Rules" and a second for "Case Precedents" (human overrides), allowing the AI to learn dynamically without code changes.
-
-### 🤖 Multi-Agent Orchestration
-- **Decision Support Agent (Frontline Nurse):** Evaluates clear-cut cases. Capable of auto-approving if strict confidence thresholds (>= 95%) are met.
-- **Medical Director Agent (Specialist):** Steps in when the frontline agent is unsure. Evaluates clinical nuance and gray areas before routing to a human queue.
-- **Deterministic Prompting:** Agents utilize persona-based, Chain-of-Thought prompting to prevent hallucinations and enforce strict compliance.
-
-### 🔐 Secure Full-Stack Architecture
-- **JWT Authentication:** End-to-end secured endpoints using `bcrypt` password hashing and stateless JSON Web Tokens.
-- **Relational Database:** Local SQLite database managed via **SQLAlchemy ORM** for provider and user credential management.
-- **Modern Frontend:** Responsive React 18 Provider Dashboard built with Vite and Tailwind CSS.
-
-### 🔧 Production-Ready Architecture
-- FastAPI backend with async support
-- React frontend with real-time updates
-- PostgreSQL for persistence, Redis for caching
-- Docker and Kubernetes ready
-- Comprehensive test coverage
 
 ## Architecture
 
 ```mermaid
 graph TD
-    %% Styling
     classDef frontend fill:#61dafb,stroke:#333,stroke-width:2px,color:#000
     classDef backend fill:#009688,stroke:#333,stroke-width:2px,color:#fff
     classDef auth fill:#e91e63,stroke:#333,stroke-width:2px,color:#fff
     classDef agent fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
     classDef database fill:#607d8b,stroke:#333,stroke-width:2px,color:#fff
+    classDef audit fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
 
-    %% Nodes
-    React[React Frontend SPA]:::frontend
-    Auth[JWT Auth Bouncer]:::auth
-    API[FastAPI Backend]:::backend
-    
-    SQL[(SQLite / SQLAlchemy\nUser Credentials)]:::database
-    Chroma[(ChromaDB Vector Store\nMedical Guidelines)]:::database
-    
+    React[React 18 Frontend SPA]:::frontend
+    Auth[JWT Auth — bcrypt]:::auth
+    API[FastAPI Backend — async]:::backend
+
+    PG[(PostgreSQL 16\nRequests · Decisions\nAudit Trail · Guidelines)]:::database
+    Chroma[(ChromaDB\nOfficial Guidelines\nCase Precedents)]:::database
+    Redis[(Redis\nCaching · Rate Limiting)]:::database
+
     Orchestrator{Multi-Agent\nOrchestrator}:::agent
-    Agent1[Frontline Nurse Agent]:::agent
-    Agent2[Medical Director Agent]:::agent
-    LLM((LLM API\nClaude/OpenAI)):::database
+    Agent1[Decision Support Agent\nFrontline Nurse]:::agent
+    Agent2[Medical Director Agent\nTier 2 Specialist]:::agent
+    LLM((Claude API\nAnthropic)):::database
+    AuditLog[Audit Trail\ncorrelation_id tracing]:::audit
 
-    %% Flow
     React -- "POST /login" --> Auth
-    Auth -- "Verify/Hash" --> SQL
-    Auth -- "Returns JWT" --> React
-    
+    Auth -- "bcrypt verify" --> PG
+    Auth -- "JWT returned" --> React
     React -- "Submit Case + JWT" --> API
     API -- "Semantic Search" --> Chroma
-    Chroma -- "Returns Guidelines" --> API
+    Chroma -- "Guidelines + Precedents" --> API
     API -- "Clinical Context" --> Orchestrator
-    
-    Orchestrator -- "Tier 1 Review" --> Agent1
-    Agent1 -- "Evaluate" --> LLM
-    Agent1 -- "Ambiguous Case (<95%)" --> Orchestrator
+    Orchestrator -- "Tier 1 Evaluation" --> Agent1
+    Agent1 -- "Chain-of-Thought" --> LLM
+    Agent1 -- "Confidence 0.90–0.95" --> Orchestrator
     Orchestrator -- "Tier 2 Escalation" --> Agent2
-    Agent2 -- "Evaluate Nuance" --> LLM
-    
-    Agent1 -. "Auto-Approve" .-> API
+    Agent2 -- "Clinical Nuance" --> LLM
+    Agent1 -. "Auto-Approve ≥0.95" .-> API
     Agent2 -. "Approve / In Review" .-> API
-    API -- "JSON Decision & Rationale" --> React
-
+    API -- "Decision + Rationale" --> React
+    API -- "Every event logged" --> AuditLog
+    AuditLog -- "Persisted" --> PG
 ```
 
+**Key architectural properties:**
+- Every agent call is bounded by a `start`/`complete` audit pair — orphaned `start` records identify failure points exactly
+- All audit records for one request share a `correlation_id` UUID, making full request traces queryable in one call
+- The Orchestrator contains zero clinical reasoning — only workflow logic — so escalation rules are testable independently of LLM calls
+- The RAG dual-collection design separates authoritative guidelines from institutional precedents, enabling learning without retraining
+
 ---
-For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Engineering Decisions
+
+These are deliberate architectural choices, not defaults. Each trade-off is documented here because a production system that cannot explain its own design decisions is a liability.
+
+### Decision 1: Custom Agent Framework vs. LangChain / CrewAI
+
+**Chose:** Custom agent base class (`agents/base.py`)
+
+**Rejected:** LangChain, CrewAI, AutoGen
+
+**Rationale:** Healthcare prior authorization requires deterministic escalation logic — specific clinical conditions (experimental treatment, rare ICD-10 codes, prior denial history) must trigger specific routing paths regardless of LLM output. Framework abstractions obscure this control flow and make compliance auditing harder. The custom framework is ~150 lines and gives explicit control over every handoff point. The trade-off is maintenance ownership; the benefit is that every escalation decision is a readable `if` statement, not a framework callback.
+
+### Decision 2: PostgreSQL as Primary Database
+
+**Chose:** PostgreSQL 16 (production) / SQLite (local development)
+
+**Rejected:** MongoDB, DynamoDB, SQLite-only
+
+**Rationale:** The data model has hard relational constraints — a `Decision` must have exactly one `Request`; an `AuditLog` must reference a valid `Request`. These are foreign key relationships, and a relational database enforces them at the database level rather than in application code. PostgreSQL's native `JSONB` type (used for `audit_logs.token_usage`, `audit_logs.details`, `decisions.rationale_data`) enables indexed queries inside JSON fields — for example, finding all decisions where `details->>'confidence_score' < 0.9` for compliance analysis. The `JSONB` column type is already in `db/models.py`; switching from SQLite to PostgreSQL is a single environment variable change (see [Database Strategy](#database-strategy)).
+
+### Decision 3: SQLAlchemy ORM with Repository Pattern
+
+**Chose:** SQLAlchemy 2.0 async ORM + Repository pattern (`db/repository.py`)
+
+**Rejected:** Raw SQL, SQLModel, Tortoise ORM
+
+**Rationale:** The repository pattern (`AuthorizationRepository`, `DecisionRepository`, `AuditRepository`) decouples business logic from database mechanics. Routes call `await audit.log(...)` without knowing whether the underlying store is PostgreSQL or SQLite — the repository handles the translation. This makes unit testing clean (mock the repository, not the database), and makes database engine swaps a configuration change rather than a code change.
+
+### Decision 4: ChromaDB Dual-Collection RAG
+
+**Chose:** Two ChromaDB collections — `nccn_guidelines` (official rules) + `case_precedents` (human overrides)
+
+**Rejected:** Single-collection RAG, Pinecone (SaaS), pure fine-tuning
+
+**Rationale:** Clinical guidelines and institutional precedents have different trust levels and update frequencies. Official guidelines update quarterly; institutional overrides update continuously. Separating them into two collections allows independent versioning, different relevance-weighting in prompts, and rollback of institutional learning without touching the authoritative guideline store. The precedents collection is the system's memory — when a Medical Director overrides an AI decision and records a rationale, that rationale is embedded and stored. Future semantically similar cases retrieve that precedent alongside official guidelines. This achieves institutional learning without model retraining or fine-tuning.
+
+### Decision 5: Async Throughout
+
+**Chose:** Fully async FastAPI + AsyncSession + async agent calls
+
+**Rejected:** Sync FastAPI with threading
+
+**Rationale:** Each prior authorization involves 2–4 Claude API calls, each taking 3–8 seconds. A synchronous server would block the event loop during every API call, making concurrent users mutually exclusive. The async architecture allows FastAPI to handle other requests while the LLM is thinking. Every `await` in the codebase is a point where the server can serve other requests — the difference between 500 concurrent users and 1.
+
+---
+
+## Agent Design
+
+### The Type System (`agents/types.py`)
+
+Every agent interaction is typed end-to-end. The type system is the contract:
+
+```python
+# AgentContext — passed to every agent, carries request state and correlation tracking
+class AgentContext(BaseModel):
+    request_id: str                          # Authorization request being processed
+    correlation_id: str                      # Shared UUID across all audit records
+    previous_agents: list[AgentType]         # Which agents have already run
+    agent_outputs: dict[str, Any]            # Their outputs (available to downstream agents)
+    force_escalation: bool                   # Override flag for high-risk cases
+    autonomy_level: AgentAutonomyLevel       # SUPERVISED | AUTONOMOUS | LOCKED
+
+# AgentResponse[T] — every agent returns this generic wrapper
+class AgentResponse(BaseModel, Generic[T]):
+    output: T | None                         # Agent-specific structured output
+    confidence_score: float                  # 0.0–1.0
+    should_escalate: bool                    # Agent's own escalation recommendation
+    escalation_reasons: list[str]            # Why it thinks it should escalate
+    token_usage: TokenUsage                  # Input/output tokens + estimated cost
+    duration_ms: int                         # Execution time for performance tracking
+
+# TokenUsage — cost tracking built into the type system
+class TokenUsage(BaseModel):
+    input_tokens: int
+    output_tokens: int
+
+    @property
+    def estimated_cost(self) -> float:
+        # Claude Sonnet pricing: $3/M input, $15/M output
+        return (self.input_tokens / 1_000_000 * 3.0) + (self.output_tokens / 1_000_000 * 15.0)
+```
+
+### The Base Agent (`agents/base.py`)
+
+The base class enforces a structured output contract using Claude's tool-use API:
+
+```python
+# Instead of parsing free-form JSON from LLM output (fragile),
+# we define the response schema as a tool input and force the LLM
+# to call that tool — making structured output a guarantee, not a hope.
+tool_def = {
+    "name": "submit_result",
+    "input_schema": response_model.model_json_schema()  # Pydantic schema
+}
+response = await client.messages.create(
+    tools=[tool_def],
+    tool_choice={"type": "tool", "name": "submit_result"}  # Force tool use
+)
+```
+
+This pattern eliminates the most common source of agent failures: LLM responses that look like JSON but are not quite valid.
+
+### Escalation Logic (Orchestrator)
+
+The Orchestrator enforces the escalation tree. Each branch is an explicit conditional — not a probabilistic decision:
+
+```
+Authorization Request Received
+├── Decision Agent (Tier 1 — Frontline Nurse)
+│   ├── confidence ≥ 0.95 AND status == AUTO_APPROVED → return immediately
+│   ├── 0.90 ≤ confidence < 0.95 → escalate to Tier 2
+│   └── confidence < 0.90 → route to human review queue
+│
+└── Medical Director Agent (Tier 2 — invoked only when Tier 1 is uncertain)
+    ├── confidence ≥ 0.95 → AUTO_APPROVED
+    └── confidence < 0.95 → IN_REVIEW (human queue)
+```
+
+> **All 7 escalation branches are implemented.** Pre-flight checks (Branches 4-7) run before any LLM call and route cases directly to human review based on deterministic clinical policy rules. Post-agent checks (Branches 1-3) evaluate Decision Agent confidence. See `agents/clinical_risk_detector.py` and `tests/unit/test_escalation_tree.py` for the full implementation and one test per branch.
+
+### The Policy Evolution Agent (`agents/evolution.py`)
+
+The Level 5 architecture introduces a `PolicyEvolutionAgent` — an agent that rewrites clinical authorization guidelines based on accumulated human override patterns. When a Medical Director consistently approves exceptions to a strict guideline, the Evolution Agent can propose a revised guideline that incorporates that exception. Proposals require human approval before deployment (see `api/routes/admin.py`).
+
+This is the system's long-term learning mechanism: not fine-tuning, not prompt injection, but structured policy evolution with a human approval gate and a full version trail in the database.
+
+---
+
+## Database Strategy
+
+### Development vs. Production
+
+PACCA uses a single codebase for both environments. The database engine is swapped via one environment variable:
+
+```bash
+# Local development — SQLite, zero configuration required
+DATABASE_URL=sqlite+aiosqlite:///./pacca.db
+
+# Production — PostgreSQL 16, full feature set
+DATABASE_URL=postgresql+asyncpg://pacca:password@db:5432/pacca
+```
+
+This works because the entire data layer uses SQLAlchemy 2.0 ORM with no raw SQL. The ORM translates Python to the correct SQL dialect automatically. The repository pattern (`db/repository.py`) means no route or agent touches a database engine directly.
+
+### Why PostgreSQL in Production
+
+The code is already written for PostgreSQL. Specifically:
+
+**Native JSONB columns** — `db/models.py` imports `from sqlalchemy.dialects.postgresql import JSONB` for audit log details, token usage, and decision rationale. SQLite silently stores these as TEXT, which works for local development but loses the ability to run JSON-path queries against audit records. In production, you can query: *"find all authorizations where the decision agent's confidence was below 0.85 for oncology cases in Q4"* — that requires JSONB.
+
+**Concurrent write safety** — SQLite serializes all writes through a single file lock. PostgreSQL uses row-level locking and MVCC (Multi-Version Concurrency Control), allowing hundreds of concurrent authorization requests to write simultaneously.
+
+**Connection pooling** — The async engine (`db/session.py`) is configured for PostgreSQL's connection pool: `pool_size`, `max_overflow`, `pool_timeout`, `pool_pre_ping`. These settings are no-ops on SQLite but activate automatically when the DATABASE_URL points to PostgreSQL.
+
+**High availability** — PostgreSQL supports streaming replication, point-in-time recovery, and logical replication. For a healthcare audit trail, losing `pacca.db` due to disk failure is a HIPAA incident. PostgreSQL on managed infrastructure (AWS RDS, Google Cloud SQL) provides automated backups and failover.
+
+### Schema Highlights
+
+```python
+# AuditLogModel — the core HIPAA compliance artifact
+class AuditLogModel(Base):
+    entry_id: str          # UUID7 — time-sortable, globally unique
+    correlation_id: str    # Shared UUID across all records for one request
+    action: str            # "authorization_submitted" | "agent_decision_completed" | ...
+    actor: str             # Provider NPI, agent name, or "system"
+    actor_type: str        # "provider" | "agent" | "user" | "system"
+    duration_ms: int       # How long this action took
+    token_usage: JSONB     # {input_tokens, output_tokens} — cost tracking
+    details: JSONB         # Action-specific structured data
+    success: bool          # False = this record is a failure event
+    error_message: str     # Populated when success=False
+```
+
+Every authorization submission generates 4–7 audit records (submission, per-agent start/complete, escalation decision, final decision). All share the same `correlation_id`. A compliance query for a single authorization retrieves the complete chain.
+
+---
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: Docker (Full Stack — Recommended)
 
-- Python 3.12+
-- Node.js 18+ (for frontend)
-- Docker & Docker Compose (optional)
-- Anthropic API key
-
-### Option 1: Docker (Recommended)
+Starts the API, PostgreSQL 16, Redis, and ChromaDB in one command:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/pacca.git
+git clone https://github.com/Chaos-6/pacca.git
 cd pacca
 
-# Set up environment
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env — set ANTHROPIC_API_KEY and change SECRET_KEY
 
-# Start all services
 docker-compose up -d
 
-# Access the application
-# Frontend: http://localhost:3000
-# API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
+# Services:
+# PACCA API + Swagger docs:  http://localhost:8000/docs
+# Langfuse observability UI: http://localhost:3001
+#   Login: admin@pacca.local / pacca_admin_dev
+#   Traces appear automatically after the first authorization request
+# ChromaDB:                  http://localhost:8001
+# PostgreSQL (PACCA):        localhost:5432
+# PostgreSQL (Langfuse):     localhost:5433
 ```
 
-### Option 2: Local Development
+### Option 2: Local Development (SQLite, zero config)
 
 ```bash
-# Clone and setup
-git clone https://github.com/yourusername/pacca.git
+git clone https://github.com/Chaos-6/pacca.git
 cd pacca
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-
-# Install dependencies
+python -m venv venv && source venv/bin/activate
 pip install -e ".[dev]"
 
-# Set environment variables
-export ANTHROPIC_API_KEY=sk-ant-your-key-here
-export DATABASE_URL=sqlite+aiosqlite:///./pacca.db
+cp .env.example .env
+# Set ANTHROPIC_API_KEY and DATABASE_URL (see .env.example)
 
-# Initialize database
-python -c "import asyncio; from pacca.db import init_database; asyncio.run(init_database())"
+# Initialize database tables
+python -c "import asyncio; from pacca.db.session import init_database; asyncio.run(init_database())"
 
-# Start the API server
-uvicorn pacca.api.main:app --reload
+# Seed sample clinical guidelines into ChromaDB
+python seed_data.py
 
-# In another terminal, start the frontend
-cd frontend
-npm install
-npm run dev
+# Start API
+uvicorn pacca.api.main:app --reload --port 8000
+
+# In a second terminal, start the React frontend
+cd frontend && npm install && npm run dev
 ```
 
 ### Running Tests
 
 ```bash
-# Run all tests
+# Full test suite
 pytest
 
-# Run with coverage
-pytest --cov=pacca --cov-report=html
+# Unit tests only (fast, no API calls)
+pytest tests/unit -v
 
-# Run specific test categories
-pytest tests/unit
-pytest tests/integration
+# With coverage report
+pytest tests/unit --cov=pacca --cov-report=html
+
+# Audit trail tests specifically
+pytest tests/unit/test_audit_trail.py -v
 ```
 
 ---
 
-## API Documentation
+## API Reference
 
-### Submit Authorization Request
+### Core Endpoints
 
-```http
-POST /api/v1/authorizations
-Content-Type: application/json
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/v1/login/` | None | Exchange credentials for JWT |
+| `POST` | `/api/v1/authorizations/` | JWT | Submit new authorization request |
+| `GET` | `/api/v1/authorizations/` | JWT | List requests with pagination |
+| `GET` | `/api/v1/authorizations/{id}` | JWT | Get request + decision detail |
+| `POST` | `/api/v1/authorizations/feedback` | JWT | Submit human override (learning loop) |
+| `GET` | `/api/v1/admin/config` | JWT | Read current operational configuration |
+| `PATCH` | `/api/v1/admin/config` | JWT | Update config at runtime (no restart) |
+| `DELETE` | `/api/v1/admin/config/overrides` | JWT | Reset all runtime overrides to env defaults |
+| `GET` | `/api/v1/admin/metrics` | JWT | Operational metrics + Langfuse link |
+| `POST` | `/api/v1/admin/optimize_policies` | JWT | Trigger Level 5 policy evolution |
+| `GET` | `/health` | None | Health check |
 
-{
-  "patient": {
-    "id": "P12345",
-    "date_of_birth": "1966-05-15",
-    "gender": "M"
-  },
-  "diagnosis": {
-    "code": "C34.1",
-    "description": "Malignant neoplasm of upper lobe, bronchus or lung"
-  },
-  "treatment": {
-    "code": "J9271",
-    "code_type": "HCPCS",
-    "description": "Pembrolizumab injection",
-    "category": "medication",
-    "estimated_cost": 15000.00
-  },
-  "provider": {
-    "provider_id": "1234567890",
-    "provider_name": "Dr. Jane Smith"
-  },
-  "payer": {
-    "payer_id": "BCBS001",
-    "payer_name": "Blue Cross Blue Shield",
-    "member_id": "MEM123456"
-  },
-  "clinical_notes": "Patient with stage IIIA NSCLC, PD-L1 TPS ≥50%...",
-  "urgency": "expedited"
-}
+Full interactive documentation: `http://localhost:8000/docs` (Swagger UI) or `http://localhost:8000/redoc`
+
+### Example: Submit Authorization
+
+```bash
+curl -X POST http://localhost:8000/api/v1/authorizations/ \
+  -H "Authorization: Bearer <your-jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_id": "AUTH-001",
+    "patient_id": "P-12345",
+    "provider_npi": "1234567890",
+    "clinical_case": {
+      "patient_id": "P-12345",
+      "primary_diagnosis_code": "C34.1",
+      "procedure_code": "J9271",
+      "evidence": [{
+        "id": "e1",
+        "source_type": "CLINICAL_NOTE",
+        "description": "Stage IIIA NSCLC, PD-L1 TPS ≥50%, prior platinum-based chemo",
+        "original_text": "Patient is a 58-year-old male with stage IIIA non-small cell lung cancer...",
+        "confidence": 0.95
+      }]
+    }
+  }'
 ```
-
-### Response
 
 ```json
 {
-  "request_id": "AUTH-01HQXYZ...",
-  "status": "approved",
-  "decision": "approve",
-  "confidence_score": 0.92,
-  "decision_summary": "Authorization approved based on NCCN guidelines...",
-  "complexity": 3,
-  "specialty": "oncology",
-  "requires_human_review": false
+  "decision_id": "DEC-01HQXYZ...",
+  "status": "AUTO_APPROVED",
+  "confidence_score": 0.97,
+  "rationale": "NCCN Category 1 recommendation supports Pembrolizumab monotherapy for PD-L1 TPS ≥50% NSCLC without EGFR/ALK alterations. All criteria documented.",
+  "review_tier_used": "AUTOMATED",
+  "timestamp": "2026-04-04T10:23:41.123Z"
 }
 ```
-
-### Additional Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/authorizations` | List authorizations with pagination |
-| GET | `/api/v1/authorizations/{id}` | Get authorization details |
-| GET | `/api/v1/authorizations/{id}/explain` | Get decision explanation |
-| POST | `/api/v1/authorizations/{id}/review` | Submit human review |
-| GET | `/api/v1/metrics` | System metrics |
-| GET | `/health` | Health check |
-
-Full API documentation available at `/docs` when running the server.
-
----
-
-## Demo Scenarios
-
-PACCA includes pre-configured clinical scenarios for demonstration:
-
-### 1. Routine Imaging (Auto-Approve Path)
-- **Case**: MRI lumbar spine for chronic low back pain
-- **Expected**: High confidence approval (>90%)
-- **Outcome**: Autonomous approval
-
-### 2. Oncology Immunotherapy (Review Path)
-- **Case**: Pembrolizumab for Stage IIIA NSCLC with PD-L1 ≥50%
-- **Expected**: Moderate complexity, guideline-aligned
-- **Outcome**: Approval with human review (high cost)
-
-### 3. Incomplete Documentation (Request More Info)
-- **Case**: Biologic therapy with missing lab work
-- **Expected**: Insufficient evidence
-- **Outcome**: Request for additional documentation
-
-Load demo data in the frontend using the "Load Demo Data" button.
-
----
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ANTHROPIC_API_KEY` | Claude API key | Required |
-| `DATABASE_URL` | Database connection string | SQLite (local) |
-| `REDIS_URL` | Redis connection string | localhost:6379 |
-| `APP_ENV` | Environment (development/production) | development |
-| `AUTO_APPROVE_CONFIDENCE_THRESHOLD` | Confidence for autonomous approval | 0.85 |
-| `ESCALATION_CONFIDENCE_THRESHOLD` | Confidence below which to escalate | 0.75 |
-| `COMPLEXITY_AUTO_APPROVE_MAX` | Max complexity for auto-approval | 2 |
-| `HIGH_COST_THRESHOLD` | Cost threshold for medical director review | 100000 |
-
-See [.env.example](.env.example) for all configuration options.
 
 ---
 
@@ -332,76 +402,138 @@ See [.env.example](.env.example) for all configuration options.
 ```
 pacca/
 ├── src/pacca/
-│   ├── agents/           # Multi-agent framework
-│   │   ├── base.py       # Base agent class
-│   │   ├── evidence_agent.py
-│   │   ├── classification_agent.py
-│   │   ├── decision_agent.py
-│   │   ├── orchestrator.py
-│   │   └── prompts/      # Agent prompt templates
-│   ├── api/              # FastAPI application
-│   │   ├── main.py
+│   ├── agents/
+│   │   ├── base.py              # ABC + tool-use structured output pattern
+│   │   ├── types.py             # AgentContext, AgentResponse[T], TokenUsage, ToolCall
+│   │   ├── orchestrator.py      # Escalation logic + per-agent audit records
+│   │   ├── decision.py          # Decision + Medical Director agents
+│   │   ├── evidence_agent.py    # Evidence aggregation (EHR synthesis)
+│   │   ├── classification_agent.py  # Complexity scoring + routing
+│   │   ├── evolution.py         # Level 5: Policy Evolution Agent
+│   │   └── prompts/
+│   │       └── templates.py     # Structured prompt templates (reusable safety components)
+│   ├── api/
+│   │   ├── main.py              # FastAPI app, CORS, auth endpoints
 │   │   └── routes/
-│   ├── config/           # Settings and logging
-│   ├── db/               # Database layer
-│   │   ├── models.py     # SQLAlchemy models
-│   │   ├── repository.py # Repository pattern
-│   │   └── migrations/   # Alembic migrations
-│   ├── models/           # Pydantic domain models
-│   └── rag/              # RAG pipeline
-│       ├── pipeline.py
-│       └── sample_guidelines.py
-├── frontend/             # React frontend
-├── tests/                # Test suites
-├── demo/                 # Demo scenarios
-├── docs/                 # Documentation
-└── docker-compose.yml    # Docker orchestration
+│   │       ├── authorizations.py  # Core workflow + audit wiring
+│   │       ├── admin.py         # Policy evolution management
+│   │       └── health.py        # Health + readiness probes
+│   ├── db/
+│   │   ├── models.py            # SQLAlchemy ORM (PostgreSQL JSONB columns)
+│   │   ├── repository.py        # Repository pattern — AuthorizationRepository,
+│   │   │                        #   DecisionRepository, AuditRepository
+│   │   ├── session.py           # Async engine + session factory (pool configured)
+│   │   └── migrations/          # Alembic schema migrations
+│   ├── rag/
+│   │   ├── pipeline.py          # RAGPipeline — cosine scoring, metadata filtering
+│   │   └── sample_guidelines.py # Seed data: NCCN, CMS, AHA guidelines
+│   ├── integrations/
+│   │   └── vector_store.py      # GuidelineRetriever — dual-collection ChromaDB
+│   ├── models/                  # Pydantic domain models
+│   └── config/                  # Settings + structlog logging
+├── tests/
+│   ├── unit/
+│   │   ├── test_api.py          # HTTP endpoint tests
+│   │   ├── test_models.py       # Domain model tests (edge cases)
+│   │   └── test_audit_trail.py  # Audit wiring tests (correlation_id, failure logging)
+│   ├── integration/             # (In progress — Week 4)
+│   └── clinical/                # (In progress — Week 4: golden dataset + LLM-as-judge)
+├── docs/
+│   └── ARCHITECTURE.md          # Detailed component documentation
+├── docker-compose.yml           # PostgreSQL 16 + Redis + ChromaDB + API
+├── Dockerfile                   # Multi-stage build (builder → production → development)
+├── pyproject.toml               # ruff + mypy strict + pytest asyncio + coverage 80%
+└── .env.example                 # Documented environment variables
 ```
 
 ---
 
 ## Technology Stack
 
-| Layer | Technology |
-|-------|------------|
-| **LLM** | Claude (Anthropic API) |
-| **Backend** | Python 3.12, FastAPI, Pydantic v2 |
-| **Database** | PostgreSQL, SQLAlchemy 2.0, Alembic |
-| **Vector Store** | ChromaDB |
-| **Cache** | Redis |
-| **Frontend** | React 18, TypeScript, Tailwind CSS |
-| **Testing** | pytest, pytest-asyncio |
-| **CI/CD** | GitHub Actions |
-| **Containerization** | Docker, Docker Compose |
+| Layer | Technology | Notes |
+|-------|------------|-------|
+| **LLM** | Claude (Anthropic API) | Tool-use forced for structured output |
+| **Backend** | Python 3.12, FastAPI, Pydantic v2 | Fully async throughout |
+| **Production DB** | PostgreSQL 16, SQLAlchemy 2.0, Alembic | JSONB columns, async engine, connection pool |
+| **Dev DB** | SQLite (same ORM layer) | One env var to switch to PostgreSQL |
+| **Vector Store** | ChromaDB | Dual-collection: official guidelines + precedents |
+| **Cache** | Redis 7 | Rate limiting, session caching |
+| **Frontend** | React 18, TypeScript, Tailwind CSS, Vite | |
+| **Testing** | pytest, pytest-asyncio, hypothesis | fail_under=80, asyncio_mode=auto |
+| **Code Quality** | ruff, mypy (strict), pre-commit | Zero type-ignore pragmas in core modules |
+| **CI/CD** | GitHub Actions | Lint → Test → Coverage → Docker build |
+| **Containerization** | Docker, Docker Compose | Multi-stage build, non-root user |
 
 ---
 
-## Contributing
+## Clinical Demo Scenarios
 
-Contributions are welcome! Please read our contributing guidelines and submit pull requests.
+Three pre-configured cases exercise different decision paths. Load them via the "Load Demo Data" button in the frontend.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+**Scenario 1 — Routine Imaging (Auto-Approve)**
+Case: MRI lumbar spine, chronic low back pain, documented conservative treatment failure.
+Expected: `AUTO_APPROVED`, confidence > 0.90. Demonstrates: guideline retrieval, autonomous decision path.
+
+**Scenario 2 — Oncology Immunotherapy (Tier 2 Escalation)**
+Case: Pembrolizumab for Stage IIIA NSCLC, PD-L1 ≥50%, estimated cost $15,000/cycle.
+Expected: Decision Agent is confident; Medical Director invoked due to high-cost threshold ($100K+ annual projection).
+Demonstrates: Tier 2 escalation, cost-threshold routing, multi-agent coordination.
+
+**Scenario 3 — Incomplete Documentation (Human Review)**
+Case: Biologic therapy with missing lab results and insufficient prior treatment documentation.
+Expected: `IN_REVIEW`. Agent identifies specific missing elements.
+Demonstrates: Evidence gap detection, human-in-the-loop routing, conditional response pattern.
+
+---
+
+## Configuration Reference
+
+```bash
+# ── Required ─────────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY=sk-ant-...          # Claude API key
+SECRET_KEY=<min-32-char-random>       # JWT signing key — NEVER commit a real value
+
+# ── Database (switch one line to go from dev to production) ──────────────────
+DATABASE_URL=sqlite+aiosqlite:///./pacca.db           # Local development
+# DATABASE_URL=postgresql+asyncpg://pacca:pw@db:5432/pacca  # Production
+
+# ── Clinical Decision Thresholds ─────────────────────────────────────────────
+AUTO_APPROVE_CONFIDENCE_THRESHOLD=0.95   # ≥ this → automatic approval
+ESCALATION_CONFIDENCE_THRESHOLD=0.90    # < this but ≥ 0.90 → Medical Director
+HIGH_COST_THRESHOLD=100000              # $ above this → Medical Director review
+COMPLEXITY_AUTO_APPROVE_MAX=2           # Complexity 1-2 eligible for autonomous decision
+
+# ── Feature Flags ────────────────────────────────────────────────────────────
+ENABLE_AUTONOMOUS_DECISIONS=true         # false → all cases require human review
+ENABLE_RAG=true                          # false → decisions without guideline context
+DEMO_MODE=true                           # Loads sample cases and demo accounts
+```
+
+See [.env.example](.env.example) for the complete annotated reference.
+
+---
+
+## Compliance Notes
+
+PACCA is designed with HIPAA Security Rule 164.312(b) audit control requirements in mind:
+
+- Every request touching PHI writes an audit record before any processing begins
+- Every agent execution writes `start` + `complete` records — orphaned `start` records identify exact failure points
+- All audit records for one request share a `correlation_id` UUID for complete trace reconstruction
+- Human overrides (the learning loop) write a `precedent_learned` audit record including who submitted the override and when
+- The `AuditLogModel.success=False` field distinguishes failure events from normal events without requiring log parsing
+
+**This is not a HIPAA-certified product.** It is a portfolio demonstration of HIPAA-conscious architecture patterns. A production deployment would require a HIPAA Business Associate Agreement with Anthropic, encryption at rest for the PostgreSQL instance, TLS for all connections, and a formal risk assessment.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-- Built with [Claude](https://anthropic.com) by Anthropic
-- Inspired by real-world healthcare prior authorization challenges
-- Clinical guidelines based on publicly available NCCN, ACR, and AHA guidelines
+MIT License — see [LICENSE](LICENSE)
 
 ---
 
 <p align="center">
-  <strong>PACCA</strong> - Transforming Prior Authorization with AI
+  Built by <strong>David Reed</strong> — PhD, MBA, PMP | Head of Career Advancement & AI/ML Delivery, Interview Kickstart<br>
+  <em>Demonstrating production-grade agentic AI architecture for healthcare workflows</em>
 </p>

@@ -1,0 +1,361 @@
+"""
+Unit tests for audit trail wiring — Week 1 implementation.
+
+These tests verify that:
+  1. Every authorization submission produces at least one audit record
+  2. Every successful decision produces a decision audit record
+  3. Failures produce failure audit records (not silence)
+  4. The feedback/learning endpoint produces a precedent_learned record
+  5. All audit records for one request share the same correlation_id
+
+Teaching note — why test audit logging specifically?
+  Audit logging is invisible to end users and easy to accidentally break.
+  Without tests, a refactor could silently disable audit writes and you
+  would not know until a compliance audit revealed missing records.
+  These tests make audit behavior a first-class, enforced contract.
+
+Teaching note — what is a mock?
+  The AI agents (DecisionAgent, MedicalDirectorAgent) make real HTTP calls
+  to the Anthropic API. In tests, we never want to make real API calls —
+  they are slow, cost money, and may fail due to network issues.
+  A "mock" is a fake object that pretends to be the real thing.
+  unittest.mock.AsyncMock creates a fake async function that returns
+  whatever you tell it to return, instantly, with no network call.
+  This lets us test the audit wiring independently of the AI responses.
+"""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime
+
+import pytest
+
+from pacca.models.enums import AuthorizationStatus, ReviewTier
+from pacca.models.authorization import AuthorizationDecision
+from pacca.models.clinical import ClinicalCase, EvidenceItem
+from pacca.models.enums import EvidenceSourceType
+
+
+# ── Test fixtures — reusable test data ──────────────────────────────────────
+
+@pytest.fixture
+def sample_case() -> ClinicalCase:
+    """A minimal but valid ClinicalCase for testing."""
+    return ClinicalCase(
+        patient_id="P-TEST-001",
+        primary_diagnosis_code="C34.1",
+        procedure_code="J9271",
+        evidence=[
+            EvidenceItem(
+                id="e1",
+                source_type=EvidenceSourceType.CLINICAL_NOTE,
+                description="Stage IIIA NSCLC, PD-L1 TPS >= 50%",
+                original_text="Patient presents with stage IIIA NSCLC.",
+                confidence=0.95,
+            )
+        ],
+    )
+
+
+@pytest.fixture
+def sample_request(sample_case) -> dict:
+    """A minimal valid request payload for the submit endpoint."""
+    return {
+        "request_id": "AUTH-TEST-001",
+        "patient_id": "P-TEST-001",
+        "provider_npi": "1234567890",
+        "clinical_case": {
+            "patient_id": "P-TEST-001",
+            "primary_diagnosis_code": "C34.1",
+            "procedure_code": "J9271",
+            "evidence": [
+                {
+                    "id": "e1",
+                    "source_type": "CLINICAL_NOTE",
+                    "description": "Stage IIIA NSCLC",
+                    "original_text": "Patient presents with stage IIIA NSCLC.",
+                    "confidence": 0.95,
+                }
+            ],
+        },
+    }
+
+
+@pytest.fixture
+def mock_auto_approved_decision() -> AuthorizationDecision:
+    """A pre-built decision that represents an auto-approved outcome."""
+    return AuthorizationDecision(
+        decision_id="DEC-TEST-001",
+        status=AuthorizationStatus.AUTO_APPROVED,
+        confidence_score=0.97,
+        rationale="NCCN guidelines support Pembrolizumab for PD-L1 >= 50% NSCLC.",
+        review_tier_used=ReviewTier.AUTOMATED,
+    )
+
+
+@pytest.fixture
+def mock_in_review_decision() -> AuthorizationDecision:
+    """A pre-built decision that represents a human-review-required outcome."""
+    return AuthorizationDecision(
+        decision_id="DEC-TEST-002",
+        status=AuthorizationStatus.IN_REVIEW,
+        confidence_score=0.72,
+        rationale="Insufficient documentation of prior treatment failure.",
+        review_tier_used=ReviewTier.AUTOMATED,
+    )
+
+
+# ── Core audit wiring tests ──────────────────────────────────────────────────
+
+class TestAuditTrailWiring:
+    """
+    Tests that audit records are written at the correct moments.
+
+    Each test patches (replaces with a mock) the components we are NOT
+    testing, so we can focus purely on whether audit.log() gets called.
+    """
+
+    @pytest.mark.asyncio
+    async def test_submission_writes_audit_record(
+        self, sample_request, mock_auto_approved_decision
+    ):
+        """
+        Submitting an authorization must produce at least one audit record.
+
+        This is the most basic HIPAA requirement: every request touching
+        PHI must be logged. Even if the AI pipeline fails later, the
+        submission itself must be recorded.
+        """
+        # We will count how many times audit.log() is called
+        audit_log_calls = []
+
+        async def capture_log(**kwargs):
+            """Fake audit.log() that records what it was called with."""
+            audit_log_calls.append(kwargs)
+            # Return a minimal fake AuditLogModel
+            mock_entry = MagicMock()
+            mock_entry.entry_id = f"AUDIT-{len(audit_log_calls)}"
+            return mock_entry
+
+        # Patch three things:
+        #   1. The Orchestrator's process_decision (avoid real LLM calls)
+        #   2. The RAG engine's query (avoid ChromaDB calls)
+        #   3. AuditRepository.log (capture calls instead of hitting DB)
+        with patch(
+            "pacca.api.routes.authorizations.orchestrator.process_decision",
+            new_callable=AsyncMock,
+            return_value=mock_auto_approved_decision,
+        ), patch(
+            "pacca.api.routes.authorizations.rag_engine.query",
+            return_value="Mock guideline content",
+        ), patch(
+            "pacca.db.repository.AuditRepository.log",
+            side_effect=capture_log,
+        ):
+            from pacca.agents.orchestrator import Orchestrator
+            from pacca.integrations.vector_store import GuidelineRetriever
+            from pacca.api.routes.authorizations import submit_authorization
+            from pacca.models.authorization import AuthorizationRequest
+
+            # Build the request model
+            req = AuthorizationRequest(**sample_request)
+
+            # Create a fake async session (we are not testing DB writes here,
+            # just that audit.log() is called)
+            mock_session = AsyncMock()
+
+            # Call the route function directly (no HTTP overhead in unit tests)
+            await submit_authorization(request=req, session=mock_session)
+
+        # There should be at least 2 audit records: submission + decision
+        assert len(audit_log_calls) >= 2, (
+            f"Expected at least 2 audit records, got {len(audit_log_calls)}. "
+            "Submission and decision must both be logged."
+        )
+
+    @pytest.mark.asyncio
+    async def test_submission_audit_has_correct_action(
+        self, sample_request, mock_auto_approved_decision
+    ):
+        """
+        The first audit record must have action='authorization_submitted'.
+
+        This ensures we can query the audit log by action to find all
+        submissions, which is a common compliance reporting need.
+        """
+        audit_log_calls = []
+
+        async def capture_log(**kwargs):
+            audit_log_calls.append(kwargs)
+            return MagicMock()
+
+        with patch(
+            "pacca.api.routes.authorizations.orchestrator.process_decision",
+            new_callable=AsyncMock,
+            return_value=mock_auto_approved_decision,
+        ), patch(
+            "pacca.api.routes.authorizations.rag_engine.query",
+            return_value="Mock guideline",
+        ), patch(
+            "pacca.db.repository.AuditRepository.log",
+            side_effect=capture_log,
+        ):
+            from pacca.api.routes.authorizations import submit_authorization
+            from pacca.models.authorization import AuthorizationRequest
+
+            req = AuthorizationRequest(**sample_request)
+            mock_session = AsyncMock()
+            await submit_authorization(request=req, session=mock_session)
+
+        # The first call should always be the submission record
+        first_action = audit_log_calls[0]["action"]
+        assert first_action == "authorization_submitted", (
+            f"First audit record should be 'authorization_submitted', got '{first_action}'. "
+            "Submission must be logged BEFORE processing in case of downstream failure."
+        )
+
+    @pytest.mark.asyncio
+    async def test_all_records_share_correlation_id(
+        self, sample_request, mock_auto_approved_decision
+    ):
+        """
+        All audit records for one request must share the same correlation_id.
+
+        Without this, you cannot reconstruct a full request trace. You need
+        to be able to ask: 'show me everything that happened for AUTH-001'
+        and get back all 4-6 records from that single authorization flow.
+        """
+        audit_log_calls = []
+
+        async def capture_log(**kwargs):
+            audit_log_calls.append(kwargs)
+            return MagicMock()
+
+        with patch(
+            "pacca.api.routes.authorizations.orchestrator.process_decision",
+            new_callable=AsyncMock,
+            return_value=mock_auto_approved_decision,
+        ), patch(
+            "pacca.api.routes.authorizations.rag_engine.query",
+            return_value="Mock guideline",
+        ), patch(
+            "pacca.db.repository.AuditRepository.log",
+            side_effect=capture_log,
+        ):
+            from pacca.api.routes.authorizations import submit_authorization
+            from pacca.models.authorization import AuthorizationRequest
+
+            req = AuthorizationRequest(**sample_request)
+            mock_session = AsyncMock()
+            await submit_authorization(request=req, session=mock_session)
+
+        # All records must have a correlation_id and they must all be the same
+        correlation_ids = {
+            call.get("correlation_id") for call in audit_log_calls
+        }
+        assert None not in correlation_ids, (
+            "Some audit records are missing correlation_id. "
+            "Every audit record must have a correlation_id for request tracing."
+        )
+        assert len(correlation_ids) == 1, (
+            f"Found {len(correlation_ids)} different correlation_ids across "
+            f"{len(audit_log_calls)} records. All records for one request "
+            "must share the same correlation_id."
+        )
+
+    @pytest.mark.asyncio
+    async def test_failure_writes_failure_audit_record(self, sample_request):
+        """
+        If the AI pipeline fails, a failure audit record must be written.
+
+        Silence on failure is worse than logging the failure itself.
+        Without this test, a bug in the LLM path could cause the route to
+        raise a 500 error AND skip the audit log — leaving no trace.
+        """
+        audit_log_calls = []
+
+        async def capture_log(**kwargs):
+            audit_log_calls.append(kwargs)
+            return MagicMock()
+
+        with patch(
+            "pacca.api.routes.authorizations.orchestrator.process_decision",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Simulated LLM API failure"),
+        ), patch(
+            "pacca.api.routes.authorizations.rag_engine.query",
+            return_value="Mock guideline",
+        ), patch(
+            "pacca.db.repository.AuditRepository.log",
+            side_effect=capture_log,
+        ):
+            from fastapi import HTTPException
+            from pacca.api.routes.authorizations import submit_authorization
+            from pacca.models.authorization import AuthorizationRequest
+
+            req = AuthorizationRequest(**sample_request)
+            mock_session = AsyncMock()
+
+            # The route should raise HTTPException(500), not crash silently
+            with pytest.raises(HTTPException) as exc_info:
+                await submit_authorization(request=req, session=mock_session)
+
+            assert exc_info.value.status_code == 500
+
+        # There must be at least one failure audit record
+        failure_records = [
+            c for c in audit_log_calls
+            if c.get("action") == "authorization_processing_failed"
+        ]
+        assert len(failure_records) >= 1, (
+            "No failure audit record was written when the AI pipeline failed. "
+            "Failures must always be logged — silence is not acceptable."
+        )
+
+        # The failure record must mark success=False
+        assert failure_records[0].get("success") is False, (
+            "The failure audit record should have success=False."
+        )
+
+    @pytest.mark.asyncio
+    async def test_feedback_endpoint_writes_audit_record(self):
+        """
+        The /feedback endpoint (learning loop) must produce an audit record.
+
+        Human overrides are the most sensitive events in the system —
+        they directly change what the AI will decide in future cases.
+        Every override must be logged with who taught what and when.
+        """
+        audit_log_calls = []
+
+        async def capture_log(**kwargs):
+            audit_log_calls.append(kwargs)
+            return MagicMock()
+
+        with patch(
+            "pacca.api.routes.authorizations.rag_engine.add_precedent",
+        ), patch(
+            "pacca.db.repository.AuditRepository.log",
+            side_effect=capture_log,
+        ):
+            from pacca.api.routes.authorizations import (
+                learn_from_feedback,
+                FeedbackRequest,
+            )
+
+            feedback = FeedbackRequest(
+                case_summary="MRI spine for 2-week back pain with motor weakness",
+                decision="AUTO_APPROVED",
+                rationale="Motor weakness constitutes neurological emergency",
+            )
+            mock_session = AsyncMock()
+            await learn_from_feedback(feedback=feedback, session=mock_session)
+
+        # Must have logged the learning event
+        learning_records = [
+            c for c in audit_log_calls
+            if c.get("action") == "precedent_learned"
+        ]
+        assert len(learning_records) == 1, (
+            f"Expected 1 'precedent_learned' audit record, got {len(learning_records)}. "
+            "Every learning loop event must be audited for model governance."
+        )

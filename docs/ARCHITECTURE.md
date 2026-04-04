@@ -4,6 +4,8 @@
 
 PACCA (Prior Authorization & Care Coordination Agent Platform) is a multi-agent AI system designed to automate healthcare prior authorization workflows while maintaining human oversight for complex cases.
 
+This document covers: system architecture, data flow, component design, database strategy, and the Architecture Decision Records (ADRs) that explain why key choices were made. ADRs are first-class documentation — a system that cannot explain its own design decisions is a liability in a regulated environment.
+
 ## Architecture Diagram
 
 ```
@@ -280,3 +282,117 @@ uvicorn pacca.api.main:app --reload
 - Managed PostgreSQL (RDS, Cloud SQL)
 - Managed Redis (ElastiCache, Cloud Memorystore)
 - CI/CD via GitHub Actions
+
+---
+
+## Database Strategy
+
+### Development vs. Production
+
+PACCA uses a single codebase across both environments. The database engine is selected via one environment variable:
+
+```bash
+# Local development — SQLite, zero infrastructure required
+DATABASE_URL=sqlite+aiosqlite:///./pacca.db
+
+# Production — PostgreSQL 16, full feature set
+DATABASE_URL=postgresql+asyncpg://pacca:password@db:5432/pacca
+```
+
+This works because the entire data layer is abstracted behind two layers:
+1. **SQLAlchemy 2.0 ORM** — translates Python model operations to correct SQL dialect automatically
+2. **Repository pattern** (`db/repository.py`) — routes and agents call `await audit.log(...)`, never touching a database engine directly
+
+No route, agent, or business logic function imports from `sqlalchemy.dialects.postgresql` directly. Only `db/models.py` does, and SQLAlchemy handles the fallback to SQLite-compatible types transparently.
+
+### Why PostgreSQL in Production
+
+**JSONB columns.** `db/models.py` defines `audit_logs.details`, `audit_logs.token_usage`, and `decisions.rationale_data` as `JSONB`. In PostgreSQL this enables indexed queries inside JSON fields:
+```sql
+-- Find all decisions below 85% confidence for oncology cases
+SELECT * FROM authorization_decisions
+WHERE rationale_data->>'confidence_score' < '0.85'
+AND request_id IN (
+    SELECT request_id FROM authorization_requests
+    WHERE assigned_specialty = 'oncology'
+);
+```
+In SQLite, JSONB falls back to TEXT — queries still work, but without JSON-path indexing. Suitable for development; not for compliance reporting at scale.
+
+**Concurrent write safety.** SQLite serializes all writes through a file lock. PostgreSQL uses row-level locking and MVCC (Multi-Version Concurrency Control). For a system claiming 500+ concurrent users, SQLite's file lock is a hard architectural limit.
+
+**Connection pooling.** `db/session.py` configures `pool_size`, `max_overflow`, `pool_timeout`, and `pool_pre_ping`. These settings are live with PostgreSQL and no-ops with SQLite.
+
+**High availability.** PostgreSQL on managed infrastructure (AWS RDS, Cloud SQL) provides automated backups, point-in-time recovery, and streaming replication. For a healthcare audit trail, losing `pacca.db` to a disk failure is a HIPAA incident.
+
+---
+
+## Architecture Decision Records (ADRs)
+
+### ADR-001: Custom Agent Framework vs. LangChain / CrewAI
+
+**Status:** Accepted
+
+**Decision:** Custom agent base class (`agents/base.py`)
+
+**Context:** Healthcare prior authorization requires deterministic escalation logic. Specific clinical conditions must trigger specific routing paths regardless of LLM output confidence.
+
+**Rationale:** Framework abstractions (LangChain chains, CrewAI crews) obscure the control flow that compliance auditors need to inspect. A 150-line custom base class gives explicit, readable control over every agent handoff. The trade-off is maintenance ownership; the benefit is that every escalation decision is a readable conditional, not a framework callback.
+
+**Consequence:** Agent framework updates require internal changes. This is acceptable given the compliance requirement for inspectable decision paths. The full 7-branch escalation tree lives in `agents/orchestrator.py` (workflow) and `agents/clinical_risk_detector.py` (policy rules), with one unit test per branch in `tests/unit/test_escalation_tree.py`.
+
+---
+
+### ADR-002: PostgreSQL as Primary Database
+
+**Status:** Accepted
+
+**Decision:** PostgreSQL 16 (production) with SQLite fallback (development)
+
+**Context:** The data model has hard relational constraints and requires JSON-path querying of audit records for compliance reporting.
+
+**Rationale:** PostgreSQL's native JSONB type, row-level locking, connection pooling, and replication support are requirements at production scale. SQLite is retained for local development because the ORM abstraction makes it a zero-cost option.
+
+**Consequence:** `docker-compose.yml` requires a PostgreSQL service. Local development requires either Docker or explicitly setting `DATABASE_URL` to the SQLite option.
+
+---
+
+### ADR-003: ChromaDB Dual-Collection RAG
+
+**Status:** Accepted
+
+**Decision:** Two ChromaDB collections — `nccn_guidelines` (official rules) + `case_precedents` (human overrides)
+
+**Context:** Clinical guidelines and institutional override decisions have different trust levels, update frequencies, and rollback requirements.
+
+**Rationale:** Separating them into two collections allows independent versioning, different relevance-weighting in LLM prompts, and rollback of institutional learning without touching the authoritative guideline store. The precedents collection is the system's institutional memory — human overrides are embedded and stored; future similar cases retrieve them alongside official guidelines.
+
+**Consequence:** The `integrations/vector_store.py` `GuidelineRetriever` maintains two collection references and queries both on every RAG call.
+
+---
+
+### ADR-004: Tool-Use API for Structured Agent Output
+
+**Status:** Accepted
+
+**Decision:** Force Claude's tool-use API for all agent responses
+
+**Context:** Agent responses must be parseable Pydantic models. Free-form JSON parsing from LLM output fails unpredictably.
+
+**Rationale:** Claude's tool-use API with `tool_choice: {type: "tool", name: "submit_result"}` forces the model to populate a JSON schema rather than generating free-form text. This makes structured output a guarantee enforced by the API, not a regex or `json.loads()` that can fail.
+
+**Consequence:** All agent interactions require a tool definition derived from the response model's JSON schema. `base.py` handles this automatically via `response_model.model_json_schema()`.
+
+---
+
+### ADR-005: Repository Pattern for Data Access
+
+**Status:** Accepted
+
+**Decision:** Repository pattern (`AuthorizationRepository`, `DecisionRepository`, `AuditRepository`)
+
+**Context:** Routes and agents need to read/write database records without coupling business logic to SQL.
+
+**Rationale:** The repository pattern decouples business logic from database mechanics. `await audit.log(...)` is a stable interface regardless of whether the underlying engine is SQLite or PostgreSQL. This makes unit testing clean (mock the repository, not the database) and makes engine swaps a configuration change.
+
+**Consequence:** New database operations require a corresponding repository method. Direct ORM access from routes is prohibited by convention.

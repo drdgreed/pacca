@@ -1,73 +1,194 @@
+"""
+Decision Support Agent (Tier 1) and Medical Director Agent (Tier 2).
+
+These are the two core clinical reasoning agents in PACCA:
+
+  DecisionSupportAgent (Tier 1 — Frontline UM Nurse):
+    Handles every case that passes pre-flight checks. Returns a
+    confidence score and rationale. High confidence → auto-approve.
+    Ambiguous → escalate to Medical Director Agent.
+
+  MedicalDirectorAgent (Tier 2 — Chief Medical Director):
+    Handles cases the Tier 1 agent found ambiguous (confidence 0.90–0.95).
+    Has clinical authority to resolve nuance and interpret gray areas.
+    Produces a definitive determination with high confidence, or routes
+    to human review if uncertainty genuinely persists.
+
+Both agents use the full structured prompt template from prompts/templates.py,
+including the shared CLINICAL_SAFETY_GUIDELINES anti-hallucination instructions.
+Prompt versions are tracked in PROMPT_REGISTRY for audit trail purposes.
+"""
+
 from pydantic import BaseModel
+
 from ..models.authorization import AuthorizationDecision, ReviewTier
 from ..models.clinical import ClinicalCase
 from .base import BaseAgent
+from .prompts.templates import (
+    DECISION_AGENT_SYSTEM,
+    MEDICAL_DIRECTOR_AGENT_SYSTEM,
+    PROMPT_REGISTRY,
+    get_prompt_version,
+)
+
 
 class DecisionContext(BaseModel):
+    """
+    Input context passed to both Tier 1 and Tier 2 agents.
+
+    Attributes:
+        case:                The clinical case being evaluated
+        relevant_guidelines: Raw text from the RAG pipeline — guidelines
+                             and institutional precedents most relevant to
+                             this specific case
+    """
     case: ClinicalCase
     relevant_guidelines: str
 
+
 class DecisionAgent(BaseAgent):
+    """
+    Tier 1 Frontline UM Nurse Decision Support Agent.
+
+    Evaluates prior authorization cases against clinical guidelines
+    using the full DECISION_AGENT_SYSTEM prompt (v2.2). Prompt includes:
+      - AGENT_IDENTITY (shared baseline)
+      - CLINICAL_SAFETY_GUIDELINES (anti-hallucination, escalation rules)
+      - 5-step evaluation framework (guideline alignment, medical necessity,
+        step therapy, documentation, precedent)
+      - Confidence scoring rubric with explicit thresholds
+      - OUTPUT_FORMAT_INSTRUCTIONS (structured output enforcement)
+
+    Prompt version: see PROMPT_REGISTRY['DecisionSupportAgent']
+    """
+
     @property
-    def name(self) -> str: return "DecisionSupportAgent"
+    def name(self) -> str:
+        return "DecisionSupportAgent"
 
     @property
     def system_prompt(self) -> str:
-        return """
-        You are an expert Utilization Management (UM) Nurse reviewing clinical authorization requests. 
-        Your job is to compare the provided Clinical Case against the established Guidelines.
+        return DECISION_AGENT_SYSTEM
 
-        STRICT GRADING RUBRIC:
-        1. Read the Clinical Case notes carefully.
-        2. Read the Guidelines carefully.
-        3. Identify if the specific criteria in the Guidelines are explicitly met by the evidence in the case notes.
-        4. If the case notes mention "PAST MEDICAL DIRECTOR DECISIONS" or "PRECEDENT", you MUST weigh this heavily.
-
-        SCORING RULES:
-        - Output a Confidence Score of 0.95 to 1.0 ONLY if every single guideline requirement is clearly documented in the case notes.
-        - Output a Confidence Score of 0.90 to 0.94 if the criteria are mostly met, but there is some ambiguity.
-        - Output a Confidence Score below 0.90 if the evidence is missing, contradictory, or clearly does not meet the guidelines.
-        
-        Write a clear, concise rationale for your score explaining exactly what evidence was found or missing.
-        """
+    @property
+    def prompt_version(self) -> str:
+        return get_prompt_version(self.name)
 
     async def run(self, context: DecisionContext) -> AuthorizationDecision:
+        """
+        Evaluate a clinical case and return an authorization decision.
+
+        Builds a structured user-turn prompt from the case and guidelines,
+        calls the Claude API via BaseAgent.execute() (with retry + OTel span),
+        and returns a typed AuthorizationDecision.
+
+        Args:
+            context: Clinical case + retrieved guidelines
+
+        Returns:
+            AuthorizationDecision with status, confidence, and rationale
+        """
+        # Build a clear, structured user-turn prompt
+        # The user turn provides the case-specific data; the system prompt
+        # provides the role definition, safety guidelines, and rubric.
+        user_input = (
+            f"## Clinical Case\n"
+            f"{context.case.model_dump_json(indent=2)}\n\n"
+            f"## Relevant Clinical Guidelines\n"
+            f"{context.relevant_guidelines}"
+        )
+
         decision = await self.execute(
-            user_input=f"Case: {context.case.model_dump_json()}\nContext: {context.relevant_guidelines}", 
-            response_model=AuthorizationDecision
+            user_input=user_input,
+            response_model=AuthorizationDecision,
         )
         decision.review_tier_used = ReviewTier.AUTOMATED
         return decision
 
+
 class MedicalDirectorAgent(BaseAgent):
+    """
+    Tier 2 Chief Medical Director Agent.
+
+    Handles cases escalated by the Tier 1 agent when confidence is in
+    the 0.90–0.95 ambiguous zone. Uses the full MEDICAL_DIRECTOR_AGENT_SYSTEM
+    prompt (v2.2). Prompt includes:
+      - AGENT_IDENTITY (shared baseline)
+      - CLINICAL_SAFETY_GUIDELINES (same anti-hallucination rules)
+      - Explicit framing as Tier 2 authority with specific scope
+      - 4-step evaluation framework (understand Tier 1 uncertainty,
+        apply clinical authority, evaluate medical necessity, make
+        definitive determination)
+      - Confidence scoring rules specific to MD tier
+      - Required output structure (must address Tier 1 hesitation explicitly)
+
+    This is a significant upgrade from the original 2-line prompt.
+    The MD Agent is the highest-stakes agent in the system — the one
+    making decisions about genuinely ambiguous cases — and requires
+    the most specific, structured guidance.
+
+    Prompt version: see PROMPT_REGISTRY['MedicalDirectorAgent']
+    """
+
     @property
-    def name(self) -> str: return "MedicalDirectorAgent"
+    def name(self) -> str:
+        return "MedicalDirectorAgent"
 
     @property
     def system_prompt(self) -> str:
-        return """
-        You are the Chief Medical Director of a Utilization Management board. 
-        A frontline UM Nurse has escalated a case to you because the clinical evidence was ambiguous or fell into a gray area.
+        return MEDICAL_DIRECTOR_AGENT_SYSTEM
 
-        YOUR TASK:
-        Review the Nurse's previous decision, the clinical case, and the guidelines. You have the authority to interpret clinical nuance that the frontline nurse cannot.
+    @property
+    def prompt_version(self) -> str:
+        return get_prompt_version(self.name)
 
-        STRICT GRADING RUBRIC:
-        1. Evaluate why the frontline nurse was unsure (look at their rationale and the case notes).
-        2. Determine if the clinical nuance justifies an approval despite the strict guideline text.
-        3. If there is a recorded precedent where a Medical Director approved a similar case, you should lean toward approval.
-        
-        SCORING RULES:
-        - If you determine the procedure is medically necessary based on your expert review, output a Confidence Score >= 0.95.
-        - If the case still lacks critical medical necessity, output a Confidence Score below 0.90 to route it to a human review queue.
-        
-        Your rationale must specifically address WHY you are overriding or confirming the nurse's hesitation.
+    async def run(
+        self,
+        context: DecisionContext,
+        previous_decision: AuthorizationDecision,
+    ) -> AuthorizationDecision:
         """
+        Apply Medical Director authority to resolve Tier 1 uncertainty.
 
-    async def run(self, context: DecisionContext, previous_decision: AuthorizationDecision) -> AuthorizationDecision:
+        Receives both the original case and the Tier 1 decision so the
+        MD Agent can explicitly address why the Frontline Agent was uncertain.
+
+        Teaching note: the key difference from Tier 1 is the FRAMING.
+        The MD Agent's prompt tells it: "you are NOT re-evaluating from scratch.
+        You are specifically resolving the uncertainty the Tier 1 agent had."
+        This produces better outputs than asking the MD Agent to evaluate
+        the case independently, because it focuses the model's attention
+        on the actual ambiguity rather than starting over from the top.
+
+        Args:
+            context:           Original clinical case + guidelines
+            previous_decision: The Tier 1 agent's decision and rationale
+
+        Returns:
+            AuthorizationDecision with final status and MD-level rationale
+        """
+        # Build a structured prompt that puts the Tier 1 decision front and center.
+        # The MD Agent must address the Tier 1 hesitation — not ignore it.
+        tier1_rationale = (
+            previous_decision.rationale
+            if isinstance(previous_decision.rationale, str)
+            else str(previous_decision.rationale)
+        )
+
+        user_input = (
+            f"## Tier 1 Agent Decision (Escalated)\n"
+            f"- Status: {previous_decision.status.value}\n"
+            f"- Confidence: {previous_decision.confidence_score:.2f}\n"
+            f"- Tier 1 Rationale: {tier1_rationale}\n\n"
+            f"## Original Clinical Case\n"
+            f"{context.case.model_dump_json(indent=2)}\n\n"
+            f"## Clinical Guidelines\n"
+            f"{context.relevant_guidelines}"
+        )
+
         decision = await self.execute(
-            user_input=f"Previous Nurse Decision: {previous_decision.model_dump_json()}\nCase: {context.case.model_dump_json()}\nContext: {context.relevant_guidelines}", 
-            response_model=AuthorizationDecision
+            user_input=user_input,
+            response_model=AuthorizationDecision,
         )
         decision.review_tier_used = ReviewTier.MEDICAL_DIRECTOR_AGENT
         return decision

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Application
     # ==========================================================================
     app_name: str = Field(default="pacca", description="Application name")
-    app_env: Literal["development", "staging", "production"] = Field(
+    app_env: Literal["development", "staging", "production", "test"] = Field(
         default="development", description="Environment"
     )
     debug: bool = Field(default=True, description="Debug mode")
@@ -153,6 +153,43 @@ class Settings(BaseSettings):
     # ==========================================================================
     enable_tracing: bool = Field(default=True, description="Enable agent tracing")
     metrics_enabled: bool = Field(default=True, description="Enable metrics endpoint")
+
+    # OpenTelemetry configuration
+    # When otel_endpoint is set, traces are exported to that collector
+    # (Langfuse, Jaeger, Tempo, etc.). When None, traces are logged locally only.
+    otel_endpoint: str | None = Field(
+        default=None,
+        description="OpenTelemetry collector endpoint (e.g. http://localhost:4318)",
+    )
+    otel_service_name: str = Field(
+        default="pacca",
+        description="Service name reported in OTel traces",
+    )
+    otel_enabled: bool = Field(
+        default=True,
+        description="Enable OpenTelemetry span instrumentation",
+    )
+
+    # Retry configuration for LLM API calls
+    # These values control tenacity's exponential backoff behaviour.
+    llm_retry_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum number of LLM call attempts before giving up",
+    )
+    llm_retry_wait_min_seconds: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=10.0,
+        description="Minimum wait seconds between retries (exponential base)",
+    )
+    llm_retry_wait_max_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=120.0,
+        description="Maximum wait seconds between retries (exponential cap)",
+    )
 
     # ==========================================================================
     # Rate Limiting

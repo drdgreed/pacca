@@ -10,7 +10,25 @@ from typing import Any
 
 from sqlalchemy import select, update, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid7 import uuid7
+from uuid import uuid4
+
+
+def uuid7() -> str:
+    """Generate a time-sortable unique ID using uuid4 as fallback.
+
+    The uuid7 package provides true UUIDv7 (time-ordered). When unavailable,
+    uuid4 (random) is used instead — functionally identical for our purposes
+    since we only need globally unique IDs, not strict time ordering.
+    """
+    try:
+        from uuid7 import uuid7 as _uuid7
+        return str(_uuid7())
+    except ImportError:
+        return str(uuid4())
+
+
+# Re-export as the same name callers expect
+__all__ = ["uuid7"]
 
 from pacca.config import get_logger
 from pacca.db.models import (
@@ -20,13 +38,12 @@ from pacca.db.models import (
     GuidelineModel,
     HumanReviewModel,
 )
-from pacca.models import (
+from pacca.models.authorization import (
+    AuditLogEntry,
     AuthorizationDecision,
     AuthorizationRequest,
-    AuthorizationStatus,
-    AuditLogEntry,
-    HumanReview,
 )
+from pacca.models.enums import AuthorizationStatus
 
 logger = get_logger(__name__)
 

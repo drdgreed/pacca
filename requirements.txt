@@ -1,0 +1,48 @@
+# Core runtime dependencies for PACCA
+# Generated from pyproject.toml for environments where pip install -e . is not used.
+# Prefer: pip install -e ".[dev]"   (installs everything)
+# Use this file only if editable install is not available.
+
+# Web Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+
+# Data Validation
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.36
+asyncpg>=0.30.0
+alembic>=1.14.0
+aiosqlite>=0.20.0
+
+# LLM
+anthropic>=0.40.0
+
+# Vector Store
+chromadb>=0.5.0
+
+# Utilities
+python-dotenv>=1.0.1
+structlog>=24.4.0
+tenacity>=9.0.0
+uuid7>=0.1.0
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0
+python-dateutil>=2.9.0
+jsonschema>=4.23.0
+redis>=5.2.0
+httpx>=0.28.0
+
+# Observability
+opentelemetry-api>=1.27.0
+opentelemetry-sdk>=1.27.0
+opentelemetry-exporter-otlp-proto-http>=1.27.0
+
+# Dev / Testing
+pytest>=8.3.0
+pytest-asyncio>=0.24.0
+pytest-cov>=6.0.0
+pytest-mock>=3.14.0
