@@ -1,0 +1,48 @@
+{
+  "run_at": "2026-04-04T18:36:16.222349",
+  "cases_run": 5,
+  "passed": 5,
+  "accuracy": 1.0,
+  "results": [
+    {
+      "case_id": "DEMO-A01",
+      "expected": "AUTO_APPROVED",
+      "actual": "AUTO_APPROVED",
+      "confidence": 0.98,
+      "match": true,
+      "rationale_preview": "This request for pembrolizumab (J9271) for first-line treatment of stage IIIA NSCLC meets all NCCN guideline criteria wi"
+    },
+    {
+      "case_id": "DEMO-A02",
+      "expected": "AUTO_APPROVED",
+      "actual": "AUTO_APPROVED",
+      "confidence": 0.98,
+      "match": true,
+      "rationale_preview": "This request for empagliflozin (J0597) meets ALL ADA 2025 guideline criteria for SGLT2 inhibitor use in Type 2 Diabetes "
+    },
+    {
+      "case_id": "DEMO-A03",
+      "expected": "AUTO_APPROVED",
+      "actual": "AUTO_APPROVED",
+      "confidence": 0.98,
+      "match": true,
+      "rationale_preview": "This request meets the neurological emergency exception criteria for immediate MRI imaging despite only 3 weeks of sympt"
+    },
+    {
+      "case_id": "DEMO-A04",
+      "expected": "AUTO_APPROVED",
+      "actual": "AUTO_APPROVED",
+      "confidence": 0.98,
+      "match": true,
+      "rationale_preview": "This prior authorization request for abatacept (J0129) meets ALL criteria per ACR RA Guidelines 2021 with explicit docum"
+    },
+    {
+      "case_id": "DEMO-A05",
+      "expected": "AUTO_APPROVED",
+      "actual": "AUTO_APPROVED",
+      "confidence": 0.98,
+      "match": true,
+      "rationale_preview": "This prior authorization request for adalimumab (J0135) for moderate-to-severe Crohn's disease meets ALL ACG guideline c"
+    }
+  ]
+}

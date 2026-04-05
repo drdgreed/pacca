@@ -1,0 +1,48 @@
+{
+  "run_at": "2026-04-04T18:25:49.133624",
+  "cases_run": 5,
+  "passed": 0,
+  "accuracy": 0.0,
+  "results": [
+    {
+      "case_id": "DEMO-A01",
+      "expected": "AUTO_APPROVED",
+      "actual": "ERROR",
+      "confidence": 0,
+      "match": false,
+      "error": "Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZjkdiz5pebmZCU6iA2A9'}"
+    },
+    {
+      "case_id": "DEMO-A02",
+      "expected": "AUTO_APPROVED",
+      "actual": "ERROR",
+      "confidence": 0,
+      "match": false,
+      "error": "Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZjkdjbnvWxZZj8qQd5mc'}"
+    },
+    {
+      "case_id": "DEMO-A03",
+      "expected": "AUTO_APPROVED",
+      "actual": "ERROR",
+      "confidence": 0,
+      "match": false,
+      "error": "Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZjkdkFynmqPoVw1YXXXQ'}"
+    },
+    {
+      "case_id": "DEMO-A04",
+      "expected": "AUTO_APPROVED",
+      "actual": "ERROR",
+      "confidence": 0,
+      "match": false,
+      "error": "Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZjkdmcqSm7UQrZGcG2as'}"
+    },
+    {
+      "case_id": "DEMO-A05",
+      "expected": "AUTO_APPROVED",
+      "actual": "ERROR",
+      "confidence": 0,
+      "match": false,
+      "error": "Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZjkdnBpDkhbKE2u3tbLj'}"
+    }
+  ]
+}
