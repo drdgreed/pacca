@@ -48,80 +48,9 @@ PACCA addresses all four. A provider submits a clinical case through a React das
 
 ## Architecture
 
-```
-                    ┌─────────────────────────────┐
-                    │     React Frontend SPA       │
-                    │  Dashboard · Submit · Review │
-                    └──────────┬──────────────┬────┘
-           POST /login         │              │  JSON Decision & Rationale
-           Returns JWT         │              │
-                    ┌──────────▼──┐   ┌───────▼──────────────────┐
-                    │  JWT Auth   │   │   FastAPI Backend (async) │
-                    │  Bouncer    │   │   /authorizations /admin  │
-                    │  (bcrypt)   │   │   /health /login          │
-                    └──────────┬──┘   └───────┬──────────┬────────┘
-                    Verify/Hash│    Semantic   │          │ Clinical
-                               │    Search     │          │ Context
-                    ┌──────────▼──┐   ┌────────▼──┐      │
-                    │ PostgreSQL  │   │  ChromaDB  │      │
-                    │ 16 / SQLite │   │  Vector    │◄─────┘
-                    │             │   │  Store     │
-                    │ Requests    │   │            │
-                    │ Decisions   │   │ nccn_      │
-                    │ Audit Log   │   │ guidelines │
-                    │ (JSONB)     │   │            │
-                    └─────────────┘   │ case_      │
-                                      │ precedents │
-                                      └────────────┘
-                                             │ Returns Guidelines
-                                             ▼
-                              ┌──────────────────────────┐
-                              │   Multi-Agent            │
-                              │      Orchestrator        │◆
-                              │                          │
-                              │  PRE-FLIGHT CHECKS       │──── Auto-Approve
-                              │  Experimental treatment  │
-                              │  Rare condition          │──── Approve /
-                              │  Conflicting guidelines  │     In Review
-                              │  Prior denial            │
-                              └──────────┬───────────────┘
-                          Tier 1 Review  │  Tier 2 Escalation
-                    ┌─────────────────────┴──────────────────────┐
-                    │                                            │
-           ┌────────▼──────────┐                    ┌───────────▼───────────┐
-           │  Frontline Nurse  │                    │  Medical Director     │
-           │  Agent (Tier 1)   │                    │  Agent (Tier 2)       │
-           │                   │                    │                       │
-           │  Evaluate case    │                    │  Evaluate nuance      │
-           │  vs guidelines    │                    │  Resolve ambiguity    │
-           └────────┬──────────┘                    └───────────┬───────────┘
-                    │                                            │
-                    └──────────────────┬─────────────────────────┘
-                                       │
-                              ┌────────▼────────┐
-                              │   LLM API       │
-                              │   Claude        │
-                              └─────────────────┘
-
-  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ v2.2 platform layers ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-
-  ┌──────────────────────────────────┐   ┌─────────────────────────────────────┐
-  │  Policy Evolution — Level 5      │   │  Clinical Evaluation (LLM-as-Judge) │
-  │                                  │   │                                     │
-  │  EvolutionAgent analyzes         │   │  20 golden cases                    │
-  │  override patterns →             │   │  Hallucination detection            │
-  │  PolicyProposal (PENDING) →      │   │  CI accuracy gate ≥80%              │
-  │  Human MD approves →             │   │  Zero-tolerance hallucination test  │
-  │  ChromaDB updated +              │   │                                     │
-  │  Immutable change log            │   │                                     │
-  └──────────────────────────────────┘   └─────────────────────────────────────┘
-
-  ┌────────────────────────────────────────────────────────────────────────────┐
-  │  HIPAA Audit Trail — correlation_id tracing                                │
-  │  Pre-write records · start/complete pairs per agent ·                      │
-  │  success=False for failures · append-only policy change log                │
-  └────────────────────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="docs/assets/architecture_v2.2.svg" alt="PACCA v2.2.0 Architecture Diagram" width="680"/>
+</p>
 
 ### Key architectural properties
 
