@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Chaos-6/pacca/harness/manifests/change_manifest.schema.json",
+  "title": "PACCA Change Manifest",
+  "description": "Schema for harness change manifests in PACCA. Every behavioral change to PACCA's agent harness ships with a manifest entry that names the failure pattern, root cause, predicted fixes, predicted risks, and constraint level. The next evaluation round verifies the predictions against actual case-level outcomes; rejected changes are reverted at file granularity. Methodology adapted from Lin et al., Agentic Harness Engineering (arXiv:2604.25850, 2026).",
+  "type": "object",
+  "required": ["iteration", "iteration_tag", "iso_date", "author", "base_model", "changes"],
+  "additionalProperties": false,
+  "properties": {
+    "iteration": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Iteration number. Iteration 0 is the baseline; each subsequent iteration corresponds to a harness-iter-N git tag."
+    },
+    "iteration_tag": {
+      "type": "string",
+      "pattern": "^harness-iter-[0-9]+$",
+      "description": "The git tag this manifest is bound to. Must match the iteration number."
+    },
+    "iso_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the manifest was committed, ISO 8601 (YYYY-MM-DD)."
+    },
+    "author": {
+      "type": "string",
+      "description": "Human author of this manifest. Even when changes are drafted with AI assistance, a human author owns the manifest's predictions."
+    },
+    "base_model": {
+      "type": "string",
+      "description": "Identifier of the LLM the harness is tuned against (e.g., 'claude-sonnet-4-20250514'). Recorded because the optimal harness is model-specific; a manifest's predictions are only valid against the base model recorded here."
+    },
+    "previous_iteration_tag": {
+      "type": ["string", "null"],
+      "pattern": "^harness-iter-[0-9]+$",
+      "description": "The iteration tag this manifest builds on. Null only for iteration 0."
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "One-paragraph human-readable summary of what this iteration shipped and why."
+    },
+    "changes": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Ordered list of changes shipped in this iteration. Each change is one logical edit at one constraint level.",
+      "items": { "$ref": "#/$defs/change" }
+    },
+    "verdicts": {
+      "type": "array",
+      "description": "Verdicts on changes from the previous iteration's manifest. Populated when this iteration's evaluation round completes. Each verdict references a change ID from the previous manifest.",
+      "items": { "$ref": "#/$defs/verdict" }
+    }
+  },
+  "$defs": {
+    "change": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "description",
+        "files",
+        "failure_pattern",
+        "root_cause",
+        "predicted_fixes",
+        "risk_cases",
+        "constraint_level",
+        "why_this_component"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^chg-[0-9]+$",
+          "description": "Change ID, sequential within the iteration. Matches the git commit prefix (e.g., 'chg-7' corresponds to a commit message beginning 'chg-7:')."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["new", "improvement", "rollback", "removal"],
+          "description": "Type of change. 'new' adds a component; 'improvement' refines an existing one; 'rollback' reverts a prior change; 'removal' deletes a component."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 500,
+          "description": "What was changed. One or two sentences."
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Files modified by this change, relative to repo root. The AHE convention is that one logical change touches files within one constraint level only.",
+          "items": {
+            "type": "string",
+            "pattern": "^(src/pacca/|harness/|docs/|tests/)"
+          }
+        },
+        "failure_pattern": {
+          "type": "string",
+          "minLength": 10,
+          "description": "The class of failure this change addresses. Phrased as a pattern, not a single case (e.g., 'Frontline Nurse retroactively auto-approves after Medical Director escalation' rather than 'case-23 was wrong')."
+        },
+        "root_cause": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Why the failure occurs. Distinct from the failure pattern: the pattern names the symptom, the root cause names the mechanism."
+        },
+        "evidence": {
+          "type": "array",
+          "description": "Specific cases or trajectory log references that demonstrate the failure pattern. Strong manifests cite at least two pieces of evidence per change.",
+          "items": {
+            "type": "object",
+            "required": ["source"],
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "Case ID, trajectory log path, or audit record reference."
+              },
+              "note": {
+                "type": "string",
+                "description": "Optional one-line explanation of what the evidence shows."
+              }
+            }
+          }
+        },
+        "predicted_fixes": {
+          "type": "array",
+          "description": "Cases predicted to flip from failing to passing as a result of this change. The AHE paper found self-prediction of fixes is reliable (~5x random precision and recall).",
+          "items": {
+            "type": "string",
+            "description": "Case ID from the evaluation suite."
+          }
+        },
+        "risk_cases": {
+          "type": "array",
+          "description": "Cases predicted to be at risk of regressing as a result of this change. The AHE paper found self-prediction of regressions is barely above random (~2x). Treat this list as a low-confidence claim; the evaluation suite is the safety net.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "constraint_level": {
+          "type": "string",
+          "enum": [
+            "system_prompt",
+            "tool_description",
+            "tool_implementation",
+            "middleware",
+            "skill",
+            "sub_agent",
+            "long_term_memory",
+            "escalation_branch",
+            "rag_collection",
+            "prompt_registry",
+            "audit_schema"
+          ],
+          "description": "Which component type this change edits. The first seven are AHE/NexAU standard component types; the last four are PACCA-specific harness surfaces (the 7-branch escalation tree, dual-collection ChromaDB, the PROMPT_REGISTRY, and the HIPAA audit log schema)."
+        },
+        "why_this_component": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Why this constraint level was chosen over alternatives. Required because the AHE paper's findings hinge on choosing the right level: system prompt edits in isolation tend to regress, while tools/middleware/memory edits tend to compound."
+        },
+        "phi_impact": {
+          "type": "string",
+          "enum": ["none", "indirect", "direct"],
+          "description": "PACCA-specific. Whether this change affects how Protected Health Information flows through the system. 'none' = no PHI handling change; 'indirect' = changes logging or audit of PHI-handling code paths; 'direct' = changes what PHI fields are accessed, stored, or transmitted."
+        },
+        "audit_relevant": {
+          "type": "boolean",
+          "description": "PACCA-specific. Whether this change touches code paths required for HIPAA 45 CFR 164.312(b) audit controls or FDA SaMD change-control compliance. If true, the change must be reflected in the immutable PolicyChangeLogEntry per Section 14 of the PRD."
+        },
+        "rollback_plan": {
+          "type": "string",
+          "description": "How to revert this change if the next-iteration verdict rejects it. For most file-level changes this is 'git revert <sha>'. For changes that require database migrations or RAG collection updates, document the reverse migration here."
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["change_id", "previous_iteration_tag", "outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "change_id": {
+          "type": "string",
+          "pattern": "^chg-[0-9]+$",
+          "description": "The change ID this verdict applies to."
+        },
+        "previous_iteration_tag": {
+          "type": "string",
+          "pattern": "^harness-iter-[0-9]+$",
+          "description": "The iteration tag where this change originally landed."
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["keep", "improve", "rollback"],
+          "description": "Verdict, mirroring the AHE paper's vocabulary. 'keep' = working, leave as-is; 'improve' = directionally correct, refine; 'rollback' = not working at this constraint level, revert and re-approach from a different level."
+        },
+        "verified_fixes": {
+          "type": "array",
+          "description": "Predicted fixes that materialized — true positives.",
+          "items": { "type": "string" }
+        },
+        "missed_fixes": {
+          "type": "array",
+          "description": "Cases that flipped to passing but were not predicted — true positives the manifest didn't claim credit for.",
+          "items": { "type": "string" }
+        },
+        "false_predicted_fixes": {
+          "type": "array",
+          "description": "Predicted fixes that did NOT materialize — false positives. A high count here weakens the manifest's authorial credibility for future iterations.",
+          "items": { "type": "string" }
+        },
+        "verified_risks": {
+          "type": "array",
+          "description": "Predicted risks that materialized — the change did regress these cases.",
+          "items": { "type": "string" }
+        },
+        "unforeseen_regressions": {
+          "type": "array",
+          "description": "Cases that regressed without being predicted as risks. The AHE paper's regression-blindness finding predicts this list will typically be longer than verified_risks.",
+          "items": { "type": "string" }
+        },
+        "fix_precision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "verified_fixes / (verified_fixes + false_predicted_fixes)"
+        },
+        "fix_recall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "verified_fixes / (verified_fixes + missed_fixes)"
+        },
+        "regression_precision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "verified_risks / (verified_risks + risks predicted but not realized). Expected to be low per the AHE paper's findings; tracked anyway as a calibration signal."
+        },
+        "regression_recall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "verified_risks / (verified_risks + unforeseen_regressions). Low values flag that the evaluation suite needs more case coverage in the affected area."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional human commentary on the verdict, especially when outcome is 'rollback' — capturing why the constraint level was wrong is the most valuable text in the manifest for future iterations."
+        }
+      }
+    }
+  }
+}
