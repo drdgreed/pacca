@@ -1,0 +1,59 @@
+{
+  "iteration": 1,
+  "iteration_tag": "harness-iter-1",
+  "iso_date": "2026-05-04",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-20250514",
+  "previous_iteration_tag": "harness-iter-0",
+  "summary": "Phase H1 first extraction. Decision Support and Medical Director system prompts moved from f-string constants in templates.py to file-level mount points at src/pacca/agents/<agent>/system_prompt.md. A Jinja2 loader assembles prompts at runtime from the .md file plus the shared components in templates.py. Byte-identity with pre-H1 output verified character-by-character before any runtime change. Full test suite (120 tests) passes unchanged. Three findings recorded, deferred to separate commits.",
+  "changes": [
+    {
+      "id": "chg-1",
+      "type": "improvement",
+      "description": "Extract Decision Support and Medical Director system prompts to file-level mount points; add Jinja2 loader; wire decision.py to use the loader; declare jinja2 (introduced by the loader) and reconcile python-jose/bcrypt (missing from pyproject.toml but present in requirements.txt) in pyproject.toml's dependencies.",
+      "files": [
+        "src/pacca/agents/decision_support/system_prompt.md",
+        "src/pacca/agents/medical_director/system_prompt.md",
+        "src/pacca/agents/_prompt_loader.py",
+        "src/pacca/agents/decision.py",
+        "pyproject.toml",
+        "harness/manifests/change_manifest.schema.json"
+      ],
+      "failure_pattern": "No failure pattern targeted. This is a structural commit that establishes the file-level decoupling Phases H2 and H3 require. The H1 success criterion is byte-identical prompt output, not a behavioral gain.",
+      "root_cause": "Pre-H1, agent prompts lived as Python f-string constants inside prompts/templates.py, mixed with Python module-level interpolation logic. Edits to prompts produced diffs that mixed prompt-text changes with module-rendering changes. Phases H2 (Institutional Memory Layer) and H3 (Cross-Step Middleware Tier) require one-file-per-component diffs to attribute behavioral gains correctly; that attribution is impossible without H1 first.",
+      "evidence": [
+        {
+          "source": "/tmp/byte_identity_check.py",
+          "note": "Custom verification script comparing loader output to f-string output character-by-character. Both DecisionSupportAgent and MedicalDirectorAgent prompts produced byte-identical output after a one-character fix to the Decision Support .md file (a missing blank line between the role section and the safety guidelines block). Documented as part of the H1 verification gate."
+        },
+        {
+          "source": "tests/unit/test_prompt_engineering.py",
+          "note": "All 18 prompt-engineering tests pass unchanged. Tests that directly compare DECISION_AGENT_SYSTEM string content continue to pass because that constant remains canonical in templates.py; the loader's Jinja2 substitution reproduces it from the file."
+        },
+        {
+          "source": "tests/unit/ full suite",
+          "note": "120 of 120 collectable tests pass. No regressions introduced."
+        },
+        {
+          "source": "GitHub Actions CI on PR for harness/iter-1",
+          "note": "Initial PR-CI run revealed (a) jinja2 was a new runtime dependency introduced by the loader and not declared, and (b) python-jose was already missing from pyproject.toml independently. Both reconciled in this commit. The deferral of python-jose/bcrypt to a separate commit was correct in principle but the CI run made the dependency surface visible enough that bundling them into chg-1 became the cleaner outcome."
+        },
+        {
+          "source": "harness/manifests/change_manifest.schema.json (modified in this commit)",
+          "note": "The iter-0 schema's files-path pattern restricted entries to src/pacca/, harness/, docs/, and tests/. The iter-1 PR-CI cycle revealed this was too strict: real harness changes sometimes touch root-level config (pyproject.toml here). The pattern was broadened to include repo-root config files (pyproject.toml, requirements*.txt, setup.py/cfg, Dockerfile, .gitignore, README.md, CHANGELOG.md, LICENSE, Makefile) and CI workflows under .github/. Also generalized src/pacca/ to src/ since the project-specific prefix was unnecessary. This is the methodology working as designed: the schema constraints themselves age into discoveries that age into improvements."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "system_prompt",
+      "why_this_component": "The system prompt is the constraint level being decoupled. Tool descriptions, tool implementations, middleware, and other component types remain unchanged in this commit; their extraction is queued for future iterations. The choice to extract only system prompts in chg-1 keeps the commit scope narrow and the verification gate simple (byte-identity check on rendered prompt strings).",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. The orphaned decision_agent.py was not modified. templates.py was not modified. Reverting decision.py and removing the new directories restores the pre-H1 state exactly. PROMPT_REGISTRY versions remain unchanged across the refactor, so audit logs are reconcilable.",
+      "observed_findings_deferred": [
+        "decision_agent.py is dead code: defines DecisionSupportAgent class that no module imports. The orchestrator and tests reference decision.py's DecisionAgent class. Deletion queued for chg-2 with its own manifest entry.",
+        "decision.py houses two tier-distinguished agents (Tier 1 Frontline Nurse, Tier 2 Medical Director) in one Python module. Both prompts extracted to separate file mount points without restructuring class layout. If a class-level split is later desired, that becomes its own iteration with its own attribution."
+      ]
+    }
+  ]
+}

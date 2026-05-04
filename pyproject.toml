@@ -73,6 +73,11 @@ dependencies = [
     
     # JSON Schema
     "jsonschema>=4.23.0",
+    "jinja2>=3.1.0",  # Prompt template assembly (added in chg-1, Phase H1)
+
+    # Auth (declared in requirements.txt, missing from pyproject.toml; reconciled in chg-1)
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
 ]
 
 [project.optional-dependencies]

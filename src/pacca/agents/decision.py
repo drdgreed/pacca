@@ -24,9 +24,8 @@ from pydantic import BaseModel
 from ..models.authorization import AuthorizationDecision, ReviewTier
 from ..models.clinical import ClinicalCase
 from .base import BaseAgent
+from ._prompt_loader import load_agent_prompt
 from .prompts.templates import (
-    DECISION_AGENT_SYSTEM,
-    MEDICAL_DIRECTOR_AGENT_SYSTEM,
     PROMPT_REGISTRY,
     get_prompt_version,
 )
@@ -68,7 +67,7 @@ class DecisionAgent(BaseAgent):
 
     @property
     def system_prompt(self) -> str:
-        return DECISION_AGENT_SYSTEM
+        return load_agent_prompt("decision_support", "DecisionSupportAgent")
 
     @property
     def prompt_version(self) -> str:
@@ -136,7 +135,7 @@ class MedicalDirectorAgent(BaseAgent):
 
     @property
     def system_prompt(self) -> str:
-        return MEDICAL_DIRECTOR_AGENT_SYSTEM
+        return load_agent_prompt("medical_director", "MedicalDirectorAgent")
 
     @property
     def prompt_version(self) -> str:
