@@ -4,7 +4,14 @@
   "title": "PACCA Change Manifest",
   "description": "Schema for harness change manifests in PACCA. Every behavioral change to PACCA's agent harness ships with a manifest entry that names the failure pattern, root cause, predicted fixes, predicted risks, and constraint level. The next evaluation round verifies the predictions against actual case-level outcomes; rejected changes are reverted at file granularity. Methodology adapted from Lin et al., Agentic Harness Engineering (arXiv:2604.25850, 2026).",
   "type": "object",
-  "required": ["iteration", "iteration_tag", "iso_date", "author", "base_model", "changes"],
+  "required": [
+    "iteration",
+    "iteration_tag",
+    "iso_date",
+    "author",
+    "base_model",
+    "changes"
+  ],
   "additionalProperties": false,
   "properties": {
     "iteration": {
@@ -31,7 +38,10 @@
       "description": "Identifier of the LLM the harness is tuned against (e.g., 'claude-sonnet-4-20250514'). Recorded because the optimal harness is model-specific; a manifest's predictions are only valid against the base model recorded here."
     },
     "previous_iteration_tag": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "pattern": "^harness-iter-[0-9]+$",
       "description": "The iteration tag this manifest builds on. Null only for iteration 0."
     },
@@ -44,12 +54,16 @@
       "type": "array",
       "minItems": 1,
       "description": "Ordered list of changes shipped in this iteration. Each change is one logical edit at one constraint level.",
-      "items": { "$ref": "#/$defs/change" }
+      "items": {
+        "$ref": "#/$defs/change"
+      }
     },
     "verdicts": {
       "type": "array",
       "description": "Verdicts on changes from the previous iteration's manifest. Populated when this iteration's evaluation round completes. Each verdict references a change ID from the previous manifest.",
-      "items": { "$ref": "#/$defs/verdict" }
+      "items": {
+        "$ref": "#/$defs/verdict"
+      }
     }
   },
   "$defs": {
@@ -76,7 +90,12 @@
         },
         "type": {
           "type": "string",
-          "enum": ["new", "improvement", "rollback", "removal"],
+          "enum": [
+            "new",
+            "improvement",
+            "rollback",
+            "removal"
+          ],
           "description": "Type of change. 'new' adds a component; 'improvement' refines an existing one; 'rollback' reverts a prior change; 'removal' deletes a component."
         },
         "description": {
@@ -91,7 +110,8 @@
           "description": "Files modified by this change, relative to repo root. The AHE convention is that one logical change touches files within one constraint level only.",
           "items": {
             "type": "string",
-            "pattern": "^(src/pacca/|harness/|docs/|tests/)"
+            "pattern": "^(src/|harness/|docs/|tests/|\\.github/|pyproject\\.toml$|requirements.*\\.txt$|setup\\.(py|cfg)$|Dockerfile$|\\.gitignore$|README\\.md$|CHANGELOG\\.md$|LICENSE$|Makefile$)",
+            "description": "Path of a file modified by this change, relative to repo root. Allowed roots: src/ (any source), harness/, docs/, tests/, .github/ (CI workflows). Also allowed at repo root: pyproject.toml, requirements*.txt, setup.py, setup.cfg, Dockerfile, .gitignore, README.md, CHANGELOG.md, LICENSE, Makefile. If a harness change needs to touch a path not in this list, extend the pattern in its own commit with a manifest entry justifying the addition."
           }
         },
         "failure_pattern": {
@@ -109,7 +129,9 @@
           "description": "Specific cases or trajectory log references that demonstrate the failure pattern. Strong manifests cite at least two pieces of evidence per change.",
           "items": {
             "type": "object",
-            "required": ["source"],
+            "required": [
+              "source"
+            ],
             "additionalProperties": false,
             "properties": {
               "source": {
@@ -162,7 +184,11 @@
         },
         "phi_impact": {
           "type": "string",
-          "enum": ["none", "indirect", "direct"],
+          "enum": [
+            "none",
+            "indirect",
+            "direct"
+          ],
           "description": "PACCA-specific. Whether this change affects how Protected Health Information flows through the system. 'none' = no PHI handling change; 'indirect' = changes logging or audit of PHI-handling code paths; 'direct' = changes what PHI fields are accessed, stored, or transmitted."
         },
         "audit_relevant": {
@@ -177,7 +203,11 @@
     },
     "verdict": {
       "type": "object",
-      "required": ["change_id", "previous_iteration_tag", "outcome"],
+      "required": [
+        "change_id",
+        "previous_iteration_tag",
+        "outcome"
+      ],
       "additionalProperties": false,
       "properties": {
         "change_id": {
@@ -192,33 +222,47 @@
         },
         "outcome": {
           "type": "string",
-          "enum": ["keep", "improve", "rollback"],
+          "enum": [
+            "keep",
+            "improve",
+            "rollback"
+          ],
           "description": "Verdict, mirroring the AHE paper's vocabulary. 'keep' = working, leave as-is; 'improve' = directionally correct, refine; 'rollback' = not working at this constraint level, revert and re-approach from a different level."
         },
         "verified_fixes": {
           "type": "array",
-          "description": "Predicted fixes that materialized — true positives.",
-          "items": { "type": "string" }
+          "description": "Predicted fixes that materialized \u2014 true positives.",
+          "items": {
+            "type": "string"
+          }
         },
         "missed_fixes": {
           "type": "array",
-          "description": "Cases that flipped to passing but were not predicted — true positives the manifest didn't claim credit for.",
-          "items": { "type": "string" }
+          "description": "Cases that flipped to passing but were not predicted \u2014 true positives the manifest didn't claim credit for.",
+          "items": {
+            "type": "string"
+          }
         },
         "false_predicted_fixes": {
           "type": "array",
-          "description": "Predicted fixes that did NOT materialize — false positives. A high count here weakens the manifest's authorial credibility for future iterations.",
-          "items": { "type": "string" }
+          "description": "Predicted fixes that did NOT materialize \u2014 false positives. A high count here weakens the manifest's authorial credibility for future iterations.",
+          "items": {
+            "type": "string"
+          }
         },
         "verified_risks": {
           "type": "array",
-          "description": "Predicted risks that materialized — the change did regress these cases.",
-          "items": { "type": "string" }
+          "description": "Predicted risks that materialized \u2014 the change did regress these cases.",
+          "items": {
+            "type": "string"
+          }
         },
         "unforeseen_regressions": {
           "type": "array",
           "description": "Cases that regressed without being predicted as risks. The AHE paper's regression-blindness finding predicts this list will typically be longer than verified_risks.",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "fix_precision": {
           "type": "number",
@@ -246,7 +290,7 @@
         },
         "notes": {
           "type": "string",
-          "description": "Optional human commentary on the verdict, especially when outcome is 'rollback' — capturing why the constraint level was wrong is the most valuable text in the manifest for future iterations."
+          "description": "Optional human commentary on the verdict, especially when outcome is 'rollback' \u2014 capturing why the constraint level was wrong is the most valuable text in the manifest for future iterations."
         }
       }
     }
