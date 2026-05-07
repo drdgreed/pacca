@@ -12,47 +12,56 @@
 
 ## Index
 
-- [iter-1 — Example: First Behavioral Change Under H1](#chg-1-iter-1)
+- [iter-1 — chg-1: Decision Support and Medical Director prompt extraction (Phase H1)](#chg-1-iter-1)
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
 
 ---
 
 <a name="chg-1-iter-1"></a>
-## chg-1 (iter-1) — Example entry: First Behavioral Change Under Phase H1
-
-> **Note:** this entry is a **worked example** showing the format. It will be replaced by the actual first behavioral change when Phase H1 lands. It is included here so the format is reviewable from day one and the iter-0 seed entry is not the only example a reader sees.
+## chg-1 (iter-1) — Decision Support and Medical Director prompt extraction (Phase H1)
 
 | Field | Value |
 |-------|-------|
 | Iteration tag | `harness-iter-1` |
-| Date | *(populated when shipped)* |
+| Merged commit | `a72249a` (merge of feature branch into main) |
+| Date | 2026-05-04 |
 | Author | David Reed |
-| Base model | claude-sonnet-4-20250514 |
-| Constraint level | `system_prompt` |
-| Files | `src/pacca/agents/decision_support/system_prompt.md` (extracted from `src/pacca/agents/decision_agent.py`) |
-| Type | `improvement` (refactor with no behavioral change) |
+| Base model | `claude-sonnet-4-20250514` |
+| Constraint level | `system_prompt` (primary); also touched `pyproject.toml` and the manifest schema |
+| Files (7) | `src/pacca/agents/_prompt_loader.py`, `src/pacca/agents/decision_support/system_prompt.md`, `src/pacca/agents/medical_director/system_prompt.md`, `src/pacca/agents/decision.py`, `pyproject.toml`, `harness/manifests/iter-1.json`, `harness/manifests/change_manifest.schema.json` |
+| Type | `improvement` (refactor with no behavioral change predicted) |
 
-**Description.** Extract the Decision Support Agent's system prompt from the Python string literal in `decision_agent.py` into a standalone Markdown file at the canonical mount point. The Jinja2 template renderer is wired up so runtime prompt assembly is unchanged.
+**Description.** Extracted the agent-specific bodies of `DECISION_AGENT_SYSTEM` and `MEDICAL_DIRECTOR_AGENT_SYSTEM` from f-string constants in `prompts/templates.py` into file-level mount points at `src/pacca/agents/<agent>/system_prompt.md`. Added a Jinja2 loader (`_prompt_loader.py`) that assembles prompts at runtime from the .md file plus the shared components (`AGENT_IDENTITY`, `CLINICAL_SAFETY_GUIDELINES`, `OUTPUT_FORMAT_INSTRUCTIONS`) which remain canonical in `templates.py`. Wired `decision.py`'s `DecisionAgent` and `MedicalDirectorAgent` classes to use the loader. Reconciled three missing dependency declarations (`jinja2`, `python-jose`, `bcrypt`) in `pyproject.toml` after CI surfaced them. Broadened the schema's files-path pattern to allow repo-root config files after the same CI cycle revealed the iter-0 pattern was too strict.
 
-**Failure pattern addressed.** No failure pattern — this is a refactor enabling Phase H1's component decoupling exit criterion. Behavioral changes to the prompt would land as separate `chg-N:` commits with their own manifest entries.
+**Failure pattern addressed.** No clinical or runtime failure pattern. This is the structural commit that establishes the file-level decoupling that Phases H2 and H3 require. The H1 success criterion is byte-identical prompt output, not a behavioral gain.
 
-**Root cause.** v2.2.0 mixes prompts, tool definitions, and tool implementations inside agent Python files, making file-level diffs of behavioral changes impossible. This refactor establishes the file boundary that subsequent behavioral changes will land against.
+**Root cause.** Pre-H1, agent prompts lived as Python f-string constants inside `prompts/templates.py`, mixed with module-level interpolation logic. Edits to prompts produced diffs that mixed prompt-text changes with module-rendering changes. Phases H2 (Institutional Memory Layer) and H3 (Cross-Step Middleware Tier) require one-file-per-component diffs to attribute behavioral gains correctly; that attribution is impossible without H1 first.
 
-**Predicted fixes.** None (refactor only).
+**Predicted fixes.** None. iter-1 is a refactor; no clinical case is targeted.
 
-**Risk cases.** All 53 demo cases plus all 20 clinical golden cases — a Jinja2 rendering bug would silently break every case. The refactor is therefore gated on full-suite reproduction of iter-0 baseline numbers.
+**Risk cases.** None recorded in the manifest. The risk model is "any case where the rendered prompt differs by even one character from the pre-H1 baseline." This was preempted by a custom byte-identity check that compared the loader's output to the f-string output character-by-character before any runtime change. The check caught one bug — a missing blank line in the Decision Support `system_prompt.md` file — and the fix was a one-character correction. Both prompts confirmed byte-identical post-fix.
 
-**Why this constraint level.** This change *creates* the system_prompt constraint level by externalizing its file. Refactor commits like this one establish constraint levels; subsequent behavioral commits exercise them.
+**Why this constraint level.** `system_prompt` is the level being decoupled. Tool descriptions, tool implementations, middleware, skills, and sub-agents remain unchanged. The choice to extract only system prompts in chg-1 keeps the scope narrow and makes the verification gate simple (byte-identity check on rendered prompt strings). The two collateral edits to `pyproject.toml` and the schema are not behavioral changes at the agent layer; they're correctness fixes that the chg-1 work surfaced.
 
-**PHI impact.** None.
+**PHI impact.** None. No code path touching Protected Health Information was modified.
 
-**Audit relevant.** No (no change to audit-logged behavior).
+**Audit relevant.** No. Prompt versions tracked in `PROMPT_REGISTRY` remain unchanged across the refactor (still `v2.2`), so audit log entries from before and after this commit reconcile cleanly.
 
-**Rollback plan.** `git revert <sha>` returns the prompt string to `decision_agent.py`. The `prompt_registry` version stays unchanged across the refactor, so no audit-log reconciliation is needed.
+**Rollback plan.** `git revert <merge-sha>`. The orphaned `decision_agent.py` was not modified; `templates.py` was not modified beyond unused-imports cleanup. Reverting `decision.py` and removing the new directories restores the pre-H1 state exactly.
+
+**Process notes from this iteration.** Three findings were observed during the work and recorded explicitly in the manifest. Two were deferred to future commits; one was bundled into chg-1 after CI made the case for it.
+
+- *Deferred to chg-2:* `decision_agent.py` is dead code. Defines `DecisionSupportAgent(BaseAgent[DecisionOutput])` at line 52, but no module imports that class. The orchestrator and tests reference `decision.py`'s `DecisionAgent` instead. Deletion is queued for chg-2 with its own manifest entry.
+
+- *Deferred indefinitely:* `decision.py` houses two tier-distinguished agents (Tier 1 Frontline Nurse, Tier 2 Medical Director) in one Python module. Both prompts were extracted to separate file mount points without restructuring the class layout. If a class-level split is later desired, that becomes its own iteration with its own attribution.
+
+- *Originally deferred, then bundled into chg-1 after CI feedback:* `pyproject.toml` was missing declarations for `python-jose` and `bcrypt`, both of which `requirements.txt` declared. The first PR-CI run also revealed that `jinja2` (a new runtime dependency introduced by the loader in this very commit) was undeclared. All three were added to `pyproject.toml` in the same commit. The original "one logical change per commit" deferral was correct in principle but the CI run made the dependency surface visible enough that bundling all three reconciliations into chg-1 became the cleaner outcome. Methodology choice: when a constraint surfaces during execution that the original plan missed, fix it within scope rather than letting CI red ride.
+
+- *Schema evolution:* the iter-0 schema's files-path pattern restricted entries to `^(src/pacca/|harness/|docs/|tests/)`. Adding `pyproject.toml` to the manifest's files list failed validation. The pattern was broadened to accept repo-root config files (`pyproject.toml`, `requirements*.txt`, `setup.py/cfg`, `Dockerfile`, `.gitignore`, `README.md`, `CHANGELOG.md`, `LICENSE`, `Makefile`) and CI workflows (`.github/`). Also generalized `src/pacca/` to `src/` since the project-specific prefix was unnecessary. The pattern broadening is itself in chg-1 because it was caused by chg-1.
 
 ### Verdict (recorded after iter-2 evaluation)
 
-*Pending — populated after iter-2's evaluation run completes. Expected fields: `outcome` (keep / improve / rollback), full-suite pass@1 delta vs. iter-0 baseline (target: zero change), tokens/case delta (target: ≤ baseline).*
+*Pending — populated after iter-2's evaluation run completes. Expected fields: `outcome` (keep / improve / rollback), full-suite pass@1 delta vs. iter-0 baseline (target: zero change), tokens/case delta (target: ≤ baseline). The byte-identity verification and the green CI test suite (97 collectable tests passing post-merge) provide strong prior evidence that the verdict will be `keep`, but the formal verdict requires iter-2's eval run to confirm.*
 
 ---
 

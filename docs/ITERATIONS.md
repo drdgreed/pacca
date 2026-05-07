@@ -12,7 +12,90 @@
 
 ## Index
 
+- [iter-1 — chg-1: Component Decoupling first extraction](#iter-1-component-decoupling)
 - [iter-0 — Baseline Crystallization (seed narrative)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-1-component-decoupling"></a>
+## iter-1 — Component Decoupling, first extraction
+
+**Tag:** `harness-iter-1`
+**Phase:** H1 (Component Decoupling)
+**Date:** 2026-05-04
+**Merged commit:** `a72249a`
+**Files changed:** 7 (+291 / -24 lines)
+**Eval delta:** zero behavioral change (refactor only); byte-identity verified pre-merge
+
+### What this iteration shipped
+
+iter-1 is the cycle's first behavioral commit, and intentionally a refactor. The agent-specific bodies of `DECISION_AGENT_SYSTEM` and `MEDICAL_DIRECTOR_AGENT_SYSTEM` were moved out of f-string constants in `prompts/templates.py` and into file-level mount points at `src/pacca/agents/<agent>/system_prompt.md`. A Jinja2 loader (`_prompt_loader.py`) assembles each prompt at runtime from the per-agent `.md` file plus the shared components (`AGENT_IDENTITY`, `CLINICAL_SAFETY_GUIDELINES`, `OUTPUT_FORMAT_INSTRUCTIONS`) which remain canonical in `templates.py`. The `DecisionAgent` and `MedicalDirectorAgent` classes in `decision.py` were rewired to use the loader.
+
+The H1 success criterion is the AHE paper's `paragraph_2 == paragraph_2` bar: byte-identical prompt output before and after extraction. We hit that criterion. The work was structural; no clinical case was targeted, no behavioral gain was predicted, and no behavioral change was observed in the test suite (120 of 120 collectable tests passing, identical to iter-0).
+
+### The architectural ambiguity that defined the work
+
+The iteration began by trying to identify the right extraction target. Two files in `src/pacca/agents/` claimed similar names: `decision_agent.py` (330 lines) and `decision.py` (194 lines). Both defined classes consistent with the Decision Support Agent role. Neither file's name made it obvious which one the runtime actually used.
+
+The investigation took longer than the extraction itself. Three diagnostic commands surfaced the answer: the orchestrator imports `DecisionAgent` from `decision.py`, not from `decision_agent.py`; tests reference the *string* `"DecisionSupportAgent"` (which is what `decision.py`'s `name()` method returns); no module anywhere imports `decision_agent.py`'s class. The 330-line file is dead code — likely a partial migration target that was never cleaned up.
+
+This finding was deliberately not addressed in chg-1. The methodology calls for one logical change per commit; deleting the dead file is its own commit (queued as chg-2). What chg-1 *did* record was the finding itself, in the manifest's `observed_findings_deferred` array, so the dead-code observation has a durable home even though the deletion waits for its own commit.
+
+A second architectural finding emerged during the same investigation: `decision.py` houses both `DecisionAgent` (Tier 1) and `MedicalDirectorAgent` (Tier 2) in a single Python module. The HARNESS.md vocabulary assumes one agent per directory, which would have implied splitting `decision.py`. We chose instead to extract both prompts to separate `.md` mount points without restructuring the class layout — a Path B that adds the file-level editability that H1 requires while leaving the Python class structure intact. That's a smaller, lower-risk change than the directory split would have been, and the LinkedIn post for iter-1 will be more credible because of the restraint than it would have been with a more ambitious restructure.
+
+### The byte-identity verification was the work
+
+The H1 success criterion is unambiguous: every prompt token sent to Claude must match what the f-string version produced. A character-level drift would mean the rendered prompts differ, the Claude responses differ, the test suite that compares `DECISION_AGENT_SYSTEM` content fails, and the iter-1 manifest's "zero behavioral change" claim becomes false on the public record.
+
+Rather than ship and hope, we built a small Python script (`/tmp/byte_identity_check.py`) that imported both the existing f-string constants and the new loader output, compared them character-by-character, and printed the first divergence with 30 characters of context on each side. This script ran *before* `decision.py` was modified to use the loader, so any miss would be caught at the verification gate, not in the runtime path.
+
+The first run failed. The Decision Support `system_prompt.md` was missing a blank line between the role section and the safety guidelines block. The byte-identity check showed: expected `\n\n\n## Clinical Safety Guidelines`, actual `\n\n## Clinical Safety Guidelines`. One missing newline. Cascading effect: 893 characters of difference, every line shifted relative to baseline.
+
+The fix was a one-character correction (literally one missing `\n`). The check passed on the second run. Both prompts confirmed byte-identical to the pre-H1 baseline. The runtime wiring was then safe to proceed.
+
+This is the regression-blindness safety net the AHE paper warns about, applied at the byte level rather than at the case level. The local test suite would not have caught the missing newline — `tests/unit/test_prompt_engineering.py` checks for *content presence* (does the prompt contain the precedent-weighting language?), not for *exact string equality*. A character-level drift could have shipped past the test suite and into production. The byte-identity check was the right tool for the right gate.
+
+### Three rounds of CI feedback that taught the cycle
+
+Local tests passed at 120 of 120. The first PR-CI run failed with a `ModuleNotFoundError: No module named 'jinja2'`. Locally we had installed jinja2 manually after the first import error in our own venv; we never circled back to declare it in `pyproject.toml`. CI ran against `pip install -e .` from a clean environment, hit the missing declaration, and failed the test job before any test could run.
+
+The fix was one line in `pyproject.toml`. After force-pushing the amendment, CI advanced from "broken at collection" to "97 of 98 passing, 1 failed." The remaining failure was `ModuleNotFoundError: No module named 'jose'` — exactly one of the deferred findings from chg-1's original manifest. The pyproject.toml/requirements.txt manifest divergence had bitten us mid-iteration.
+
+This is the moment where I (the AI assistant) recommended a methodology recalibration to David. The original deferral plan said: keep `python-jose` and `bcrypt` for their own dedicated commit. That principle is sound when the dependency issue is unrelated to chg-1's scope. But chg-1 itself surfaced the dependency surface (by introducing `jinja2`), and the same CI run revealed all three missing declarations. Splitting them across commits would have meant landing chg-1 with a known broken CI for an issue we already knew how to fix.
+
+We bundled all three (`jinja2`, `python-jose`, `bcrypt`) into chg-1's pyproject.toml amendment. The chg-1 narrative grew slightly: "extracted prompts; fixed pyproject.toml dependency declarations including the new one introduced by this commit." The deferred-findings list shrank from three to two. The methodology principle still held — every change had clear attribution — but the unit of "one logical change" expanded to include "make pyproject.toml accurately describe what the runtime needs," which was the right scope for this specific situation.
+
+The third CI cycle revealed another finding: the change manifest schema's files-path pattern was too strict. The pattern `^(src/pacca/|harness/|docs/|tests/)` rejected `pyproject.toml` because root-level config files don't match any of the allowed roots. The schema we wrote in iter-0 was too narrow for what real harness changes need. We extended the pattern to include repo-root config files (`pyproject.toml`, `requirements*.txt`, `setup.py/cfg`, `Dockerfile`, `.gitignore`, `README.md`, `CHANGELOG.md`, `LICENSE`, `Makefile`) and CI workflows under `.github/`. Also generalized `src/pacca/` to `src/` since the project-specific prefix was unnecessary.
+
+This last change is the one that most clearly demonstrates the methodology working as designed. Schema constraints written upfront age into discoveries during real iteration; the discoveries age into improvements. The schema is now more accurate because chg-1 forced us to use it for a case the iter-0 author hadn't anticipated. This pattern will recur — schema evolution alongside content evolution, both recorded — and the iter-2 verdict on chg-1 will reference both the prompt extraction and the schema broadening as bundled deliverables.
+
+### What the cycle internalized
+
+Three lessons for future iterations:
+
+**Investigate before extracting.** The 30 minutes spent identifying which decision file was canonical (and which was dead code) was non-negotiable. A naive extraction from `decision_agent.py` would have produced a working `.md` file that the runtime never read; we would have shipped a refactor that changed nothing in production and recorded a false success. The diagnostic phase is not optional and should be the first item in any future H1-style extraction.
+
+**Build the byte-level safety net before modifying the runtime.** The byte-identity check was the highest-leverage tool of the iteration. It caught one real bug pre-merge, validated the loader against the canonical baseline, and produced a reusable template (`/tmp/byte_identity_check.py`) for future agent extractions. Subsequent H1 commits — Evidence Aggregation, Clinical Classification, Policy Evolution — should adopt the same pattern.
+
+**Defer plans are revisable when CI surfaces dependencies.** The "one logical change per commit" principle is sound, but it's a heuristic, not a constitution. When chg-1's CI run made three dependency declarations visible at the same moment, bundling them into chg-1 was the right scope. The defer plan in the manifest is a planning artifact, not a commitment device — the methodology values shipping clean over enforcing the original plan rigidly.
+
+### What success looks like for iter-2
+
+iter-2 is the next iteration in the cycle, and it has two plausible candidates depending on what we want to demonstrate next:
+
+- **Phase H1 continuation:** extract the next agent (likely Evidence Aggregation, since its prompt is simpler than Decision Support) using the loader pattern established here. Lower-risk than chg-1 because the byte-identity gate is now a known-good template; should land faster.
+
+- **Phase H2 first move:** introduce the `long_term_memory.md` layer for the Decision Support agent. This is the AHE paper's highest-leverage component (+5.6 pp single-component gain on Terminal-Bench 2) and is the iteration most likely to produce the cycle's first real behavioral delta.
+
+H2 is more strategically important; H1 continuation is operationally easier. The choice depends on whether iter-2 should optimize for risk reduction (H1 continuation) or for the cycle's first behavioral gain (H2 start). My current lean: H2, because the iter-2 LinkedIn post is the post that tests the AHE paper's transferability claim and that's the post that does the most portfolio work.
+
+The chg-2 dead-code deletion (`decision_agent.py` removal) is small enough to bundle into either path as a parallel cleanup commit. It does not need its own iteration.
+
+### Verdict on iter-1's predictions
+
+iter-1's predicted_fixes list was empty (refactor only). risk_cases was also empty (zero behavioral change predicted). The byte-identity check and the green test suite (120 of 120 local; 97 of 97 collectable in CI post-merge, with 23 tests skipped due to external service requirements unrelated to this PR) provide strong prior evidence that the formal verdict from iter-2 will be `keep`. The verdict block in DECISIONS.md will be filled when iter-2's evaluation completes.
+
+One small note for the iter-2 verdict: the test count discrepancy between local (120) and CI (97 + 23 skipped) is not a regression; it's environmental. CI runs without the external services some integration tests require. This will be a recurring pattern across iterations and is worth recording so future verdicts don't flag it as a change.
 
 ---
 
