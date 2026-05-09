@@ -79,12 +79,8 @@ class AuthorizationRequestModel(Base):
     narrative_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     # Timestamps
-    submitted_at: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), index=True
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), onupdate=func.now()
-    )
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
     # Relationships
     decision: Mapped["AuthorizationDecisionModel | None"] = relationship(
@@ -199,9 +195,7 @@ class AuditLogModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     entry_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), index=True
-    )
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
 
     # Context
     request_id: Mapped[str | None] = mapped_column(
@@ -270,9 +264,7 @@ class GuidelineModel(Base):
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
     tags: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     # Vector store reference

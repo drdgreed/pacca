@@ -5,6 +5,8 @@ Responsible for classifying authorization requests by complexity,
 specialty, and urgency to determine appropriate routing and processing.
 """
 
+import contextlib
+
 from pydantic import BaseModel, Field
 
 from pacca.agents.base import BaseAgent
@@ -204,9 +206,7 @@ class ClinicalClassificationAgent(BaseAgent[ClassificationOutput]):
         context: AgentContext,
     ) -> tuple[bool, list[str]]:
         """Determine escalation based on classification results."""
-        should_escalate, reasons = await super().should_escalate(
-            output, confidence, context
-        )
+        should_escalate, reasons = await super().should_escalate(output, confidence, context)
 
         # Add classification-specific escalation reasons
         if output.requires_specialist_review:
@@ -237,10 +237,8 @@ class ClinicalClassificationAgent(BaseAgent[ClassificationOutput]):
 
         secondary_specialties = []
         for spec in output.secondary_specialties:
-            try:
+            with contextlib.suppress(ValueError):
                 secondary_specialties.append(ClinicalSpecialty(spec.lower()))
-            except ValueError:
-                pass
 
         # Map urgency string to enum
         try:

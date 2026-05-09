@@ -5,9 +5,6 @@ Provides semantic search over clinical guidelines using ChromaDB
 for vector storage and Anthropic embeddings for similarity matching.
 """
 
-from datetime import datetime
-from typing import Any
-
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 
@@ -160,18 +157,13 @@ class GuidelineVectorStore:
         if specialty_filter or treatment_category_filter:
             conditions = []
             if specialty_filter:
-                conditions.append(
-                    {"specialties": {"$contains": specialty_filter}}
-                )
+                conditions.append({"specialties": {"$contains": specialty_filter}})
             if treatment_category_filter:
                 conditions.append(
                     {"treatment_categories": {"$contains": treatment_category_filter}}
                 )
 
-            if len(conditions) == 1:
-                where_clause = conditions[0]
-            else:
-                where_clause = {"$and": conditions}
+            where_clause = conditions[0] if len(conditions) == 1 else {"$and": conditions}
 
         # Execute search
         try:
@@ -291,8 +283,7 @@ class GuidelineVectorStore:
 
             # Move start position, accounting for overlap
             start = end - overlap
-            if start < 0:
-                start = 0
+            start = max(start, 0)
 
             # Avoid infinite loop for very small texts
             if start >= len(text) - overlap:

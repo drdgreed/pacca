@@ -6,7 +6,7 @@ including response structures, tool calls, and context management.
 """
 
 from datetime import datetime
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 from uuid7 import uuid7
@@ -87,12 +87,8 @@ class AgentContext(BaseModel):
         AgentAutonomyLevel.SUPERVISED,
         description="Autonomy level for this request",
     )
-    force_escalation: bool = Field(
-        False, description="Force escalation regardless of confidence"
-    )
-    skip_agents: list[AgentType] = Field(
-        default_factory=list, description="Agents to skip"
-    )
+    force_escalation: bool = Field(False, description="Force escalation regardless of confidence")
+    skip_agents: list[AgentType] = Field(default_factory=list, description="Agents to skip")
 
     # Metadata
     metadata: dict[str, Any] = Field(
@@ -113,7 +109,7 @@ class AgentContext(BaseModel):
         return agent_type in self.previous_agents
 
 
-class AgentResponse(BaseModel, Generic[T]):
+class AgentResponse[T: BaseModel](BaseModel):
     """
     Standard response structure from all agents.
 
@@ -135,28 +131,20 @@ class AgentResponse(BaseModel, Generic[T]):
 
     # Output
     output: T | None = Field(None, description="Agent-specific output")
-    confidence_score: float = Field(
-        ..., ge=0.0, le=1.0, description="Confidence in output (0-1)"
-    )
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence in output (0-1)")
 
     # Recommendations
-    should_escalate: bool = Field(
-        False, description="Whether this should escalate to human"
-    )
+    should_escalate: bool = Field(False, description="Whether this should escalate to human")
     escalation_reasons: list[str] = Field(
         default_factory=list, description="Reasons for escalation recommendation"
     )
-    next_agent: AgentType | None = Field(
-        None, description="Recommended next agent in chain"
-    )
+    next_agent: AgentType | None = Field(None, description="Recommended next agent in chain")
 
     # Execution details
     tool_calls: list[ToolCall] = Field(
         default_factory=list, description="Tools called during execution"
     )
-    token_usage: TokenUsage = Field(
-        default_factory=TokenUsage, description="LLM token usage"
-    )
+    token_usage: TokenUsage = Field(default_factory=TokenUsage, description="LLM token usage")
 
     # Timing
     started_at: datetime = Field(..., description="When agent started")

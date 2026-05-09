@@ -30,14 +30,14 @@ Teaching note — test structure (AAA pattern):
   test here and understand the escalation rule it encodes.
 """
 
-from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
-from pacca.agents.clinical_risk_detector import ClinicalRiskDetector, EscalationFlags
-from pacca.agents.orchestrator import Orchestrator
+from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
 from pacca.agents.decision import DecisionContext
+from pacca.agents.orchestrator import Orchestrator
+from pacca.models.authorization import AuthorizationDecision
 from pacca.models.clinical import ClinicalCase, EvidenceItem
 from pacca.models.enums import (
     AuthorizationStatus,
@@ -45,12 +45,11 @@ from pacca.models.enums import (
     EvidenceSourceType,
     ReviewTier,
 )
-from pacca.models.authorization import AuthorizationDecision
-
 
 # =============================================================================
 # Shared fixtures
 # =============================================================================
+
 
 def make_case(
     procedure_code: str = "J9271",
@@ -96,6 +95,7 @@ def make_decision(
 # =============================================================================
 # ClinicalRiskDetector unit tests — each detection method in isolation
 # =============================================================================
+
 
 class TestClinicalRiskDetector:
     """
@@ -309,12 +309,12 @@ class TestClinicalRiskDetector:
         This test ensures flags accumulate, not that only the first match fires.
         """
         case = make_case(
-            procedure_code="Q2041",    # Experimental CAR-T therapy
-            diagnosis_code="C91.0",    # Acute lymphoblastic leukemia (pediatric common)
+            procedure_code="Q2041",  # Experimental CAR-T therapy
+            diagnosis_code="C91.0",  # Acute lymphoblastic leukemia (pediatric common)
         )
         flags = self.detector.evaluate(
             case,
-            prior_denial_codes=["Q2041"],   # Also has a prior denial for same procedure
+            prior_denial_codes=["Q2041"],  # Also has a prior denial for same procedure
         )
 
         assert EscalationReason.EXPERIMENTAL_TREATMENT in flags.reasons
@@ -325,6 +325,7 @@ class TestClinicalRiskDetector:
 # =============================================================================
 # Orchestrator integration tests — full 7-branch routing
 # =============================================================================
+
 
 class TestOrchestratorEscalationTree:
     """
@@ -551,8 +552,8 @@ class TestOrchestratorEscalationTree:
             tier1_status=AuthorizationStatus.AUTO_APPROVED,
         )
         clean_case = make_case(
-            procedure_code="J9271",   # Standard, non-experimental
-            diagnosis_code="C34.1",   # Common NSCLC
+            procedure_code="J9271",  # Standard, non-experimental
+            diagnosis_code="C34.1",  # Common NSCLC
             evidence_text="PD-L1 >= 50%, no prior treatment, standard of care.",
         )
         ctx = DecisionContext(

@@ -14,6 +14,7 @@ marked @pytest.mark.clinical to run separately from the fast suite.
 """
 
 import os
+
 import pytest
 
 # =============================================================================
@@ -26,14 +27,15 @@ import pytest
 # =============================================================================
 
 collect_ignore = [
-    "tests/test_level5_flow.py",   # Uses 'src.pacca' import path (pre-package)
-    "tests/unit/test_api.py",      # Tests v1 route structure with old fixtures
+    "tests/test_level5_flow.py",  # Uses 'src.pacca' import path (pre-package)
+    "tests/unit/test_api.py",  # Tests v1 route structure with old fixtures
 ]
 
 
 # =============================================================================
 # Environment setup — runs before any test imports
 # =============================================================================
+
 
 def pytest_configure(config):
     """
@@ -58,6 +60,7 @@ def pytest_configure(config):
     # would be reused and the test env vars would be ignored.
     try:
         from pacca.config.settings import get_settings
+
         get_settings.cache_clear()
     except Exception:
         pass  # Module not yet importable at this stage — that's fine
@@ -66,6 +69,7 @@ def pytest_configure(config):
 # =============================================================================
 # Shared fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def any_authorized_user() -> str:

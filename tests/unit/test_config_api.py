@@ -29,13 +29,12 @@ Teaching note — why test configuration validation?
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-
 
 # =============================================================================
 # Test setup
 # =============================================================================
+
 
 @pytest.fixture(autouse=True)
 def reset_config_overrides():
@@ -47,6 +46,7 @@ def reset_config_overrides():
     test in this file automatically.
     """
     import pacca.api.routes.admin as admin_module
+
     # Clear before the test
     admin_module._config_overrides.clear()
     yield
@@ -63,6 +63,7 @@ def admin_client():
     to avoid needing JWT authentication in every test.
     """
     from fastapi import FastAPI
+
     from pacca.api.routes.admin import router
 
     app = FastAPI()
@@ -74,8 +75,8 @@ def admin_client():
 # GET /config tests
 # =============================================================================
 
-class TestGetConfig:
 
+class TestGetConfig:
     def test_returns_all_required_fields(self, admin_client):
         """
         GET /config must return a complete snapshot of all tunable parameters.
@@ -138,8 +139,8 @@ class TestGetConfig:
 # PATCH /config tests
 # =============================================================================
 
-class TestPatchConfig:
 
+class TestPatchConfig:
     def test_patch_updates_single_field(self, admin_client):
         """
         PATCH with one field should update only that field.
@@ -147,7 +148,7 @@ class TestPatchConfig:
         """
         # Get baseline
         baseline = admin_client.get("/api/v1/admin/config").json()
-        original_retry = baseline["llm_retry_max_attempts"]
+        baseline["llm_retry_max_attempts"]
 
         # Update only retry attempts
         response = admin_client.patch(
@@ -161,10 +162,10 @@ class TestPatchConfig:
             "PATCH should update the specified field to the new value."
         )
         # All other fields should be unchanged
-        assert updated["auto_approve_confidence_threshold"] == \
-               baseline["auto_approve_confidence_threshold"], (
-            "PATCH should not affect fields not included in the request."
-        )
+        assert (
+            updated["auto_approve_confidence_threshold"]
+            == baseline["auto_approve_confidence_threshold"]
+        ), "PATCH should not affect fields not included in the request."
 
     def test_patch_override_reflected_in_subsequent_get(self, admin_client):
         """
@@ -227,8 +228,10 @@ class TestPatchConfig:
         admin_client.patch("/api/v1/admin/config", json={})
         after = admin_client.get("/api/v1/admin/config").json()
 
-        assert after["auto_approve_confidence_threshold"] == \
-               baseline["auto_approve_confidence_threshold"]
+        assert (
+            after["auto_approve_confidence_threshold"]
+            == baseline["auto_approve_confidence_threshold"]
+        )
         assert after["overrides_active"] == []
 
 
@@ -236,8 +239,8 @@ class TestPatchConfig:
 # Validation tests — rejected configurations
 # =============================================================================
 
-class TestConfigValidation:
 
+class TestConfigValidation:
     def test_rejects_auto_approve_below_escalation_threshold(self, admin_client):
         """
         CRITICAL: auto_approve_threshold must always be > escalation_threshold.
@@ -262,10 +265,10 @@ class TestConfigValidation:
             f"Setting auto_approve ({escalation - 0.05}) <= escalation ({escalation}) "
             f"must be rejected with 422. The escalation band would collapse to nothing."
         )
-        assert "escalation band" in response.json()["detail"].lower() or \
-               "greater than" in response.json()["detail"].lower(), (
-            "Error message should explain the escalation band constraint."
-        )
+        assert (
+            "escalation band" in response.json()["detail"].lower()
+            or "greater than" in response.json()["detail"].lower()
+        ), "Error message should explain the escalation band constraint."
 
     def test_rejects_equal_thresholds(self, admin_client):
         """
@@ -311,8 +314,8 @@ class TestConfigValidation:
         admin_client.patch(
             "/api/v1/admin/config",
             json={
-                "llm_retry_max_attempts": 7,                           # valid
-                "auto_approve_confidence_threshold": escalation - 0.1, # invalid
+                "llm_retry_max_attempts": 7,  # valid
+                "auto_approve_confidence_threshold": escalation - 0.1,  # invalid
             },
         )
 
@@ -328,8 +331,8 @@ class TestConfigValidation:
 # DELETE /config/overrides tests
 # =============================================================================
 
-class TestResetConfigOverrides:
 
+class TestResetConfigOverrides:
     def test_reset_clears_all_overrides(self, admin_client):
         """
         DELETE /config/overrides must clear every runtime override.
@@ -373,8 +376,8 @@ class TestResetConfigOverrides:
 # Metrics endpoint tests
 # =============================================================================
 
-class TestMetricsEndpoint:
 
+class TestMetricsEndpoint:
     def test_metrics_returns_effective_values(self, admin_client):
         """
         GET /metrics must reflect runtime overrides, not just env var defaults.

@@ -23,15 +23,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Our domain models (Pydantic schemas for request/response shapes)
-from ...models.authorization import AuthorizationRequest, AuthorizationDecision
-from ...models.enums import AuthorizationStatus
-
 # The agents that do the clinical reasoning
-from ...agents.orchestrator import Orchestrator, DecisionContext
+from ...agents.orchestrator import DecisionContext, Orchestrator
 
-# The RAG engine that retrieves relevant guidelines from ChromaDB
-from ...integrations.vector_store import GuidelineRetriever
+# The repository that writes audit records.
+# A "repository" is a design pattern that wraps all database operations
+# for one type of data. AuditRepository handles everything related to
+# the audit_logs table. You call audit.log(...) and it handles the SQL.
+from ...db.repository import AuditRepository
 
 # The proper async database session — this replaces the sync api/database.py session.
 # Teaching note: get_session is a FastAPI "dependency". When you write
@@ -41,11 +40,11 @@ from ...integrations.vector_store import GuidelineRetriever
 # after your route returns. You never have to remember to close it.
 from ...db.session import get_session
 
-# The repository that writes audit records.
-# A "repository" is a design pattern that wraps all database operations
-# for one type of data. AuditRepository handles everything related to
-# the audit_logs table. You call audit.log(...) and it handles the SQL.
-from ...db.repository import AuditRepository
+# The RAG engine that retrieves relevant guidelines from ChromaDB
+from ...integrations.vector_store import GuidelineRetriever
+
+# Our domain models (Pydantic schemas for request/response shapes)
+from ...models.authorization import AuthorizationDecision, AuthorizationRequest
 
 router = APIRouter()
 
@@ -69,6 +68,7 @@ class FeedbackRequest(BaseModel):
         decision:     The correct outcome (e.g. "AUTO_APPROVED")
         rationale:    Why the human made this decision (stored in vector DB)
     """
+
     case_summary: str
     decision: str
     rationale: str
@@ -122,9 +122,9 @@ async def submit_authorization(
     # crashes mid-flight, we still have evidence that the request was received.
     await audit.log(
         action="authorization_submitted",
-        actor=request.provider_npi,           # Who submitted it (provider NPI)
-        actor_type="provider",                 # Category of actor
-        request_id=request.request_id,        # Links to authorization_requests table
+        actor=request.provider_npi,  # Who submitted it (provider NPI)
+        actor_type="provider",  # Category of actor
+        request_id=request.request_id,  # Links to authorization_requests table
         correlation_id=correlation_id,
         input_summary=(
             f"Diagnosis: {request.clinical_case.primary_diagnosis_code} | "
@@ -149,10 +149,7 @@ async def submit_authorization(
         #   3. Inject those chunks into the LLM prompt as context
         # This grounds the AI's reasoning in real, up-to-date guidelines.
         case = request.clinical_case
-        query = (
-            f"Guidelines for {case.primary_diagnosis_code} "
-            f"and {case.procedure_code}"
-        )
+        query = f"Guidelines for {case.primary_diagnosis_code} and {case.procedure_code}"
         context_text = rag_engine.query(query)
 
         # ── ORCHESTRATOR: Run the AI decision pipeline ────────────────────────
@@ -218,7 +215,7 @@ async def submit_authorization(
             success=False,
             error_message=str(e),
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/feedback")

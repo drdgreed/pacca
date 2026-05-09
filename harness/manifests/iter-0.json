@@ -1,0 +1,43 @@
+{
+  "iteration": 0,
+  "iteration_tag": "harness-iter-0",
+  "iso_date": "2026-04-15",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-20250514",
+  "previous_iteration_tag": null,
+  "summary": "Phase H0 baseline crystallization. No behavioral change — this iteration establishes the instrumentation surface (OpenTelemetry spans on every agent call, structured trajectory logs, correlation-ID-linked HIPAA audit pairs) that subsequent iterations measure against. The pre-AHE codebase state is captured under tag pre-ahe-baseline; harness-iter-0 marks the first state where every behavioral path is observable end-to-end. Future iterations attribute their predicted-vs-observed deltas relative to this baseline.",
+  "changes": [
+    {
+      "id": "chg-0",
+      "type": "instrumentation",
+      "description": "Establish baseline observability: OpenTelemetry tracer initialization, span emission on every agent execute() call, trajectory log writes alongside the HIPAA audit trail, and correlation-ID propagation through the orchestrator. No prompt, tool, memory, middleware, or eval-suite changes.",
+      "files": [
+        "src/pacca/observability/tracer.py",
+        "src/pacca/observability/trajectory_logger.py",
+        "src/pacca/agents/base.py",
+        "src/pacca/orchestrator/orchestrator.py",
+        "harness/manifests/change_manifest.schema.json"
+      ],
+      "failure_pattern": "No failure pattern targeted. H0 is the precondition for all subsequent measurement; without it, iterations cannot produce falsifiable verdicts.",
+      "root_cause": "Pre-instrumentation, agent calls were observable only via the HIPAA audit trail, which captures decision-level events but not intra-agent steps. Phases H1-H5 require step-level visibility to attribute outcomes to specific harness-component changes.",
+      "evidence": [
+        {
+          "source": "tests/unit/test_retry_and_tracing.py",
+          "note": "Eleven tests verify span emission, retry-with-tracing semantics, and that trajectory logs contain one entry per agent call. All pass."
+        },
+        {
+          "source": "docs/HARNESS.md",
+          "note": "Documents the three observability pillars (component, experience, decision) the H0 instrumentation enables."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "instrumentation",
+      "why_this_component": "Instrumentation is intentionally outside the seven AHE constraint levels because it must precede them. Adding tracing to a system whose components are already extracted creates retrofit problems and obscures attribution.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert <sha>. Reverting removes the tracer and trajectory-logger imports, leaving the HIPAA audit trail (which existed pre-H0) as the sole observability surface. No state migration required.",
+      "observed_findings_deferred": []
+    }
+  ]
+}

@@ -40,7 +40,6 @@ from dataclasses import dataclass, field
 from ..models.clinical import ClinicalCase
 from ..models.enums import EscalationReason
 
-
 # =============================================================================
 # Curated clinical reference data
 #
@@ -57,50 +56,49 @@ from ..models.enums import EscalationReason
 # This is a representative sample for the portfolio prototype. A production
 # system would maintain this list in a versioned configuration store and
 # update it quarterly in sync with FDA and CMS coverage decisions.
-EXPERIMENTAL_PROCEDURE_CODES: frozenset[str] = frozenset({
-    # CAR-T cell therapies (FDA-approved for limited indications; experimental for others)
-    "Q2041",  # Axicabtagene ciloleucel (Yescarta) — experimental outside approved indications
-    "Q2042",  # Tisagenlecleucel (Kymriah) — experimental outside approved indications
-    "Q2055",  # Lisocabtagene maraleucel (Breyanzi)
-
-    # Gene therapies
-    "J3399",  # Gene therapy — unspecified investigational
-    "C9399",  # Investigational device or treatment — unspecified
-
-    # Investigational oncology biologics
-    "J9999",  # Unclassified antineoplastic drug (often used for investigational agents)
-    "J3490",  # Unclassified drugs (catch-all for unlisted agents)
-
-    # Experimental neural stimulation
-    "0278T",  # Transcranial magnetic stimulation — experimental for certain indications
-    "0364T",  # Vagus nerve stimulation — experimental for new indications
-
-    # Investigational imaging
-    "A9699",  # Radiopharmaceutical — investigational
-
-    # Fecal microbiota transplantation beyond approved indications
-    "G0455",  # Fecal microbiota transplantation — experimental outside C. diff indication
-})
+EXPERIMENTAL_PROCEDURE_CODES: frozenset[str] = frozenset(
+    {
+        # CAR-T cell therapies (FDA-approved for limited indications; experimental for others)
+        "Q2041",  # Axicabtagene ciloleucel (Yescarta) — experimental outside approved indications
+        "Q2042",  # Tisagenlecleucel (Kymriah) — experimental outside approved indications
+        "Q2055",  # Lisocabtagene maraleucel (Breyanzi)
+        # Gene therapies
+        "J3399",  # Gene therapy — unspecified investigational
+        "C9399",  # Investigational device or treatment — unspecified
+        # Investigational oncology biologics
+        "J9999",  # Unclassified antineoplastic drug (often used for investigational agents)
+        "J3490",  # Unclassified drugs (catch-all for unlisted agents)
+        # Experimental neural stimulation
+        "0278T",  # Transcranial magnetic stimulation — experimental for certain indications
+        "0364T",  # Vagus nerve stimulation — experimental for new indications
+        # Investigational imaging
+        "A9699",  # Radiopharmaceutical — investigational
+        # Fecal microbiota transplantation beyond approved indications
+        "G0455",  # Fecal microbiota transplantation — experimental outside C. diff indication
+    }
+)
 
 # Diagnosis keyword fragments that suggest experimental treatment context.
 # Used as a secondary check when procedure code is not on the list above.
-EXPERIMENTAL_DIAGNOSIS_KEYWORDS: frozenset[str] = frozenset({
-    "investigational",
-    "experimental",
-    "clinical trial",
-    "compassionate use",
-    "expanded access",
-    "off-label",
-    "off label",
-    "unproven",
-    "not fda approved",
-    "phase i",
-    "phase ii",
-    "phase iii",
-    "phase 1",
-    "phase 2",
-    "phase 3",
-})
+EXPERIMENTAL_DIAGNOSIS_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "investigational",
+        "experimental",
+        "clinical trial",
+        "compassionate use",
+        "expanded access",
+        "off-label",
+        "off label",
+        "unproven",
+        "not fda approved",
+        "phase i",
+        "phase ii",
+        "phase iii",
+        "phase 1",
+        "phase 2",
+        "phase 3",
+    }
+)
 
 # ICD-10 code prefixes associated with rare diseases (prevalence < 1:10,000).
 # Source: NORD (National Organization for Rare Disorders), OMIM, Orphanet.
@@ -108,46 +106,52 @@ EXPERIMENTAL_DIAGNOSIS_KEYWORDS: frozenset[str] = frozenset({
 # ICD-10 prefixes are used rather than full codes because rare disease codes
 # often have multiple specificity levels (e.g. E70.0, E70.1, E70.2...) that
 # all represent the same rare condition family.
-RARE_CONDITION_ICD10_PREFIXES: frozenset[str] = frozenset({
-    # Phenylketonuria and amino acid metabolism disorders
-    "E70",
-    # Gaucher disease, Fabry disease, other lysosomal storage disorders
-    "E75",
-    # Glycogen storage diseases (Pompe, McArdle, etc.)
-    "E74",
-    # Wilson disease, hemochromatosis
-    "E83",
-    # Huntington disease
-    "G10",
-    # Friedreich ataxia and spinocerebellar ataxias
-    "G11",
-    # Spinal muscular atrophy (SMA)
-    "G12",
-    # Amyotrophic lateral sclerosis (ALS) — rare but high-cost treatment
-    "G12.21",
-    # Myasthenia gravis — rare, complex treatment
-    "G70",
-    # Tuberous sclerosis
-    "Q85",
-    # Marfan syndrome
-    "Q87.4",
-    # Ehlers-Danlos syndrome
-    "Q79.6",
-    # Cystic fibrosis
-    "J84.9",
-    # Pulmonary arterial hypertension (rare forms)
-    "I27.0",
-    # Hereditary angioedema
-    "D84.1",
-    # Systemic mastocytosis
-    "D47.0",
-    # Aplastic anemia (severe forms)
-    "D61",
-    # Paroxysmal nocturnal hemoglobinuria
-    "D59.5",
-    # Primary immunodeficiencies
-    "D80", "D81", "D82", "D83", "D84",
-})
+RARE_CONDITION_ICD10_PREFIXES: frozenset[str] = frozenset(
+    {
+        # Phenylketonuria and amino acid metabolism disorders
+        "E70",
+        # Gaucher disease, Fabry disease, other lysosomal storage disorders
+        "E75",
+        # Glycogen storage diseases (Pompe, McArdle, etc.)
+        "E74",
+        # Wilson disease, hemochromatosis
+        "E83",
+        # Huntington disease
+        "G10",
+        # Friedreich ataxia and spinocerebellar ataxias
+        "G11",
+        # Spinal muscular atrophy (SMA)
+        "G12",
+        # Amyotrophic lateral sclerosis (ALS) — rare but high-cost treatment
+        "G12.21",
+        # Myasthenia gravis — rare, complex treatment
+        "G70",
+        # Tuberous sclerosis
+        "Q85",
+        # Marfan syndrome
+        "Q87.4",
+        # Ehlers-Danlos syndrome
+        "Q79.6",
+        # Cystic fibrosis
+        "J84.9",
+        # Pulmonary arterial hypertension (rare forms)
+        "I27.0",
+        # Hereditary angioedema
+        "D84.1",
+        # Systemic mastocytosis
+        "D47.0",
+        # Aplastic anemia (severe forms)
+        "D61",
+        # Paroxysmal nocturnal hemoglobinuria
+        "D59.5",
+        # Primary immunodeficiencies
+        "D80",
+        "D81",
+        "D82",
+        "D83",
+        "D84",
+    }
+)
 
 # Guideline source identifiers that, when multiple are present, indicate
 # a potential conflict. The detection logic checks whether the RAG context
@@ -179,6 +183,7 @@ GUIDELINE_APPROVAL_MARKERS: tuple[str, ...] = (
 # Escalation flag dataclass
 # =============================================================================
 
+
 @dataclass
 class EscalationFlags:
     """
@@ -194,6 +199,7 @@ class EscalationFlags:
         should_pre_escalate: True if any check fired — shortcuts to human review
         details:             Human-readable explanation of each triggered check
     """
+
     reasons: list[EscalationReason] = field(default_factory=list)
     details: dict[str, str] = field(default_factory=dict)
 
@@ -211,6 +217,7 @@ class EscalationFlags:
 # =============================================================================
 # The detector
 # =============================================================================
+
 
 class ClinicalRiskDetector:
     """
@@ -303,13 +310,9 @@ class ClinicalRiskDetector:
 
         # Strategy 2: keyword scan across all evidence text
         all_evidence_text = " ".join(
-            item.description.lower() + " " + item.original_text.lower()
-            for item in case.evidence
+            item.description.lower() + " " + item.original_text.lower() for item in case.evidence
         )
-        matched_keywords = [
-            kw for kw in EXPERIMENTAL_DIAGNOSIS_KEYWORDS
-            if kw in all_evidence_text
-        ]
+        matched_keywords = [kw for kw in EXPERIMENTAL_DIAGNOSIS_KEYWORDS if kw in all_evidence_text]
         if matched_keywords:
             flags.add(
                 EscalationReason.EXPERIMENTAL_TREATMENT,
@@ -392,13 +395,11 @@ class ClinicalRiskDetector:
 
         context_lower = guidelines_context.lower()
 
-        has_approval  = any(m in context_lower for m in GUIDELINE_APPROVAL_MARKERS)
+        has_approval = any(m in context_lower for m in GUIDELINE_APPROVAL_MARKERS)
         has_rejection = any(m in context_lower for m in GUIDELINE_CONFLICT_MARKERS)
 
         if has_approval and has_rejection:
-            matched_rejections = [
-                m for m in GUIDELINE_CONFLICT_MARKERS if m in context_lower
-            ]
+            matched_rejections = [m for m in GUIDELINE_CONFLICT_MARKERS if m in context_lower]
             flags.add(
                 EscalationReason.CONFLICTING_GUIDELINES,
                 f"Retrieved guidelines contain both approval and rejection language. "

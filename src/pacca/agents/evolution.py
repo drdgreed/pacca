@@ -47,17 +47,16 @@ Teaching note — why in-memory proposal store for the prototype:
 
 import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
 from .base import BaseAgent
 from .prompts.templates import EVOLUTION_AGENT_SYSTEM, get_prompt_version
 
-
 # =============================================================================
 # Domain models for the governance pipeline
 # =============================================================================
+
 
 class PolicyProposal(BaseModel):
     """
@@ -77,15 +76,12 @@ class PolicyProposal(BaseModel):
         scope_boundaries:      What the amendment does NOT cover (scope limits)
         reviewer_checklist:    What a human approver should verify before deploying
     """
+
     original_guideline_id: str = Field(
         description="The guideline being amended (source_id in ChromaDB)"
     )
-    proposed_text: str = Field(
-        description="The full text of the proposed amended guideline"
-    )
-    reasoning: str = Field(
-        description="Why this amendment is warranted based on override patterns"
-    )
+    proposed_text: str = Field(description="The full text of the proposed amended guideline")
+    reasoning: str = Field(description="Why this amendment is warranted based on override patterns")
     override_pattern: str = Field(
         description="Summary of the human override pattern that triggered this proposal"
     )
@@ -120,13 +116,14 @@ class ProposalRecord:
         reviewed_at:   Unix timestamp when reviewed (set on review)
         review_notes:  Approver's notes (optional)
     """
+
     proposal_id: str
     proposal: PolicyProposal
     status: str = "pending"
     submitted_at: float = field(default_factory=time.time)
-    reviewed_by: Optional[str] = None
-    reviewed_at: Optional[float] = None
-    review_notes: Optional[str] = None
+    reviewed_by: str | None = None
+    reviewed_at: float | None = None
+    review_notes: str | None = None
 
 
 @dataclass
@@ -148,6 +145,7 @@ class PolicyChangeLogEntry:
         deployed_at:       When it was deployed
         rationale_summary: Brief summary of why the change was made
     """
+
     change_id: str
     proposal_id: str
     guideline_id: str
@@ -177,7 +175,7 @@ def get_pending_proposals() -> list[ProposalRecord]:
     return [p for p in _proposal_store if p.status == "pending"]
 
 
-def get_proposal_by_id(proposal_id: str) -> Optional[ProposalRecord]:
+def get_proposal_by_id(proposal_id: str) -> ProposalRecord | None:
     """Return a specific proposal by ID."""
     return next((p for p in _proposal_store if p.proposal_id == proposal_id), None)
 
@@ -190,6 +188,7 @@ def get_change_log() -> list[PolicyChangeLogEntry]:
 # =============================================================================
 # The EvolutionAgent
 # =============================================================================
+
 
 class EvolutionAgent(BaseAgent):
     """
@@ -258,9 +257,7 @@ class EvolutionAgent(BaseAgent):
         )
         # Ensure the guideline ID is set even if the model didn't populate it
         if proposal.original_guideline_id == "UNKNOWN" or not proposal.original_guideline_id:
-            proposal = proposal.model_copy(
-                update={"original_guideline_id": guideline_id}
-            )
+            proposal = proposal.model_copy(update={"original_guideline_id": guideline_id})
 
         # Store with governance metadata — status starts as 'pending'
         proposal_id = f"PROP-{int(time.time())}"
@@ -278,12 +275,13 @@ class EvolutionAgent(BaseAgent):
 # Governance functions — called by the admin API endpoints
 # =============================================================================
 
+
 def approve_proposal(
     proposal_id: str,
     approved_by: str,
-    review_notes: Optional[str] = None,
+    review_notes: str | None = None,
     original_guideline_text: str = "",
-) -> Optional[PolicyChangeLogEntry]:
+) -> PolicyChangeLogEntry | None:
     """
     Approve a pending proposal and record it in the change log.
 
@@ -330,7 +328,7 @@ def approve_proposal(
 def reject_proposal(
     proposal_id: str,
     rejected_by: str,
-    review_notes: Optional[str] = None,
+    review_notes: str | None = None,
 ) -> bool:
     """
     Reject a pending proposal without deploying it.

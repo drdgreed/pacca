@@ -42,9 +42,7 @@ class GuidelineCriterion(BaseModel):
     )
 
     # Structured data for automated matching
-    diagnosis_codes: list[str] = Field(
-        default_factory=list, description="Applicable ICD-10 codes"
-    )
+    diagnosis_codes: list[str] = Field(default_factory=list, description="Applicable ICD-10 codes")
     treatment_codes: list[str] = Field(
         default_factory=list, description="Applicable CPT/HCPCS codes"
     )
@@ -71,9 +69,7 @@ class StepTherapyRequirement(BaseModel):
     documentation_required: list[str] = Field(
         default_factory=list, description="Required documentation"
     )
-    exceptions: list[str] = Field(
-        default_factory=list, description="Exceptions to this step"
-    )
+    exceptions: list[str] = Field(default_factory=list, description="Exceptions to this step")
 
 
 class ClinicalGuideline(BaseModel):
@@ -138,9 +134,7 @@ class ClinicalGuideline(BaseModel):
     # Special considerations
     age_restrictions: str | None = Field(None, description="Age-based restrictions")
     pregnancy_considerations: str | None = Field(None, description="Pregnancy notes")
-    contraindications: list[str] = Field(
-        default_factory=list, description="Contraindications"
-    )
+    contraindications: list[str] = Field(default_factory=list, description="Contraindications")
     warnings: list[str] = Field(default_factory=list, description="Clinical warnings")
 
     # Metadata
@@ -154,9 +148,7 @@ class ClinicalGuideline(BaseModel):
         today = date.today()
         if self.effective_date > today:
             return False
-        if self.expiration_date and self.expiration_date < today:
-            return False
-        return True
+        return not (self.expiration_date and self.expiration_date < today)
 
     @property
     def requires_step_therapy(self) -> bool:

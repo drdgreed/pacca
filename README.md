@@ -4,11 +4,14 @@
 
 [Features](#features) • [Architecture](#architecture) • [Harness Engineering](#harness-engineering) • [Quick Start](#quick-start) • [API Docs](#api-documentation) • [Demo](#demo-scenarios)
 
+[![CI](https://github.com/drdgreed/pacca/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drdgreed/pacca/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/drdgreed/pacca/branch/main/graph/badge.svg)](https://codecov.io/gh/drdgreed/pacca)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
 [![React 18](https://img.shields.io/badge/React-18+-61dafb.svg)](https://react.dev/)
 [![Claude API](https://img.shields.io/badge/Claude-API-blueviolet.svg)](https://anthropic.com/)
-[![Harness Iter](https://img.shields.io/badge/harness--iter-0-orange.svg)](docs/ITERATIONS.md)
+[![Harness Iter](https://img.shields.io/badge/harness--iter-1-orange.svg)](docs/ITERATIONS.md)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![MIT License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
 
 ---
@@ -50,6 +53,30 @@ PACCA automates the workflow using a five-agent hierarchical architecture with d
 - OpenTelemetry → Langfuse distributed tracing on every agent call
 - Runtime-adjustable operational parameters (confidence thresholds, retry budget, autonomy switch) without server restart
 - Three-stage governance pipeline for AI-proposed guideline amendments — meets FDA SaMD change-control intent
+
+---
+
+## Results
+
+Numbers are *measured locally* (the unit and integration suites) or *clearly labeled as benchmark/simulated* where they reflect synthesized cases rather than production traffic. The repository ships with no real PHI, so all clinical numbers come from the 53-case synthesized demo dataset and the 20-case clinical golden set.
+
+| Metric | Value | Source |
+|---|---|---|
+| **Unit tests** | 120 / 120 passing | `pytest tests/unit` — 7.14s |
+| **Total tests across tiers** | 146 (unit + integration + clinical) | `pytest tests/ --collect-only` |
+| **Clinical-accuracy CI gate** | ≥80% pass rate on 20-case golden set, LLM-as-judge (Claude Haiku, 1–5 rubric) | `tests/clinical/`, fails the build below threshold |
+| **Hallucination tolerance** | **Zero** — sparse-notes traps GC-018, GC-019 fail the build on any score-1 hallucination | `tests/unit/test_clinical_accuracy.py` |
+| **Lint posture** | `ruff check src/ tests/` — clean | CI lint job |
+| **Median decision latency** *(benchmark, single-process)* | ~2.1 s | Synthesized 53-case run, Sonnet 4 |
+| **95p decision latency** *(benchmark, single-process)* | ~4.3 s | Same |
+| **Auto-approval rate** *(synthesized dataset)* | 28% (15 / 53 cases) | Group A — complete documentation, explicit guideline alignment |
+| **Human-review rate** *(synthesized dataset)* | 19% (10 / 53 cases) | Group B — missing documentation, hallucination traps |
+| **Pre-flight escalations triggered** *(synthesized dataset)* | 32% (17 / 53 cases) | Groups D–G — experimental treatment, rare condition, conflicting guidelines, prior denial |
+| **Cost per decision** *(simulated, Sonnet 4 at current pricing)* | ~$0.04 | Token-counted per case; pricing as of 2026-05 |
+| **Harness iterations recorded** | 2 (`harness-iter-0` baseline, `harness-iter-1` first extraction) | `harness/manifests/iter-{0,1}.json` |
+| **Methodology source** | Lin et al., *Agentic Harness Engineering* | [arXiv:2604.25850](https://arxiv.org/abs/2604.25850) |
+
+> **What is *not* measured yet:** sustained-load latency, aggregate cost-per-decision at production volume, and adversarial prompt-injection resistance. These land in Phase H5 (Evaluation Harness Expansion). See [`docs/EVALUATION.md`](docs/EVALUATION.md) for the methodology and the gap list.
 
 ---
 
@@ -137,11 +164,18 @@ Full phase specifications, exit criteria, expected impact, and AHE paper citatio
 - PostgreSQL 16 for persistence, SQLite for development (one env-var switch)
 - Dual-collection ChromaDB with metadata filtering
 - OpenTelemetry → Langfuse distributed tracing (Docker Compose included)
-- Comprehensive test coverage: 140 unit tests, 0 failures, ~8 seconds
+- Comprehensive test coverage: 120 unit tests, 0 failures, ~7 seconds (146 total across unit, integration, and clinical-accuracy tiers)
 
 ---
 
 ## Architecture
+
+<p align="center">
+  <img src="docs/assets/architecture_v2.2.svg" alt="PACCA system architecture: React frontend, JWT bouncer, FastAPI backend, multi-agent orchestrator with 7-branch escalation tree, dual-collection ChromaDB RAG, and Claude API integration" width="780">
+</p>
+
+<details>
+<summary>Mermaid source (click to expand)</summary>
 
 ```mermaid
 graph TD
@@ -183,6 +217,8 @@ graph TD
     API -- "JSON Decision + Audit Trail" --> React
 ```
 
+</details>
+
 For the complete architecture, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For the harness layer specifically, see [`docs/HARNESS.md`](docs/HARNESS.md).
 
 ---
@@ -200,7 +236,7 @@ For the complete architecture, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md
 
 ```bash
 # Clone the repository
-git clone https://github.com/Chaos-6/pacca.git
+git clone https://github.com/drdgreed/pacca.git
 cd pacca
 
 # Set up environment
@@ -221,7 +257,7 @@ docker-compose up -d
 
 ```bash
 # Clone and set up
-git clone https://github.com/Chaos-6/pacca.git
+git clone https://github.com/drdgreed/pacca.git
 cd pacca
 
 # Create virtual environment
@@ -251,7 +287,7 @@ npm run dev
 ### Running Tests
 
 ```bash
-# Full unit test suite (140 tests, ~8 seconds)
+# Full unit test suite (120 tests, ~7 seconds)
 pytest
 
 # With coverage report
@@ -430,7 +466,7 @@ pacca/
 │       ├── iter-0.json
 │       └── iter-N-verdicts.json
 ├── tests/
-│   ├── test_*.py            # 140 unit tests
+│   ├── test_*.py            # 120 unit tests
 │   └── eval/                # v2.3: harness benchmark (Phase H5)
 ├── demo/                    # 53-case synthesized demo dataset
 ├── docs/                    # Documentation
@@ -494,28 +530,12 @@ PACCA's documentation is structured to serve four audiences: engineers, healthca
 
 Contributions are welcome. PACCA's contribution model has two paths:
 
-### Non-behavioral changes
+- **Standard PRs** — refactors, documentation, infra, dependency bumps, non-behavioral fixes.
+- **Behavioral PRs (harness-engineering discipline)** — anything that changes how an agent reasons, what tools it can call, what middleware fires, or what memory context it sees. Requires a one-file diff plus a manifest entry under [`harness/manifests/`](harness/manifests/).
 
-Refactors, documentation updates, test additions that do not change agent behavior. Standard PR workflow:
+Full details on local setup, the two-path workflow, the manifest schema, and the predicted-vs-observed verdict cycle are in [`CONTRIBUTING.md`](CONTRIBUTING.md). Security-related findings should follow [`SECURITY.md`](SECURITY.md) instead — please do not open a public issue.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/your-feature`)
-3. Commit using conventional commits (`feat:`, `fix:`, `docs:`, etc.)
-4. Push and open a PR; the PR template's "non-behavioral" checkbox applies
-5. CI runs the full unit test suite
-
-### Behavioral changes (v2.3+)
-
-Any change that modifies how an agent reasons, what tools it can call, what middleware fires, or what memory context it sees. These follow the harness engineering discipline:
-
-1. Read [`docs/HARNESS.md`](docs/HARNESS.md) to identify the correct constraint level
-2. Make the change as a one-file diff (or multiple commits, one per file, if multiple components are touched)
-3. Use the `chg-N:` commit prefix
-4. Add a corresponding entry to [`harness/manifests/iter-N.json`](harness/manifests/) per the [schema](harness/manifests/change_manifest.schema.json)
-5. CI validates the manifest schema and runs the benchmark
-6. After merge, the next evaluation round produces a verdict in [`docs/DECISIONS.md`](docs/DECISIONS.md)
-
-The PR template enforces the choice between paths — every PR is one or the other, never ambiguous.
+By contributing you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
@@ -525,7 +545,7 @@ If you reference PACCA's harness engineering implementation in academic work or 
 
 ```
 Reed, D. (2026). PACCA: Prior Authorization & Care Coordination Agent Platform —
-v2.3 Consolidated PRD. github.com/Chaos-6/pacca.
+v2.3 Consolidated PRD. github.com/drdgreed/pacca.
 
 Methodology adapted from:
 Lin, J., Liu, S., Pan, C., Lin, L., Dou, S., Huang, X., Yan, H., Han, Z., & Gui, T. (2026).
@@ -551,4 +571,4 @@ MIT — see [LICENSE](LICENSE) for details.
 ---
 
 **PACCA v2.3** — Healthcare Prior Authorization, Iterated Like Engineering
-*github.com/Chaos-6/pacca | David Reed, PhD | May 2026*
+*github.com/drdgreed/pacca | David Reed, PhD | May 2026*

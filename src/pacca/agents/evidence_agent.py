@@ -6,7 +6,6 @@ from multiple data sources to support authorization decisions.
 """
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -153,9 +152,9 @@ class EvidenceAggregationAgent(BaseAgent[EvidenceOutput]):
 
             if evidence.lab_results:
                 labs = "\n".join(
-                    f"  - {l.test_name}: {l.result_value} {l.unit or ''} "
-                    f"({'ABNORMAL' if l.is_abnormal else 'normal'}) - {l.result_date.date()}"
-                    for l in evidence.lab_results
+                    f"  - {lab.test_name}: {lab.result_value} {lab.unit or ''} "
+                    f"({'ABNORMAL' if lab.is_abnormal else 'normal'}) - {lab.result_date.date()}"
+                    for lab in evidence.lab_results
                 )
                 data_sections.append(f"**Recent Lab Results:**\n{labs}")
 

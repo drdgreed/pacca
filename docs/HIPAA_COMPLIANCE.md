@@ -307,4 +307,4 @@ These are the design patterns a Staff or Principal engineer implements when buil
 ---
 
 *PACCA v2.2.0 — April 2026*
-*github.com/Chaos-6/pacca*
+*github.com/drdgreed/pacca*

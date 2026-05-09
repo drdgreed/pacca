@@ -39,34 +39,30 @@ Teaching note — why the CI gate threshold is 80% and not 100%:
   you would tune this threshold based on observed baseline performance.
 """
 
-import asyncio
 import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.clinical.evaluator import (
+    MINIMUM_ACCEPTABLE_ACCURACY,
+    ClinicalEvaluator,
+    JudgeVerdict,
+)
 from tests.clinical.golden_cases import (
     GOLDEN_CASES,
     EscalationBranch,
     ExpectedOutcome,
-    GoldenCase,
     get_cases_by_branch,
     get_dataset_summary,
     get_hallucination_trap_cases,
 )
-from tests.clinical.evaluator import (
-    MINIMUM_ACCEPTABLE_ACCURACY,
-    MINIMUM_PASSING_SCORE,
-    ClinicalEvaluator,
-    EvaluationReport,
-    JudgeVerdict,
-)
-
 
 # =============================================================================
 # Dataset integrity tests — fast, no API calls
 # These always run as part of the standard unit suite.
 # =============================================================================
+
 
 class TestGoldenDatasetIntegrity:
     """
@@ -88,8 +84,7 @@ class TestGoldenDatasetIntegrity:
         """No two cases may share a case_id."""
         ids = [c.case_id for c in GOLDEN_CASES]
         assert len(ids) == len(set(ids)), (
-            f"Duplicate case IDs found: "
-            f"{[x for x in ids if ids.count(x) > 1]}"
+            f"Duplicate case IDs found: {[x for x in ids if ids.count(x) > 1]}"
         )
 
     def test_all_cases_have_required_fields(self):
@@ -193,7 +188,7 @@ class TestGoldenDatasetIntegrity:
 
         branch4_cases = get_cases_by_branch(EscalationBranch.BRANCH_4_EXPERIMENTAL)
         for case in branch4_cases:
-            code_match    = case.procedure_code.upper() in EXPERIMENTAL_PROCEDURE_CODES
+            code_match = case.procedure_code.upper() in EXPERIMENTAL_PROCEDURE_CODES
             keyword_match = any(
                 kw in case.clinical_notes.lower()
                 for kw in ["clinical trial", "investigational", "phase", "experimental"]
@@ -210,6 +205,7 @@ class TestGoldenDatasetIntegrity:
 # Verify that pre-flight checks fire correctly for the golden cases.
 # =============================================================================
 
+
 class TestPreFlightOnGoldenCases:
     """
     Verify that ClinicalRiskDetector correctly handles the golden dataset
@@ -220,7 +216,7 @@ class TestPreFlightOnGoldenCases:
         """Branch 4 golden cases must trigger pre-flight escalation."""
         from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
         from pacca.models.clinical import ClinicalCase, EvidenceItem
-        from pacca.models.enums import EvidenceSourceType, EscalationReason
+        from pacca.models.enums import EscalationReason, EvidenceSourceType
 
         detector = ClinicalRiskDetector()
         branch4_cases = get_cases_by_branch(EscalationBranch.BRANCH_4_EXPERIMENTAL)
@@ -256,8 +252,8 @@ class TestPreFlightOnGoldenCases:
     def test_rare_condition_cases_trigger_pre_flight(self):
         """Branch 5 golden cases must trigger pre-flight escalation."""
         from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
-        from pacca.models.clinical import ClinicalCase, EvidenceItem
-        from pacca.models.enums import EvidenceSourceType, EscalationReason
+        from pacca.models.clinical import ClinicalCase
+        from pacca.models.enums import EscalationReason
 
         detector = ClinicalRiskDetector()
         branch5_cases = get_cases_by_branch(EscalationBranch.BRANCH_5_RARE)
@@ -279,8 +275,8 @@ class TestPreFlightOnGoldenCases:
     def test_prior_denial_cases_trigger_pre_flight(self):
         """Branch 7 golden cases must trigger pre-flight escalation."""
         from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
-        from pacca.models.clinical import ClinicalCase, EvidenceItem
-        from pacca.models.enums import EvidenceSourceType, EscalationReason
+        from pacca.models.clinical import ClinicalCase
+        from pacca.models.enums import EscalationReason
 
         detector = ClinicalRiskDetector()
         branch7_cases = get_cases_by_branch(EscalationBranch.BRANCH_7_PRIOR_DENIAL)
@@ -334,6 +330,7 @@ class TestPreFlightOnGoldenCases:
 # Verify evaluator logic without real API calls.
 # =============================================================================
 
+
 class TestEvaluatorLogic:
     """
     Unit tests for the ClinicalEvaluator class.
@@ -349,6 +346,7 @@ class TestEvaluatorLogic:
     def mock_judge_response(self, score: int, correct: bool, hallucination: bool) -> MagicMock:
         """Build a mock Anthropic response with a judge verdict."""
         import json
+
         verdict = {
             "score": score,
             "correct_outcome": correct,
@@ -453,13 +451,13 @@ class TestEvaluatorLogic:
         n = 10
         threshold_passes = int(n * MINIMUM_ACCEPTABLE_ACCURACY)
 
-        verdicts = (
-            [JudgeVerdict(f"GC-{i:03}", 4, True, "Good", True, False, [])
-             for i in range(threshold_passes)]
-            +
-            [JudgeVerdict(f"GC-{i:03}", 1, False, "Bad", False, False, [])
-             for i in range(threshold_passes, n)]
-        )
+        verdicts = [
+            JudgeVerdict(f"GC-{i:03}", 4, True, "Good", True, False, [])
+            for i in range(threshold_passes)
+        ] + [
+            JudgeVerdict(f"GC-{i:03}", 1, False, "Bad", False, False, [])
+            for i in range(threshold_passes, n)
+        ]
 
         report = evaluator.compile_report(verdicts)
         assert report.passed_ci_gate is True
@@ -468,8 +466,7 @@ class TestEvaluatorLogic:
         """Report must fail CI gate when accuracy < MINIMUM_ACCEPTABLE_ACCURACY."""
         evaluator = self.make_mock_evaluator()
         verdicts = [
-            JudgeVerdict(f"GC-{i:03}", 1, False, "Bad", False, False, [])
-            for i in range(10)
+            JudgeVerdict(f"GC-{i:03}", 1, False, "Bad", False, False, []) for i in range(10)
         ]
         report = evaluator.compile_report(verdicts)
         assert report.passed_ci_gate is False
@@ -484,6 +481,7 @@ class TestEvaluatorLogic:
 #   Nightly: pytest tests/ -m clinical
 #   Pre-commit: pytest tests/ -m "not clinical"
 # =============================================================================
+
 
 @pytest.mark.clinical
 class TestFullClinicalEvaluation:
@@ -530,10 +528,10 @@ class TestFullClinicalEvaluation:
         from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
         from pacca.agents.decision import DecisionAgent, DecisionContext
         from pacca.models.clinical import ClinicalCase, EvidenceItem
-        from pacca.models.enums import EvidenceSourceType, AuthorizationStatus
+        from pacca.models.enums import AuthorizationStatus, EvidenceSourceType
 
-        detector  = ClinicalRiskDetector()
-        agent     = DecisionAgent()
+        detector = ClinicalRiskDetector()
+        agent = DecisionAgent()
         evaluator = ClinicalEvaluator()
         verdicts: list[JudgeVerdict] = []
 
@@ -562,7 +560,7 @@ class TestFullClinicalEvaluation:
 
             if flags.should_pre_escalate:
                 # Pre-flight fired — build the pre-flight decision
-                status    = AuthorizationStatus.IN_REVIEW.value
+                status = AuthorizationStatus.IN_REVIEW.value
                 rationale = (
                     f"Pre-flight escalation triggered. "
                     f"Reasons: {[r.value for r in flags.reasons]}. "
@@ -576,13 +574,13 @@ class TestFullClinicalEvaluation:
                         case=clinical_case,
                         relevant_guidelines=golden.guidelines_context,
                     )
-                    decision   = await agent.run(ctx)
-                    status     = decision.status.value
-                    rationale  = decision.rationale
+                    decision = await agent.run(ctx)
+                    status = decision.status.value
+                    rationale = decision.rationale
                     confidence = decision.confidence_score
                 except Exception as exc:
-                    status     = "ERROR"
-                    rationale  = f"Agent failed: {str(exc)}"
+                    status = "ERROR"
+                    rationale = f"Agent failed: {exc!s}"
                     confidence = 0.0
 
             # Judge the decision
@@ -616,15 +614,15 @@ class TestFullClinicalEvaluation:
 
         # THE CI GATE — this assertion is what makes this a gate, not just a report
         assert report.passed_ci_gate, (
-            f"\n{'='*60}\n"
+            f"\n{'=' * 60}\n"
             f"CLINICAL ACCURACY CI GATE FAILED\n"
-            f"{'='*60}\n"
+            f"{'=' * 60}\n"
             f"Accuracy: {report.accuracy:.1%} "
             f"(required: {MINIMUM_ACCEPTABLE_ACCURACY:.0%})\n"
             f"Passed: {report.passed_cases}/{report.total_cases} cases\n"
             f"Failed cases: {report.failed_cases}\n"
             f"Hallucinations: {report.hallucinations}\n"
-            f"{'='*60}\n"
+            f"{'=' * 60}\n"
             f"This failure means the system's clinical reasoning quality has "
             f"degraded below the minimum acceptable standard. Review the failed "
             f"cases above and the agent prompts in agents/decision.py."
@@ -647,9 +645,9 @@ class TestFullClinicalEvaluation:
         from pacca.models.clinical import ClinicalCase, EvidenceItem
         from pacca.models.enums import EvidenceSourceType
 
-        agent     = DecisionAgent()
+        agent = DecisionAgent()
         evaluator = ClinicalEvaluator()
-        traps     = get_hallucination_trap_cases()
+        traps = get_hallucination_trap_cases()
         verdicts: list[JudgeVerdict] = []
 
         for golden in traps:
@@ -669,15 +667,16 @@ class TestFullClinicalEvaluation:
             )
 
             try:
-                ctx      = DecisionContext(case=clinical_case,
-                                           relevant_guidelines=golden.guidelines_context)
+                ctx = DecisionContext(
+                    case=clinical_case, relevant_guidelines=golden.guidelines_context
+                )
                 decision = await agent.run(ctx)
-                status   = decision.status.value
-                rationale  = decision.rationale
+                status = decision.status.value
+                rationale = decision.rationale
                 confidence = decision.confidence_score
             except Exception as exc:
-                status    = "ERROR"
-                rationale = f"Agent failed: {str(exc)}"
+                status = "ERROR"
+                rationale = f"Agent failed: {exc!s}"
                 confidence = 0.0
 
             verdict = await evaluator.evaluate_case(

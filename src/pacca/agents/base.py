@@ -75,13 +75,13 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Type, TypeVar
+from typing import TypeVar
 
 from anthropic import (
-    AsyncAnthropic,
     APIConnectionError,
     APIStatusError,
     APITimeoutError,
+    AsyncAnthropic,
     RateLimitError,
 )
 from pydantic import BaseModel
@@ -93,8 +93,8 @@ from tenacity import (
     wait_exponential,
 )
 
-from ..config.tracing import get_tracer, record_span_error
 from ..config.settings import get_settings
+from ..config.tracing import get_tracer, record_span_error
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +106,9 @@ T = TypeVar("T", bound=BaseModel)
 # Errors that are worth retrying — transient API/network failures.
 # Tuple so it can be passed directly to retry_if_exception_type().
 RETRIABLE_ERRORS = (
-    RateLimitError,       # 429 — slow down
-    APIConnectionError,   # Network unreachable
-    APITimeoutError,      # Request timed out
+    RateLimitError,  # 429 — slow down
+    APIConnectionError,  # Network unreachable
+    APITimeoutError,  # Request timed out
 )
 
 
@@ -153,6 +153,7 @@ class AgentConfig(BaseModel):
         max_tokens:  Maximum response length. 4096 is sufficient for structured
                      clinical decision output.
     """
+
     model: str = "claude-sonnet-4-5-20250929"
     temperature: float = 0.0
     max_tokens: int = 4096
@@ -217,7 +218,7 @@ class BaseAgent(ABC):
         """
         ...
 
-    async def execute(self, user_input: str, response_model: Type[T]) -> T:
+    async def execute(self, user_input: str, response_model: type[T]) -> T:
         """
         Call the Claude API with retry and OTel span instrumentation.
 
@@ -276,12 +277,8 @@ class BaseAgent(ABC):
                     if content_block.type == "tool_use":
                         # Record token usage on the span — critical for cost tracking
                         if response.usage:
-                            span.set_attribute(
-                                "llm.input_tokens", response.usage.input_tokens
-                            )
-                            span.set_attribute(
-                                "llm.output_tokens", response.usage.output_tokens
-                            )
+                            span.set_attribute("llm.input_tokens", response.usage.input_tokens)
+                            span.set_attribute("llm.output_tokens", response.usage.output_tokens)
                             span.set_attribute(
                                 "llm.total_tokens",
                                 response.usage.input_tokens + response.usage.output_tokens,

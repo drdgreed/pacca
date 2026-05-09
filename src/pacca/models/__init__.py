@@ -10,6 +10,15 @@ Examples:
     from pacca.models.enums import EscalationReason
 """
 
+from pacca.models.authorization import (
+    AuditLogEntry,
+    AuthorizationDecision,
+    AuthorizationRequest,
+)
+from pacca.models.clinical import (
+    ClinicalCase,
+    EvidenceItem,
+)
 from pacca.models.enums import (
     AuthorizationStatus,
     ComplexityLevel,
@@ -17,28 +26,19 @@ from pacca.models.enums import (
     EvidenceSourceType,
     ReviewTier,
 )
-from pacca.models.clinical import (
-    ClinicalCase,
-    EvidenceItem,
-)
-from pacca.models.authorization import (
-    AuditLogEntry,
-    AuthorizationDecision,
-    AuthorizationRequest,
-)
 
 __all__ = [
-    # Enums
-    "AuthorizationStatus",
-    "ComplexityLevel",
-    "EscalationReason",
-    "EvidenceSourceType",
-    "ReviewTier",
-    # Clinical
-    "ClinicalCase",
-    "EvidenceItem",
     # Authorization
     "AuditLogEntry",
     "AuthorizationDecision",
     "AuthorizationRequest",
+    # Enums
+    "AuthorizationStatus",
+    # Clinical
+    "ClinicalCase",
+    "ComplexityLevel",
+    "EscalationReason",
+    "EvidenceItem",
+    "EvidenceSourceType",
+    "ReviewTier",
 ]

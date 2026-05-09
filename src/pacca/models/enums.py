@@ -10,43 +10,47 @@ Teaching note — why use enums instead of plain strings?
   what it means and where to find its definition.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class AuthorizationStatus(str, Enum):
+class AuthorizationStatus(StrEnum):
     """The lifecycle status of a prior authorization request."""
-    PENDING            = "PENDING"
+
+    PENDING = "PENDING"
     INFORMATION_NEEDED = "INFORMATION_NEEDED"
-    IN_REVIEW          = "IN_REVIEW"
-    AUTO_APPROVED      = "AUTO_APPROVED"
-    DENIED             = "DENIED"
-    CANCELLED          = "CANCELLED"
+    IN_REVIEW = "IN_REVIEW"
+    AUTO_APPROVED = "AUTO_APPROVED"
+    DENIED = "DENIED"
+    CANCELLED = "CANCELLED"
 
 
-class EvidenceSourceType(str, Enum):
+class EvidenceSourceType(StrEnum):
     """The origin type of a clinical evidence item."""
-    LAB_RESULT         = "LAB_RESULT"
+
+    LAB_RESULT = "LAB_RESULT"
     MEDICATION_HISTORY = "MEDICATION"
-    CLINICAL_NOTE      = "CLINICAL_NOTE"
-    PATIENT_REPORTED   = "PATIENT_REPORTED"
+    CLINICAL_NOTE = "CLINICAL_NOTE"
+    PATIENT_REPORTED = "PATIENT_REPORTED"
 
 
-class ComplexityLevel(str, Enum):
+class ComplexityLevel(StrEnum):
     """Clinical complexity of an authorization case (1-5 scale in PRD)."""
-    ROUTINE      = "ROUTINE"
+
+    ROUTINE = "ROUTINE"
     INTERMEDIATE = "INTERMEDIATE"
-    COMPLEX      = "COMPLEX"
-    CRITICAL     = "CRITICAL"
+    COMPLEX = "COMPLEX"
+    CRITICAL = "CRITICAL"
 
 
-class ReviewTier(str, Enum):
+class ReviewTier(StrEnum):
     """Which agent or human tier produced the final decision."""
-    AUTOMATED              = "AUTOMATED"
+
+    AUTOMATED = "AUTOMATED"
     MEDICAL_DIRECTOR_AGENT = "MEDICAL_DIRECTOR_AGENT"
-    HUMAN                  = "HUMAN"
+    HUMAN = "HUMAN"
 
 
-class EscalationReason(str, Enum):
+class EscalationReason(StrEnum):
     """
     Structured reasons why a case was escalated.
 

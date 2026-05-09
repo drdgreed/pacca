@@ -88,9 +88,7 @@ async def health_check() -> HealthResponse:
     # - External API health
 
     # Determine overall status
-    all_healthy = all(
-        check.get("status") == "healthy" for check in checks.values()
-    )
+    all_healthy = all(check.get("status") == "healthy" for check in checks.values())
     overall_status = "healthy" if all_healthy else "degraded"
 
     return HealthResponse(
@@ -158,9 +156,7 @@ async def get_metrics() -> MetricsResponse:
 
     avg_time = 0.0
     if _metrics["authorizations_processed"] > 0:
-        avg_time = (
-            _metrics["total_processing_time_ms"] / _metrics["authorizations_processed"]
-        )
+        avg_time = _metrics["total_processing_time_ms"] / _metrics["authorizations_processed"]
 
     return MetricsResponse(
         uptime_seconds=uptime,

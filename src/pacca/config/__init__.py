@@ -12,21 +12,21 @@ from pacca.config.logging import (
     setup_logging,
 )
 from pacca.config.settings import Settings, get_anthropic_api_key, get_settings
-from pacca.config.tracing import configure_tracing, get_tracer, get_current_trace_id
+from pacca.config.tracing import configure_tracing, get_current_trace_id, get_tracer
 
 __all__ = [
+    "LogContext",
     # Settings
     "Settings",
-    "get_settings",
-    "get_anthropic_api_key",
-    # Logging
-    "setup_logging",
-    "get_logger",
-    "LogContext",
     "bind_request_context",
     "clear_request_context",
     # Tracing
     "configure_tracing",
-    "get_tracer",
+    "get_anthropic_api_key",
     "get_current_trace_id",
+    "get_logger",
+    "get_settings",
+    "get_tracer",
+    # Logging
+    "setup_logging",
 ]

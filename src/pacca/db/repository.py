@@ -7,10 +7,10 @@ and database operations, with async support throughout.
 
 from datetime import datetime
 from typing import Any
-
-from sqlalchemy import select, update, and_, desc
-from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
+
+from sqlalchemy import and_, desc, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def uuid7() -> str:
@@ -22,6 +22,7 @@ def uuid7() -> str:
     """
     try:
         from uuid7 import uuid7 as _uuid7
+
         return str(_uuid7())
     except ImportError:
         return str(uuid4())
@@ -36,10 +37,8 @@ from pacca.db.models import (
     AuthorizationDecisionModel,
     AuthorizationRequestModel,
     GuidelineModel,
-    HumanReviewModel,
 )
 from pacca.models.authorization import (
-    AuditLogEntry,
     AuthorizationDecision,
     AuthorizationRequest,
 )
@@ -423,7 +422,7 @@ class GuidelineRepository:
         limit: int = 100,
     ) -> list[GuidelineModel]:
         """List active guidelines, optionally filtered by specialty."""
-        query = select(GuidelineModel).where(GuidelineModel.is_active == True)
+        query = select(GuidelineModel).where(GuidelineModel.is_active)
 
         # Note: specialty filtering would require JSONB contains operator
         # For simplicity, filtering by specialty is left for the application layer

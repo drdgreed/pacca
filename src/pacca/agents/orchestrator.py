@@ -46,13 +46,12 @@ Teaching note — pre-flight before post-flight:
 """
 
 import time
-from typing import Optional
 
-from .decision import DecisionAgent, MedicalDirectorAgent, DecisionContext
-from .clinical_risk_detector import ClinicalRiskDetector, EscalationFlags
+from ..db.repository import AuditRepository
 from ..models.authorization import AuthorizationDecision, AuthorizationStatus
 from ..models.enums import EscalationReason, ReviewTier
-from ..db.repository import AuditRepository
+from .clinical_risk_detector import ClinicalRiskDetector, EscalationFlags
+from .decision import DecisionAgent, DecisionContext, MedicalDirectorAgent
 
 
 class Orchestrator:
@@ -80,9 +79,9 @@ class Orchestrator:
     async def process_decision(
         self,
         context: DecisionContext,
-        audit: Optional[AuditRepository] = None,
-        correlation_id: Optional[str] = None,
-        prior_denial_codes: Optional[list[str]] = None,
+        audit: AuditRepository | None = None,
+        correlation_id: str | None = None,
+        prior_denial_codes: list[str] | None = None,
     ) -> AuthorizationDecision:
         """
         Run the full 7-branch decision pipeline for a prior authorization request.
@@ -163,8 +162,7 @@ class Orchestrator:
                 correlation_id=correlation_id,
                 duration_ms=tier1_ms,
                 output_summary=(
-                    f"Status: {decision.status.value} | "
-                    f"Confidence: {decision.confidence_score:.2f}"
+                    f"Status: {decision.status.value} | Confidence: {decision.confidence_score:.2f}"
                 ),
                 details={
                     "confidence_score": decision.confidence_score,
@@ -225,8 +223,8 @@ class Orchestrator:
         self,
         context: DecisionContext,
         flags: EscalationFlags,
-        audit: Optional[AuditRepository],
-        correlation_id: Optional[str],
+        audit: AuditRepository | None,
+        correlation_id: str | None,
     ) -> AuthorizationDecision:
         """
         Handle a case that triggered one or more pre-flight risk checks.
@@ -242,14 +240,14 @@ class Orchestrator:
         # Build a clear rationale from all triggered flags
         reasons_text = "; ".join(
             f"{reason.value}: {detail}"
-            for reason, detail in zip(flags.reasons, flags.details.values())
+            for reason, detail in zip(flags.reasons, flags.details.values(), strict=False)
         )
 
         # Construct the decision as a policy outcome, not an AI outcome
         decision = AuthorizationDecision(
             decision_id=f"PREESC-{context.case.procedure_code}-{int(time.time())}",
             status=AuthorizationStatus.IN_REVIEW,
-            confidence_score=0.0,   # Not applicable — this is a policy decision
+            confidence_score=0.0,  # Not applicable — this is a policy decision
             rationale=(
                 f"Pre-flight escalation triggered by clinical risk checks. "
                 f"Case routed directly to human review without AI evaluation. "
@@ -284,8 +282,8 @@ class Orchestrator:
         self,
         context: DecisionContext,
         tier1_decision: AuthorizationDecision,
-        audit: Optional[AuditRepository],
-        correlation_id: Optional[str],
+        audit: AuditRepository | None,
+        correlation_id: str | None,
     ) -> AuthorizationDecision:
         """
         Run the Tier 2 Medical Director Agent for ambiguous cases.
@@ -314,9 +312,7 @@ class Orchestrator:
                 },
             )
 
-        md_decision = await self.medical_director_agent.run(
-            context, tier1_decision
-        )
+        md_decision = await self.medical_director_agent.run(context, tier1_decision)
         tier2_ms = int((time.time() - tier2_start) * 1000)
 
         if audit:

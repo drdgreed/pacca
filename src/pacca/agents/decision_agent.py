@@ -20,7 +20,6 @@ from pacca.models import (
     DecisionOutcome,
     DecisionRationale,
     EscalationReason,
-    GuidelineMatch,
 )
 
 logger = get_logger(__name__)
@@ -247,9 +246,7 @@ For {treatment_category} treatments related to diagnosis {diagnosis_code}:
         context: AgentContext,
     ) -> tuple[bool, list[str]]:
         """Determine escalation based on decision output."""
-        should_escalate, reasons = await super().should_escalate(
-            output, confidence, context
-        )
+        should_escalate, reasons = await super().should_escalate(output, confidence, context)
 
         # Escalate if the agent itself recommends escalation
         if output.recommendation.upper() == "ESCALATE":
@@ -262,7 +259,7 @@ For {treatment_category} treatments related to diagnosis {diagnosis_code}:
             reasons.append(f"Safety concerns identified: {output.rationale.safety_concerns}")
 
         # Escalate denials for additional review (optional, configurable)
-        settings = get_settings()
+        get_settings()
         if output.recommendation.upper() == "DENY" and confidence < 0.9:
             should_escalate = True
             reasons.append("Denial recommendation requires human verification")

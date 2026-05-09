@@ -39,7 +39,6 @@ Prompt architecture:
 from datetime import datetime
 from typing import Any
 
-
 # =============================================================================
 # PROMPT VERSION REGISTRY
 #
@@ -58,7 +57,7 @@ PROMPT_REGISTRY: dict[str, dict[str, str]] = {
         "version": "v2.2",
         "description": "Tier 2 Clinical Authority — override evaluation + nuance assessment",
         "changed_in": "v2.2: Full structured template; clinical authority criteria; "
-                      "override/confirm framing; safety guidelines applied",
+        "override/confirm framing; safety guidelines applied",
     },
     "EvidenceAggregationAgent": {
         "version": "v2.1",
@@ -74,7 +73,7 @@ PROMPT_REGISTRY: dict[str, dict[str, str]] = {
         "version": "v2.2",
         "description": "Level 5 — policy amendment proposals (requires human approval)",
         "changed_in": "v2.2: Added governance framing; removed auto_deploy language; "
-                      "proposals require human approval gate",
+        "proposals require human approval gate",
     },
 }
 
@@ -148,7 +147,7 @@ String fields must contain substantive content, not placeholder text."""
 DECISION_AGENT_SYSTEM = f"""{AGENT_IDENTITY}
 
 ## Your Role: Frontline UM Nurse (Tier 1 Decision Support)
-Prompt version: {PROMPT_REGISTRY['DecisionSupportAgent']['version']}
+Prompt version: {PROMPT_REGISTRY["DecisionSupportAgent"]["version"]}
 
 You evaluate prior authorization requests against clinical guidelines to generate
 a recommendation. You are the FIRST AI reviewer — your job is to handle clear cases
@@ -250,7 +249,7 @@ Evaluate this request step by step:
 MEDICAL_DIRECTOR_AGENT_SYSTEM = f"""{AGENT_IDENTITY}
 
 ## Your Role: Chief Medical Director (Tier 2 Clinical Authority)
-Prompt version: {PROMPT_REGISTRY['MedicalDirectorAgent']['version']}
+Prompt version: {PROMPT_REGISTRY["MedicalDirectorAgent"]["version"]}
 
 A frontline UM Nurse (Tier 1) has escalated this case to you because the clinical
 evidence was ambiguous — confidence was between 0.90 and 0.95. Your role is to
@@ -350,7 +349,7 @@ MEDICAL_DIRECTOR_USER_TEMPLATE = """
 EVIDENCE_AGENT_SYSTEM = f"""{AGENT_IDENTITY}
 
 ## Your Role: Evidence Aggregation Agent
-Prompt version: {PROMPT_REGISTRY['EvidenceAggregationAgent']['version']}
+Prompt version: {PROMPT_REGISTRY["EvidenceAggregationAgent"]["version"]}
 
 You gather and synthesize clinical evidence to support prior authorization decisions.
 
@@ -402,7 +401,7 @@ EVIDENCE_AGENT_USER_TEMPLATE = """
 CLASSIFICATION_AGENT_SYSTEM = f"""{AGENT_IDENTITY}
 
 ## Your Role: Clinical Classification Agent
-Prompt version: {PROMPT_REGISTRY['ClinicalClassificationAgent']['version']}
+Prompt version: {PROMPT_REGISTRY["ClinicalClassificationAgent"]["version"]}
 
 You classify prior authorization requests by complexity, specialty, and urgency.
 
@@ -446,7 +445,7 @@ CLASSIFICATION_AGENT_USER_TEMPLATE = """
 EVOLUTION_AGENT_SYSTEM = f"""{AGENT_IDENTITY}
 
 ## Your Role: Clinical Process Architect (Policy Evolution)
-Prompt version: {PROMPT_REGISTRY['PolicyEvolutionAgent']['version']}
+Prompt version: {PROMPT_REGISTRY["PolicyEvolutionAgent"]["version"]}
 
 You analyze patterns in human override decisions to identify whether an existing
 clinical guideline should be amended to incorporate a consistently-approved exception.
@@ -485,6 +484,7 @@ the human approval gate at POST /api/v1/admin/proposals/{{id}}/approve.
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
 
 def format_template(template: str, **kwargs: Any) -> str:
     """Format a prompt template, handling missing keys gracefully."""
@@ -551,9 +551,7 @@ def build_classification_prompt(
 ) -> str:
     """Build prompt for Clinical Classification Agent."""
     age_category = (
-        "pediatric" if patient_age < 18
-        else "geriatric" if patient_age >= 65
-        else "adult"
+        "pediatric" if patient_age < 18 else "geriatric" if patient_age >= 65 else "adult"
     )
     return format_template(
         CLASSIFICATION_AGENT_USER_TEMPLATE,

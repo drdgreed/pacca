@@ -55,6 +55,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login/")
 
 # ── Startup validation ────────────────────────────────────────────────────────
 
+
 def validate_secret_key() -> None:
     """
     Validate that SECRET_KEY is set and has adequate entropy.
@@ -69,7 +70,7 @@ def validate_secret_key() -> None:
         raise RuntimeError(
             "SECRET_KEY environment variable is not set. "
             "Generate a secure key with: "
-            "python -c \"import secrets; print(secrets.token_hex(32))\" "
+            'python -c "import secrets; print(secrets.token_hex(32))" '
             "and set it in your .env file or deployment secrets manager."
         )
     if len(SECRET_KEY) < 32:
@@ -77,11 +78,12 @@ def validate_secret_key() -> None:
             f"SECRET_KEY is only {len(SECRET_KEY)} characters. "
             "Minimum 32 characters required for HS256 security. "
             "Generate a secure key with: "
-            "python -c \"import secrets; print(secrets.token_hex(32))\""
+            'python -c "import secrets; print(secrets.token_hex(32))"'
         )
 
 
 # ── Password hashing ──────────────────────────────────────────────────────────
+
 
 def get_password_hash(password: str) -> str:
     """
@@ -129,6 +131,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # ── JWT token validation ──────────────────────────────────────────────────────
 
+
 def verify_token(token: str = Depends(oauth2_scheme)) -> str:
     """
     FastAPI dependency that validates a JWT Bearer token.
@@ -159,4 +162,4 @@ def verify_token(token: str = Depends(oauth2_scheme)) -> str:
             raise credentials_exception
         return username
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from None

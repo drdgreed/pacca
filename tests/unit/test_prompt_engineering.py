@@ -25,15 +25,14 @@ Teaching note — testing prompts:
   These tests ensure the STRUCTURE is correct.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
-import time
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 
 # =============================================================================
 # Prompt registry and version control tests
 # =============================================================================
+
 
 class TestPromptRegistry:
     """Verify the prompt version registry is complete and well-formed."""
@@ -64,6 +63,7 @@ class TestPromptRegistry:
     def test_registry_versions_follow_format(self):
         """Versions must follow 'vMAJOR.MINOR' format (e.g. 'v2.1')."""
         import re
+
         from pacca.agents.prompts.templates import PROMPT_REGISTRY
 
         version_pattern = re.compile(r"^v\d+\.\d+$")
@@ -81,9 +81,7 @@ class TestPromptRegistry:
         required_fields = {"version", "description", "changed_in"}
         for agent_name, entry in PROMPT_REGISTRY.items():
             missing = required_fields - set(entry.keys())
-            assert not missing, (
-                f"PROMPT_REGISTRY['{agent_name}'] missing fields: {missing}"
-            )
+            assert not missing, f"PROMPT_REGISTRY['{agent_name}'] missing fields: {missing}"
 
     def test_get_prompt_version_returns_known_agents(self):
         """get_prompt_version() must return actual version, not 'unknown'."""
@@ -112,6 +110,7 @@ class TestPromptRegistry:
 # Prompt content / structure tests
 # =============================================================================
 
+
 class TestPromptContent:
     """Verify prompt content contains required structural elements."""
 
@@ -124,11 +123,11 @@ class TestPromptContent:
         patient safety requirement.
         """
         from pacca.agents.prompts.templates import (
-            DECISION_AGENT_SYSTEM,
-            MEDICAL_DIRECTOR_AGENT_SYSTEM,
-            EVIDENCE_AGENT_SYSTEM,
             CLASSIFICATION_AGENT_SYSTEM,
+            DECISION_AGENT_SYSTEM,
+            EVIDENCE_AGENT_SYSTEM,
             EVOLUTION_AGENT_SYSTEM,
+            MEDICAL_DIRECTOR_AGENT_SYSTEM,
         )
 
         prompts = {
@@ -202,9 +201,9 @@ class TestPromptContent:
         """
         from pacca.agents.prompts.templates import EVOLUTION_AGENT_SYSTEM
 
-        assert "PROPOSALS" in EVOLUTION_AGENT_SYSTEM or "proposals" in EVOLUTION_AGENT_SYSTEM.lower(), (
-            "EvolutionAgent prompt must state that it produces proposals, not deployments."
-        )
+        assert (
+            "PROPOSALS" in EVOLUTION_AGENT_SYSTEM or "proposals" in EVOLUTION_AGENT_SYSTEM.lower()
+        ), "EvolutionAgent prompt must state that it produces proposals, not deployments."
         assert "human approval" in EVOLUTION_AGENT_SYSTEM.lower(), (
             "EvolutionAgent prompt must reference human approval requirement."
         )
@@ -217,8 +216,10 @@ class TestPromptContent:
         """
         from pacca.agents.prompts.templates import DECISION_AGENT_SYSTEM
 
-        assert "precedent" in DECISION_AGENT_SYSTEM.lower() or \
-               "PAST MEDICAL DIRECTOR" in DECISION_AGENT_SYSTEM, (
+        assert (
+            "precedent" in DECISION_AGENT_SYSTEM.lower()
+            or "PAST MEDICAL DIRECTOR" in DECISION_AGENT_SYSTEM
+        ), (
             "DecisionSupportAgent prompt must reference precedent weighting. "
             "The institutional memory feature requires the agent to act on it."
         )
@@ -252,6 +253,7 @@ class TestPromptContent:
 # EvolutionAgent governance tests
 # =============================================================================
 
+
 class TestEvolutionAgentGovernance:
     """
     Verify the EvolutionAgent governance pipeline works correctly.
@@ -263,6 +265,7 @@ class TestEvolutionAgentGovernance:
     def make_mock_proposal(self):
         """Build a mock PolicyProposal for testing."""
         from pacca.agents.evolution import PolicyProposal
+
         return PolicyProposal(
             original_guideline_id="TEST-GUIDELINE-001",
             proposed_text="Amended: Allow MRI after 3 weeks if motor weakness documented.",
@@ -279,6 +282,7 @@ class TestEvolutionAgentGovernance:
     def setup_method(self):
         """Clear proposal and change log stores before each test."""
         import pacca.agents.evolution as evo_module
+
         evo_module._proposal_store.clear()
         evo_module._change_log.clear()
 
@@ -323,21 +327,26 @@ class TestEvolutionAgentGovernance:
 
         agent = EvolutionAgent()
 
-        with patch.object(
-            agent,
-            "execute",
-            new_callable=AsyncMock,
-            return_value=self.make_mock_proposal(),
-        ), patch("pacca.integrations.vector_store.GuidelineRetriever.add_guideline") as mock_add:
-
+        with (
+            patch.object(
+                agent,
+                "execute",
+                new_callable=AsyncMock,
+                return_value=self.make_mock_proposal(),
+            ),
+            patch("pacca.integrations.vector_store.GuidelineRetriever.add_guideline") as mock_add,
+        ):
             await agent.run(
                 original_guideline="6 weeks required.",
                 overrides=["Override."] * 5,
             )
 
-            mock_add.assert_not_called(), (
-                "GuidelineRetriever.add_guideline() must NOT be called when a "
-                "proposal is created. ChromaDB writes require human approval."
+            (
+                mock_add.assert_not_called(),
+                (
+                    "GuidelineRetriever.add_guideline() must NOT be called when a "
+                    "proposal is created. ChromaDB writes require human approval."
+                ),
             )
 
     def test_approve_proposal_creates_change_log_entry(self):
@@ -345,12 +354,12 @@ class TestEvolutionAgentGovernance:
         After approving a proposal, the change log must have one entry
         recording the approval with who approved it and when.
         """
+        import pacca.agents.evolution as evo_module
         from pacca.agents.evolution import (
             ProposalRecord,
             approve_proposal,
             get_change_log,
         )
-        import pacca.agents.evolution as evo_module
 
         # Manually insert a pending proposal
         proposal = self.make_mock_proposal()
@@ -380,8 +389,8 @@ class TestEvolutionAgentGovernance:
 
     def test_approve_changes_proposal_status_to_approved(self):
         """After approval, the proposal status must be 'approved', not 'pending'."""
-        from pacca.agents.evolution import ProposalRecord, approve_proposal, get_proposal_by_id
         import pacca.agents.evolution as evo_module
+        from pacca.agents.evolution import ProposalRecord, approve_proposal, get_proposal_by_id
 
         proposal = self.make_mock_proposal()
         record = ProposalRecord(
@@ -401,8 +410,8 @@ class TestEvolutionAgentGovernance:
         """
         Rejecting a proposal must set status='rejected' and create NO change log entry.
         """
-        from pacca.agents.evolution import ProposalRecord, reject_proposal, get_change_log
         import pacca.agents.evolution as evo_module
+        from pacca.agents.evolution import ProposalRecord, get_change_log, reject_proposal
 
         proposal = self.make_mock_proposal()
         record = ProposalRecord(
@@ -433,8 +442,8 @@ class TestEvolutionAgentGovernance:
         Attempting to approve an already-approved proposal must fail gracefully.
         Proposals can only be approved once — double-approval is a governance error.
         """
-        from pacca.agents.evolution import ProposalRecord, approve_proposal
         import pacca.agents.evolution as evo_module
+        from pacca.agents.evolution import ProposalRecord, approve_proposal
 
         proposal = self.make_mock_proposal()
         record = ProposalRecord(
@@ -453,8 +462,8 @@ class TestEvolutionAgentGovernance:
 
     def test_cannot_reject_already_rejected_proposal(self):
         """Rejecting an already-rejected proposal must fail gracefully."""
-        from pacca.agents.evolution import ProposalRecord, reject_proposal
         import pacca.agents.evolution as evo_module
+        from pacca.agents.evolution import ProposalRecord, reject_proposal
 
         proposal = self.make_mock_proposal()
         record = ProposalRecord(
@@ -472,19 +481,19 @@ class TestEvolutionAgentGovernance:
         The change log must be a permanent record.
         Multiple approvals create multiple entries — none are deleted.
         """
-        from pacca.agents.evolution import ProposalRecord, approve_proposal, get_change_log
         import pacca.agents.evolution as evo_module
+        from pacca.agents.evolution import ProposalRecord, approve_proposal, get_change_log
 
         # Create and approve three proposals
         for i in range(3):
             proposal = self.make_mock_proposal()
             record = ProposalRecord(
-                proposal_id=f"TEST-PROP-{10+i}",
+                proposal_id=f"TEST-PROP-{10 + i}",
                 proposal=proposal,
                 status="pending",
             )
             evo_module._proposal_store.append(record)
-            approve_proposal(f"TEST-PROP-{10+i}", f"dr.reviewer{i}@hospital.org")
+            approve_proposal(f"TEST-PROP-{10 + i}", f"dr.reviewer{i}@hospital.org")
 
         log = get_change_log()
         assert len(log) == 3, (
