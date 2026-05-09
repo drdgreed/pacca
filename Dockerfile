@@ -19,14 +19,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install pip and build tools
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Copy only dependency files first (for better caching)
+# Copy package metadata + source. Hatchling's metadata generation requires the
+# source tree (per [tool.hatch.build.targets.wheel] packages = ["src/pacca"]),
+# so the deps-only / source-second caching split that works with poetry-no-root
+# does not apply here — pip install . is one operation under hatchling.
 COPY pyproject.toml ./
+COPY src/ ./src/
 
 # Install dependencies into a virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install the package dependencies
+# Install the package and its declared dependencies
 RUN pip install --no-cache-dir .
 
 # -----------------------------------------------------------------------------
