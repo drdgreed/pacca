@@ -24,6 +24,8 @@ Unlike basic "LLM-wrapper" approaches, PACCA grounds every decision in factual m
 
 **v2.3 introduces a methodology, not just features.** Every behavioral change to PACCA's agent harness ships as a one-file diff with a falsifiable predicted-impact contract that the next evaluation round verifies. The methodology is adapted from Lin et al., *Agentic Harness Engineering* (arXiv:2604.25850, 2026). The repository's `docs/` folder makes the discipline auditable from outside.
 
+> **Governance context.** PACCA is a Class 2/3 enterprise agent operating inside a [**CRISP-AG**](https://drdavidreed.com/portfolio)-style governance envelope. CRISP-AG is an artifact-centered framework for enterprise agentic AI governance that sits *beneath* ISO/IEC 42001 and NIST AI RMF — the standards establish what governance must achieve; CRISP-AG specifies what the producible artifacts look like. The harness-engineering discipline documented in this repo is a concrete instance of CRISP-AG's **Orchestration Contract** artifact; the seven-branch escalation tree and Medical Director gate instantiate the **Delegation Authority Scoping** artifact applied to a healthcare domain. See [drdavidreed.com/portfolio](https://drdavidreed.com/portfolio) for the full white paper.
+
 ### The Problem
 
 Prior authorization is one of healthcare's most measurable failures:
@@ -523,6 +525,10 @@ PACCA's documentation is structured to serve four audiences: engineers, healthca
 - **[`harness/manifests/change_manifest.schema.json`](harness/manifests/change_manifest.schema.json)** — JSON Schema 2020-12 specification for change manifests
 - **[`harness/manifests/iter-N.json`](harness/manifests/)** — per-iteration manifest entries
 - **[`harness/manifests/iter-N-verdicts.json`](harness/manifests/)** — per-iteration verdict files (CI-generated)
+
+### Governance framework (external)
+
+- **[CRISP-AG White Paper v2.3](https://drdavidreed.com/portfolio)** — *CRISP-AG: An Artifact-Centered Framework for Enterprise Agentic AI Governance.* Specifies the four implementation artifacts (Delegation Authority Scoping, Contractor Access Governance, Orchestration Contract, Capability Frontier Classification) and nine-phase lifecycle that PACCA's harness engineering implements at the code layer. Sits beneath ISO/IEC 42001 and NIST AI RMF.
 
 ---
 
