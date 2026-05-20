@@ -15,7 +15,6 @@ from pacca.models import (
     TreatmentCategory,
 )
 
-
 # Oncology - Immunotherapy Guidelines
 NSCLC_IMMUNOTHERAPY_GUIDELINE = ClinicalGuideline(
     guideline_id="NCCN-NSCLC-IO-2026",

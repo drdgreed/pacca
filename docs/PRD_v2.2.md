@@ -484,5 +484,5 @@ Full sprint history in `CHANGELOG.md`. Versions:
 ---
 
 *PACCA v2.2.0 — April 2026*
-*github.com/Chaos-6/pacca*
+*github.com/drdgreed/pacca*
 *Author: David Reed, PhD | david.reed@interviewkickstart.com*

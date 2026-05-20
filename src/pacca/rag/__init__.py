@@ -9,7 +9,7 @@ from pacca.rag.pipeline import GuidelineVectorStore, RAGPipeline
 from pacca.rag.sample_guidelines import SAMPLE_GUIDELINES
 
 __all__ = [
+    "SAMPLE_GUIDELINES",
     "GuidelineVectorStore",
     "RAGPipeline",
-    "SAMPLE_GUIDELINES",
 ]

@@ -25,17 +25,15 @@ Teaching note — what is a mock?
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
 
 import pytest
 
-from pacca.models.enums import AuthorizationStatus, ReviewTier
 from pacca.models.authorization import AuthorizationDecision
 from pacca.models.clinical import ClinicalCase, EvidenceItem
-from pacca.models.enums import EvidenceSourceType
-
+from pacca.models.enums import AuthorizationStatus, EvidenceSourceType, ReviewTier
 
 # ── Test fixtures — reusable test data ──────────────────────────────────────
+
 
 @pytest.fixture
 def sample_case() -> ClinicalCase:
@@ -106,6 +104,7 @@ def mock_in_review_decision() -> AuthorizationDecision:
 
 # ── Core audit wiring tests ──────────────────────────────────────────────────
 
+
 class TestAuditTrailWiring:
     """
     Tests that audit records are written at the correct moments.
@@ -140,19 +139,21 @@ class TestAuditTrailWiring:
         #   1. The Orchestrator's process_decision (avoid real LLM calls)
         #   2. The RAG engine's query (avoid ChromaDB calls)
         #   3. AuditRepository.log (capture calls instead of hitting DB)
-        with patch(
-            "pacca.api.routes.authorizations.orchestrator.process_decision",
-            new_callable=AsyncMock,
-            return_value=mock_auto_approved_decision,
-        ), patch(
-            "pacca.api.routes.authorizations.rag_engine.query",
-            return_value="Mock guideline content",
-        ), patch(
-            "pacca.db.repository.AuditRepository.log",
-            side_effect=capture_log,
+        with (
+            patch(
+                "pacca.api.routes.authorizations.orchestrator.process_decision",
+                new_callable=AsyncMock,
+                return_value=mock_auto_approved_decision,
+            ),
+            patch(
+                "pacca.api.routes.authorizations.rag_engine.query",
+                return_value="Mock guideline content",
+            ),
+            patch(
+                "pacca.db.repository.AuditRepository.log",
+                side_effect=capture_log,
+            ),
         ):
-            from pacca.agents.orchestrator import Orchestrator
-            from pacca.integrations.vector_store import GuidelineRetriever
             from pacca.api.routes.authorizations import submit_authorization
             from pacca.models.authorization import AuthorizationRequest
 
@@ -188,16 +189,20 @@ class TestAuditTrailWiring:
             audit_log_calls.append(kwargs)
             return MagicMock()
 
-        with patch(
-            "pacca.api.routes.authorizations.orchestrator.process_decision",
-            new_callable=AsyncMock,
-            return_value=mock_auto_approved_decision,
-        ), patch(
-            "pacca.api.routes.authorizations.rag_engine.query",
-            return_value="Mock guideline",
-        ), patch(
-            "pacca.db.repository.AuditRepository.log",
-            side_effect=capture_log,
+        with (
+            patch(
+                "pacca.api.routes.authorizations.orchestrator.process_decision",
+                new_callable=AsyncMock,
+                return_value=mock_auto_approved_decision,
+            ),
+            patch(
+                "pacca.api.routes.authorizations.rag_engine.query",
+                return_value="Mock guideline",
+            ),
+            patch(
+                "pacca.db.repository.AuditRepository.log",
+                side_effect=capture_log,
+            ),
         ):
             from pacca.api.routes.authorizations import submit_authorization
             from pacca.models.authorization import AuthorizationRequest
@@ -230,16 +235,20 @@ class TestAuditTrailWiring:
             audit_log_calls.append(kwargs)
             return MagicMock()
 
-        with patch(
-            "pacca.api.routes.authorizations.orchestrator.process_decision",
-            new_callable=AsyncMock,
-            return_value=mock_auto_approved_decision,
-        ), patch(
-            "pacca.api.routes.authorizations.rag_engine.query",
-            return_value="Mock guideline",
-        ), patch(
-            "pacca.db.repository.AuditRepository.log",
-            side_effect=capture_log,
+        with (
+            patch(
+                "pacca.api.routes.authorizations.orchestrator.process_decision",
+                new_callable=AsyncMock,
+                return_value=mock_auto_approved_decision,
+            ),
+            patch(
+                "pacca.api.routes.authorizations.rag_engine.query",
+                return_value="Mock guideline",
+            ),
+            patch(
+                "pacca.db.repository.AuditRepository.log",
+                side_effect=capture_log,
+            ),
         ):
             from pacca.api.routes.authorizations import submit_authorization
             from pacca.models.authorization import AuthorizationRequest
@@ -249,9 +258,7 @@ class TestAuditTrailWiring:
             await submit_authorization(request=req, session=mock_session)
 
         # All records must have a correlation_id and they must all be the same
-        correlation_ids = {
-            call.get("correlation_id") for call in audit_log_calls
-        }
+        correlation_ids = {call.get("correlation_id") for call in audit_log_calls}
         assert None not in correlation_ids, (
             "Some audit records are missing correlation_id. "
             "Every audit record must have a correlation_id for request tracing."
@@ -277,18 +284,23 @@ class TestAuditTrailWiring:
             audit_log_calls.append(kwargs)
             return MagicMock()
 
-        with patch(
-            "pacca.api.routes.authorizations.orchestrator.process_decision",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("Simulated LLM API failure"),
-        ), patch(
-            "pacca.api.routes.authorizations.rag_engine.query",
-            return_value="Mock guideline",
-        ), patch(
-            "pacca.db.repository.AuditRepository.log",
-            side_effect=capture_log,
+        with (
+            patch(
+                "pacca.api.routes.authorizations.orchestrator.process_decision",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Simulated LLM API failure"),
+            ),
+            patch(
+                "pacca.api.routes.authorizations.rag_engine.query",
+                return_value="Mock guideline",
+            ),
+            patch(
+                "pacca.db.repository.AuditRepository.log",
+                side_effect=capture_log,
+            ),
         ):
             from fastapi import HTTPException
+
             from pacca.api.routes.authorizations import submit_authorization
             from pacca.models.authorization import AuthorizationRequest
 
@@ -303,8 +315,7 @@ class TestAuditTrailWiring:
 
         # There must be at least one failure audit record
         failure_records = [
-            c for c in audit_log_calls
-            if c.get("action") == "authorization_processing_failed"
+            c for c in audit_log_calls if c.get("action") == "authorization_processing_failed"
         ]
         assert len(failure_records) >= 1, (
             "No failure audit record was written when the AI pipeline failed. "
@@ -331,15 +342,18 @@ class TestAuditTrailWiring:
             audit_log_calls.append(kwargs)
             return MagicMock()
 
-        with patch(
-            "pacca.api.routes.authorizations.rag_engine.add_precedent",
-        ), patch(
-            "pacca.db.repository.AuditRepository.log",
-            side_effect=capture_log,
+        with (
+            patch(
+                "pacca.api.routes.authorizations.rag_engine.add_precedent",
+            ),
+            patch(
+                "pacca.db.repository.AuditRepository.log",
+                side_effect=capture_log,
+            ),
         ):
             from pacca.api.routes.authorizations import (
-                learn_from_feedback,
                 FeedbackRequest,
+                learn_from_feedback,
             )
 
             feedback = FeedbackRequest(
@@ -351,10 +365,7 @@ class TestAuditTrailWiring:
             await learn_from_feedback(feedback=feedback, session=mock_session)
 
         # Must have logged the learning event
-        learning_records = [
-            c for c in audit_log_calls
-            if c.get("action") == "precedent_learned"
-        ]
+        learning_records = [c for c in audit_log_calls if c.get("action") == "precedent_learned"]
         assert len(learning_records) == 1, (
             f"Expected 1 'precedent_learned' audit record, got {len(learning_records)}. "
             "Every learning loop event must be audited for model governance."

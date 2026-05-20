@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Chaos-6/pacca/harness/manifests/change_manifest.schema.json",
+  "$id": "https://github.com/drdgreed/pacca/harness/manifests/change_manifest.schema.json",
   "title": "PACCA Change Manifest",
   "description": "Schema for harness change manifests in PACCA. Every behavioral change to PACCA's agent harness ships with a manifest entry that names the failure pattern, root cause, predicted fixes, predicted risks, and constraint level. The next evaluation round verifies the predictions against actual case-level outcomes; rejected changes are reverted at file granularity. Methodology adapted from Lin et al., Agentic Harness Engineering (arXiv:2604.25850, 2026).",
   "type": "object",

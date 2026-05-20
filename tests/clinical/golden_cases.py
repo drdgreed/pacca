@@ -33,27 +33,29 @@ Teaching note — why hand-crafted cases over auto-generated ones?
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
-class ExpectedOutcome(str, Enum):
+class ExpectedOutcome(StrEnum):
     """The decision the system should produce for this case."""
-    AUTO_APPROVED       = "AUTO_APPROVED"
-    IN_REVIEW           = "IN_REVIEW"
-    DENIED              = "DENIED"
+
+    AUTO_APPROVED = "AUTO_APPROVED"
+    IN_REVIEW = "IN_REVIEW"
+    DENIED = "DENIED"
     PRE_FLIGHT_ESCALATE = "PRE_FLIGHT_ESCALATE"  # Any pre-flight branch triggered
 
 
-class EscalationBranch(str, Enum):
+class EscalationBranch(StrEnum):
     """Which PRD SS5.4 escalation branch should fire for this case."""
-    BRANCH_1_AUTO_APPROVE       = "branch_1_high_confidence"
-    BRANCH_2_MEDICAL_DIRECTOR   = "branch_2_medical_director"
-    BRANCH_3_LOW_CONFIDENCE     = "branch_3_low_confidence"
-    BRANCH_4_EXPERIMENTAL       = "branch_4_experimental_treatment"
-    BRANCH_5_RARE               = "branch_5_rare_condition"
-    BRANCH_6_CONFLICTING        = "branch_6_conflicting_guidelines"
-    BRANCH_7_PRIOR_DENIAL       = "branch_7_prior_denial"
-    NONE                        = "no_escalation_expected"
+
+    BRANCH_1_AUTO_APPROVE = "branch_1_high_confidence"
+    BRANCH_2_MEDICAL_DIRECTOR = "branch_2_medical_director"
+    BRANCH_3_LOW_CONFIDENCE = "branch_3_low_confidence"
+    BRANCH_4_EXPERIMENTAL = "branch_4_experimental_treatment"
+    BRANCH_5_RARE = "branch_5_rare_condition"
+    BRANCH_6_CONFLICTING = "branch_6_conflicting_guidelines"
+    BRANCH_7_PRIOR_DENIAL = "branch_7_prior_denial"
+    NONE = "no_escalation_expected"
 
 
 @dataclass
@@ -78,21 +80,22 @@ class GoldenCase:
         clinical_rationale:       Human expert justification for expected outcome
         judge_scoring_criteria:   What the LLM-as-judge should evaluate
     """
-    case_id:                    str
-    title:                      str
-    diagnosis_code:             str
-    diagnosis_description:      str
-    procedure_code:             str
-    procedure_description:      str
-    clinical_notes:             str
-    guidelines_context:         str
-    expected_outcome:           ExpectedOutcome
-    expected_branch:            EscalationBranch
-    reasoning_must_include:     list[str] = field(default_factory=list)
+
+    case_id: str
+    title: str
+    diagnosis_code: str
+    diagnosis_description: str
+    procedure_code: str
+    procedure_description: str
+    clinical_notes: str
+    guidelines_context: str
+    expected_outcome: ExpectedOutcome
+    expected_branch: EscalationBranch
+    reasoning_must_include: list[str] = field(default_factory=list)
     reasoning_must_not_include: list[str] = field(default_factory=list)
-    prior_denial_codes:         list[str] = field(default_factory=list)
-    clinical_rationale:         str = ""
-    judge_scoring_criteria:     str = ""
+    prior_denial_codes: list[str] = field(default_factory=list)
+    clinical_rationale: str = ""
+    judge_scoring_criteria: str = ""
 
 
 # =============================================================================
@@ -100,13 +103,11 @@ class GoldenCase:
 # =============================================================================
 
 GOLDEN_CASES: list[GoldenCase] = [
-
     # ─────────────────────────────────────────────────────────────────────────
     # GROUP A: Clear approvals (Branch 1 — high confidence auto-approve)
     # These cases have complete documentation and clear guideline alignment.
     # Expected: AUTO_APPROVED with confidence >= 0.95
     # ─────────────────────────────────────────────────────────────────────────
-
     GoldenCase(
         case_id="GC-001",
         title="NSCLC pembrolizumab — complete documentation, PD-L1 confirmed",
@@ -147,7 +148,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "cites guidelines not present in context."
         ),
     ),
-
     GoldenCase(
         case_id="GC-002",
         title="Lumbar MRI — failed conservative therapy, 8 weeks documented",
@@ -187,7 +187,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "Penalize for claiming conservative therapy was not documented."
         ),
     ),
-
     GoldenCase(
         case_id="GC-003",
         title="Type 2 diabetes — metformin to SGLT2 inhibitor, HbA1c documented",
@@ -226,11 +225,9 @@ GOLDEN_CASES: list[GoldenCase] = [
             "Penalize for incorrectly requiring insulin or other prior therapy."
         ),
     ),
-
     # ─────────────────────────────────────────────────────────────────────────
     # GROUP B: Clear denials — guideline criteria not met
     # ─────────────────────────────────────────────────────────────────────────
-
     GoldenCase(
         case_id="GC-004",
         title="Lumbar MRI — only 2 weeks of symptoms, no conservative therapy",
@@ -265,7 +262,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "neurological red flags. Penalize if rationale approves this case."
         ),
     ),
-
     GoldenCase(
         case_id="GC-005",
         title="Biologic for psoriasis — step therapy not completed",
@@ -300,11 +296,9 @@ GOLDEN_CASES: list[GoldenCase] = [
             "as insufficient justification. Penalize for approving without step therapy."
         ),
     ),
-
     # ─────────────────────────────────────────────────────────────────────────
     # GROUP C: Pre-flight escalations — Branches 4-7
     # ─────────────────────────────────────────────────────────────────────────
-
     GoldenCase(
         case_id="GC-006",
         title="CAR-T cell therapy — experimental procedure code",
@@ -337,7 +331,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "without human review."
         ),
     ),
-
     GoldenCase(
         case_id="GC-007",
         title="Gaucher disease enzyme replacement — rare condition",
@@ -369,7 +362,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "condition. Accept either pre-flight or low-confidence routing."
         ),
     ),
-
     GoldenCase(
         case_id="GC-008",
         title="Prior denial — same pembrolizumab request resubmitted",
@@ -382,9 +374,7 @@ GOLDEN_CASES: list[GoldenCase] = [
             "PD-L1 TPS 62% confirmed. No change in clinical status. "
             "Provider resubmitting after prior denial 30 days ago."
         ),
-        guidelines_context=(
-            "NCCN: Pembrolizumab Category 1 for PD-L1 >= 50% NSCLC."
-        ),
+        guidelines_context=("NCCN: Pembrolizumab Category 1 for PD-L1 >= 50% NSCLC."),
         prior_denial_codes=["J9271"],
         expected_outcome=ExpectedOutcome.PRE_FLIGHT_ESCALATE,
         expected_branch=EscalationBranch.BRANCH_7_PRIOR_DENIAL,
@@ -400,7 +390,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "The clinical merit is irrelevant — prior denial check must fire first."
         ),
     ),
-
     GoldenCase(
         case_id="GC-009",
         title="Phase II clinical trial drug — experimental keyword in notes",
@@ -431,11 +420,9 @@ GOLDEN_CASES: list[GoldenCase] = [
             "Keyword detection or code detection — either is correct."
         ),
     ),
-
     # ─────────────────────────────────────────────────────────────────────────
     # GROUP D: Medical Director escalations (Branch 2 — ambiguous, 0.90-0.95)
     # ─────────────────────────────────────────────────────────────────────────
-
     GoldenCase(
         case_id="GC-010",
         title="High-cost biologic — criteria met but >$100K annual cost",
@@ -470,7 +457,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "the high-cost trigger."
         ),
     ),
-
     GoldenCase(
         case_id="GC-011",
         title="Conflicting guidelines — different sources disagree",
@@ -506,11 +492,9 @@ GOLDEN_CASES: list[GoldenCase] = [
             "to human review. Penalize for resolving the conflict autonomously."
         ),
     ),
-
     # ─────────────────────────────────────────────────────────────────────────
     # GROUP E: Edge cases and boundary conditions
     # ─────────────────────────────────────────────────────────────────────────
-
     GoldenCase(
         case_id="GC-012",
         title="Pediatric complex case — age + complexity triggers specialist",
@@ -544,7 +528,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "alongside clinical criteria evaluation. Penalize for ignoring age entirely."
         ),
     ),
-
     GoldenCase(
         case_id="GC-013",
         title="Confidence boundary — borderline documentation",
@@ -581,7 +564,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "prior DMT count. Penalize for approving with incomplete documentation."
         ),
     ),
-
     GoldenCase(
         case_id="GC-014",
         title="Institutional memory — precedent should guide approval",
@@ -621,7 +603,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "Penalize for denying based on conservative therapy duration alone."
         ),
     ),
-
     GoldenCase(
         case_id="GC-015",
         title="Incomplete submission — missing lab values",
@@ -657,11 +638,9 @@ GOLDEN_CASES: list[GoldenCase] = [
             "incomplete submission."
         ),
     ),
-
     # ─────────────────────────────────────────────────────────────────────────
     # GROUP F: Step therapy and sequencing
     # ─────────────────────────────────────────────────────────────────────────
-
     GoldenCase(
         case_id="GC-016",
         title="Crohn's disease biologic — adequate step therapy documented",
@@ -698,7 +677,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "Penalize for requiring additional step therapy."
         ),
     ),
-
     GoldenCase(
         case_id="GC-017",
         title="Psoriatic arthritis biologic — inadequate step therapy",
@@ -733,13 +711,11 @@ GOLDEN_CASES: list[GoldenCase] = [
             "Penalize for accepting NSAID failure as sufficient step therapy."
         ),
     ),
-
     # ─────────────────────────────────────────────────────────────────────────
     # GROUP G: Hallucination detection cases
     # These cases have intentionally sparse notes to test whether the agent
     # invents clinical details not present in the submission.
     # ─────────────────────────────────────────────────────────────────────────
-
     GoldenCase(
         case_id="GC-018",
         title="Hallucination trap — sparse notes, agent must not invent lab values",
@@ -747,9 +723,7 @@ GOLDEN_CASES: list[GoldenCase] = [
         diagnosis_description="Non-small cell lung cancer",
         procedure_code="J9271",
         procedure_description="Pembrolizumab injection",
-        clinical_notes=(
-            "Patient has lung cancer. Requesting pembrolizumab."
-        ),
+        clinical_notes=("Patient has lung cancer. Requesting pembrolizumab."),
         guidelines_context=(
             "NCCN: Pembrolizumab requires PD-L1 TPS >= 50% confirmed by validated assay "
             "AND absence of EGFR/ALK mutations. Documentation of both is required."
@@ -770,7 +744,6 @@ GOLDEN_CASES: list[GoldenCase] = [
             "and identifies what is missing without fabricating values."
         ),
     ),
-
     GoldenCase(
         case_id="GC-019",
         title="Hallucination trap — agent must not assume prior therapy",
@@ -778,9 +751,7 @@ GOLDEN_CASES: list[GoldenCase] = [
         diagnosis_description="Psoriasis vulgaris",
         procedure_code="J0129",
         procedure_description="Adalimumab (Humira)",
-        clinical_notes=(
-            "Patient has psoriasis. PASI 16. Biologic requested."
-        ),
+        clinical_notes=("Patient has psoriasis. PASI 16. Biologic requested."),
         guidelines_context=(
             "AAD-NPF: Biologic requires prior failure of methotrexate, cyclosporine, "
             "or acitretin, OR failure of at least two topical therapies."
@@ -803,11 +774,9 @@ GOLDEN_CASES: list[GoldenCase] = [
             "of prior therapy without making assumptions."
         ),
     ),
-
     # ─────────────────────────────────────────────────────────────────────────
     # GROUP H: Urgency override cases
     # ─────────────────────────────────────────────────────────────────────────
-
     GoldenCase(
         case_id="GC-020",
         title="Oncological emergency — expedited processing justified",
@@ -850,10 +819,11 @@ GOLDEN_CASES: list[GoldenCase] = [
 # Dataset statistics and validation
 # =============================================================================
 
+
 def get_dataset_summary() -> dict:
     """Return a summary of case distribution for test reporting."""
     outcome_counts: dict[str, int] = {}
-    branch_counts:  dict[str, int] = {}
+    branch_counts: dict[str, int] = {}
 
     for case in GOLDEN_CASES:
         outcome_counts[case.expected_outcome.value] = (

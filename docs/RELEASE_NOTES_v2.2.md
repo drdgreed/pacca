@@ -2,7 +2,7 @@
 
 **Project:** PACCA — Prior Authorization & Care Coordination Agent Platform
 **Author:** David Reed, PhD | Head of Career Advancement & AI/ML Delivery, Interview Kickstart
-**Repository:** github.com/Chaos-6/pacca
+**Repository:** github.com/drdgreed/pacca
 **Sprint Started:** April 2026
 **Status:** Active development — targeting v2.2.0 production milestone
 

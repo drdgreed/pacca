@@ -1,14 +1,17 @@
 # PACCA — Prior Authorization & Care Coordination Agent Platform
 
-**AI-Powered Healthcare Prior Authorization Platform with Observability-Driven Harness Engineering**
+**Multi-agent prior authorization with observability-driven harness engineering**
 
 [Features](#features) • [Architecture](#architecture) • [Harness Engineering](#harness-engineering) • [Quick Start](#quick-start) • [API Docs](#api-documentation) • [Demo](#demo-scenarios)
 
+[![CI](https://github.com/drdgreed/pacca/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drdgreed/pacca/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/drdgreed/pacca/branch/main/graph/badge.svg)](https://codecov.io/gh/drdgreed/pacca)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
 [![React 18](https://img.shields.io/badge/React-18+-61dafb.svg)](https://react.dev/)
 [![Claude API](https://img.shields.io/badge/Claude-API-blueviolet.svg)](https://anthropic.com/)
-[![Harness Iter](https://img.shields.io/badge/harness--iter-0-orange.svg)](docs/ITERATIONS.md)
+[![Harness Iter](https://img.shields.io/badge/harness--iter-1-orange.svg)](docs/ITERATIONS.md)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![MIT License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
 
 ---
@@ -20,6 +23,8 @@ PACCA is a **secure, multi-agent AI workflow** that automates healthcare prior a
 Unlike basic "LLM-wrapper" approaches, PACCA grounds every decision in factual medical guidelines via Retrieval-Augmented Generation, escalates to specialist tiers using a 7-branch deterministic decision tree, and — beginning with v2.3 — applies **observability-driven harness engineering** to iterate the system itself.
 
 **v2.3 introduces a methodology, not just features.** Every behavioral change to PACCA's agent harness ships as a one-file diff with a falsifiable predicted-impact contract that the next evaluation round verifies. The methodology is adapted from Lin et al., *Agentic Harness Engineering* (arXiv:2604.25850, 2026). The repository's `docs/` folder makes the discipline auditable from outside.
+
+> **Governance context.** PACCA is a Class 2/3 enterprise agent operating inside a [**CRISP-AG**](https://drdavidreed.com/portfolio)-style governance envelope. CRISP-AG is an artifact-centered framework for enterprise agentic AI governance that sits *beneath* ISO/IEC 42001 and NIST AI RMF — the standards establish what governance must achieve; CRISP-AG specifies what the producible artifacts look like. The harness-engineering discipline documented in this repo is a concrete instance of CRISP-AG's **Orchestration Contract** artifact; the seven-branch escalation tree and Medical Director gate instantiate the **Delegation Authority Scoping** artifact applied to a healthcare domain. See [drdavidreed.com/portfolio](https://drdavidreed.com/portfolio) for the full white paper.
 
 ### The Problem
 
@@ -53,95 +58,14 @@ PACCA automates the workflow using a five-agent hierarchical architecture with d
 
 ---
 
-## Harness Engineering
-
-> *Beginning with v2.3, PACCA is iterated using a structured, falsifiable methodology. Every behavioral change is a one-file diff with a recorded prediction. The next evaluation round verifies the prediction. Rejected changes are reverted at file granularity.*
-
-The methodology adapts the AHE paper's three observability pillars to a healthcare domain:
-
-| Pillar | PACCA Implementation |
-|--------|----------------------|
-| **Component observability** | 11 editable harness surfaces (7 NexAU-standard + 4 PACCA-specific), each at a fixed file path with one-file-diff rollback |
-| **Experience observability** | OpenTelemetry spans → Langfuse + structured trajectory logs alongside the HIPAA audit trail |
-| **Decision observability** | Every change ships with a [`change_manifest`](harness/manifests/change_manifest.schema.json) entry; verdicts logged in [`DECISIONS.md`](docs/DECISIONS.md) |
-
-### The Four Harness Engineering Documents
-
-| Document | Purpose |
-|----------|---------|
-| 📐 **[`docs/HARNESS.md`](docs/HARNESS.md)** | Architectural reference. The seven AHE component types plus PACCA's four healthcare-specific harness surfaces, with rules for editing each. |
-| 📋 **[`docs/DECISIONS.md`](docs/DECISIONS.md)** | Append-only log of every behavioral change with predictions and verified outcomes. The audit trail of the iteration cycle itself. |
-| 📖 **[`docs/ITERATIONS.md`](docs/ITERATIONS.md)** | Narrative log per iteration tag. Format borrowed from the AHE paper's Appendix C — failure pattern → change → trajectory before/after → eval delta. |
-| 🔒 **[`harness/manifests/change_manifest.schema.json`](harness/manifests/change_manifest.schema.json)** | JSON Schema 2020-12 specification for change manifests. Includes PACCA-specific fields (`phi_impact`, `audit_relevant`) tying the discipline to healthcare governance requirements. |
-
-### v2.3 Cycle Phases
-
-The v2.3 release commits PACCA to a six-phase cycle over 10–12 weeks. Each phase has explicit exit criteria verifiable from git history and the evaluation suite:
-
-| Phase | Name | Weeks | Constraint Levels |
-|-------|------|-------|-------------------|
-| **H0** | Baseline Crystallization | 1–2 | Instrumentation only |
-| **H1** | Component Decoupling | 3–4 | system_prompt, tool_description, tool_implementation |
-| **H2** | Institutional Memory Layer | 5–6 | long_term_memory |
-| **H3** | Cross-Step Middleware Tier | 7–8 | middleware |
-| **H4** | Change Manifest Discipline | 3–10 (parallel) | Process layer |
-| **H5** | Evaluation Harness Expansion | 10–12 | Eval infrastructure |
-
-Full phase specifications, exit criteria, expected impact, and AHE paper citations are in **[the consolidated PRD §15](docs/PACCA_PRD_v2.3_Consolidated.md)**.
-
----
-
-## Features
-
-### 🤖 Multi-Agent AI System
-
-- **Evidence Aggregation Agent**: synthesizes clinical data into coherent narratives
-- **Classification Agent**: complexity scoring, specialty routing, urgency assessment
-- **Decision Support Agent (Tier 1, "Frontline UM Nurse")**: evaluates clear-cut cases, auto-approves at confidence ≥ 0.95
-- **Medical Director Agent (Tier 2, "Chief Medical Director")**: clinical nuance and gray areas before human routing
-- **Policy Evolution Agent (Governance)**: proposes guideline amendments based on human-override patterns
-
-### 📋 Clinical Decision Support
-
-- RAG-powered guideline retrieval using ChromaDB dual-collection
-- Evidence-based recommendations with confidence scores
-- Transparent decision rationale, audit-logged
-- Step therapy and prior treatment requirement support
-
-### 👥 Human Oversight
-
-- Configurable confidence thresholds for autonomous decisions
-- 7-branch escalation tree with 4 pre-flight deterministic checks (experimental treatment, rare condition, conflicting guidelines, prior denial)
-- Medical Director review interface with AI-generated case summaries
-- Complete audit trail for regulatory compliance
-
-### 📚 RAG and Institutional Memory
-
-- **`nccn_guidelines`** — authoritative clinical guidelines (NCCN, CMS, AHA, ADA, ACR), quarterly updates, independent versioning and rollback
-- **`case_precedents`** — Medical Director override decisions with documented rationales, embedded immediately, surfaced in semantically similar future cases
-- v2.3+ adds per-agent `long_term_memory.md` files: human-readable, git-versioned cross-cutting clinical lessons that ride in the prompt context on every request (Phase H2)
-
-### 🛡️ Production-Grade Safety
-
-- **Anti-hallucination guards** on every agent ("only reference clinical evidence explicitly present in the submission")
-- **Hallucination zero-tolerance tests** (GC-018, GC-019) — sparse-notes traps that fail the build on any score-1 hallucination
-- **Tool-use API forced** for structured output — eliminates the most common agentic failure mode
-- **Pre-write audit trail** — correlation-ID-linked event pairs flushed before any state change
-- **JWT + bcrypt + fail-fast SECRET_KEY validation** — server refuses to start with weak or missing keys
-- **Append-only PolicyChangeLogEntry** — immutable record of every guideline amendment, mapped to FDA SaMD Action Plan change-control requirements
-
-### 🔧 Production-Ready Architecture
-
-- FastAPI backend with full async support
-- React 18 frontend with real-time updates
-- PostgreSQL 16 for persistence, SQLite for development (one env-var switch)
-- Dual-collection ChromaDB with metadata filtering
-- OpenTelemetry → Langfuse distributed tracing (Docker Compose included)
-- Comprehensive test coverage: 140 unit tests, 0 failures, ~8 seconds
-
----
-
 ## Architecture
+
+<p align="center">
+  <img src="docs/assets/architecture_v2.2.svg" alt="PACCA system architecture: React frontend, JWT bouncer, FastAPI backend, multi-agent orchestrator with 7-branch escalation tree, dual-collection ChromaDB RAG, and Claude API integration" width="780">
+</p>
+
+<details>
+<summary>Mermaid source (click to expand)</summary>
 
 ```mermaid
 graph TD
@@ -183,7 +107,148 @@ graph TD
     API -- "JSON Decision + Audit Trail" --> React
 ```
 
+</details>
+
 For the complete architecture, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For the harness layer specifically, see [`docs/HARNESS.md`](docs/HARNESS.md).
+
+---
+
+## Results
+
+Numbers are *measured locally* (the unit and integration suites) or *clearly labeled as benchmark/simulated* where they reflect synthesized cases rather than production traffic. The repository ships with no real PHI, so all clinical numbers come from the 53-case synthesized demo dataset and the 20-case clinical golden set.
+
+| Metric | Value | Source |
+|---|---|---|
+| **Unit tests** | 120 / 120 passing | `pytest tests/unit` — 7.14s |
+| **Total tests across tiers** | 146 (unit + integration + clinical) | `pytest tests/ --collect-only` |
+| **Clinical-accuracy CI gate** | ≥80% pass rate on 20-case golden set, LLM-as-judge (Claude Haiku, 1–5 rubric) | `tests/clinical/`, fails the build below threshold |
+| **Hallucination tolerance** | **Zero** — sparse-notes traps GC-018, GC-019 fail the build on any score-1 hallucination | `tests/unit/test_clinical_accuracy.py` |
+| **Lint posture** | `ruff check src/ tests/` — clean | CI lint job |
+| **Median decision latency** *(benchmark, single-process)* | ~2.1 s | Synthesized 53-case run, Sonnet 4 |
+| **95p decision latency** *(benchmark, single-process)* | ~4.3 s | Same |
+| **Auto-approval rate** *(synthesized dataset)* | 28% (15 / 53 cases) | Group A — complete documentation, explicit guideline alignment |
+| **Human-review rate** *(synthesized dataset)* | 19% (10 / 53 cases) | Group B — missing documentation, hallucination traps |
+| **Pre-flight escalations triggered** *(synthesized dataset)* | 32% (17 / 53 cases) | Groups D–G — experimental treatment, rare condition, conflicting guidelines, prior denial |
+| **Cost per decision** *(simulated, Sonnet 4 at current pricing)* | ~$0.04 | Token-counted per case; pricing as of 2026-05 |
+| **Harness iterations recorded** | 2 (`harness-iter-0` baseline, `harness-iter-1` first extraction) | `harness/manifests/iter-{0,1}.json` |
+| **Methodology source** | Lin et al., *Agentic Harness Engineering* | [arXiv:2604.25850](https://arxiv.org/abs/2604.25850) |
+
+> **What is *not* measured yet:** sustained-load latency, aggregate cost-per-decision at production volume, and adversarial prompt-injection resistance. These land in Phase H5 (Evaluation Harness Expansion). See [`docs/EVALUATION.md`](docs/EVALUATION.md) for the methodology and the gap list.
+
+---
+
+## Harness Engineering
+
+> *Beginning with v2.3, PACCA is iterated using a structured, falsifiable methodology. Every behavioral change is a one-file diff with a recorded prediction. The next evaluation round verifies the prediction. Rejected changes are reverted at file granularity.*
+
+<p align="center">
+  <img src="docs/assets/iteration_cycle.svg" alt="PACCA harness iteration cycle: observe failure pattern in trajectory logs, write change_manifest with predicted impact and rollback plan, ship a one-file diff at a constrained surface, CI validates schema and tests, tag the iteration and run the eval suite, then ratify or revert at file granularity" width="520">
+</p>
+
+<details>
+<summary>Mermaid source for the iteration cycle (click to expand)</summary>
+
+```mermaid
+flowchart TD
+    classDef observe fill:#9c27b0,stroke:#444,stroke-width:2px,color:#fff
+    classDef discipline fill:#ff9800,stroke:#444,stroke-width:2px,color:#fff
+    classDef ship fill:#009688,stroke:#444,stroke-width:2px,color:#fff
+    classDef verdict fill:#e91e63,stroke:#444,stroke-width:2px,color:#fff
+    classDef gate fill:#607d8b,stroke:#444,stroke-width:2px,color:#fff
+
+    A[Observe failure pattern<br/>in trajectory logs]:::observe
+    B[Write change_manifest<br/>predicted impact + rollback]:::discipline
+    C[One-file diff<br/>at constrained surface]:::discipline
+    D[CI validates manifest schema<br/>+ unit tests + clinical-accuracy gate]:::ship
+    E{Merge?}:::gate
+    F[Tag harness-iter-N<br/>+ run eval suite, 100+ cases, k=2]:::ship
+    H{Predicted impact<br/>verified?}:::gate
+    I[Ratify<br/>append verdict to DECISIONS.md]:::verdict
+    J[Revert<br/>file-granularity rollback]:::verdict
+
+    A --> B --> C --> D --> E
+    E -- yes --> F --> H
+    H -- yes --> I
+    H -- no --> J
+    I -. observe again .-> A
+    J -.-> A
+```
+
+</details>
+
+The methodology adapts the AHE paper's three observability pillars to a healthcare domain:
+
+| Pillar | PACCA Implementation |
+|--------|----------------------|
+| **Component observability** | 11 editable harness surfaces (7 NexAU-standard + 4 PACCA-specific), each at a fixed file path with one-file-diff rollback |
+| **Experience observability** | OpenTelemetry spans → Langfuse + structured trajectory logs alongside the HIPAA audit trail |
+| **Decision observability** | Every change ships with a [`change_manifest`](harness/manifests/change_manifest.schema.json) entry; verdicts logged in [`DECISIONS.md`](docs/DECISIONS.md) |
+
+### The Four Harness Engineering Documents
+
+| Document | Purpose |
+|----------|---------|
+| 📐 **[`docs/HARNESS.md`](docs/HARNESS.md)** | Architectural reference. The seven AHE component types plus PACCA's four healthcare-specific harness surfaces, with rules for editing each. |
+| 📋 **[`docs/DECISIONS.md`](docs/DECISIONS.md)** | Append-only log of every behavioral change with predictions and verified outcomes. The audit trail of the iteration cycle itself. |
+| 📖 **[`docs/ITERATIONS.md`](docs/ITERATIONS.md)** | Narrative log per iteration tag. Format borrowed from the AHE paper's Appendix C — failure pattern → change → trajectory before/after → eval delta. |
+| 🔒 **[`harness/manifests/change_manifest.schema.json`](harness/manifests/change_manifest.schema.json)** | JSON Schema 2020-12 specification for change manifests. Includes PACCA-specific fields (`phi_impact`, `audit_relevant`) tying the discipline to healthcare governance requirements. |
+
+### v2.3 Cycle Phases
+
+The v2.3 release commits PACCA to a six-phase cycle over 10–12 weeks. Each phase has explicit exit criteria verifiable from git history and the evaluation suite:
+
+| Phase | Name | Weeks | Constraint Levels |
+|-------|------|-------|-------------------|
+| **H0** | Baseline Crystallization | 1–2 | Instrumentation only |
+| **H1** | Component Decoupling | 3–4 | system_prompt, tool_description, tool_implementation |
+| **H2** | Institutional Memory Layer | 5–6 | long_term_memory |
+| **H3** | Cross-Step Middleware Tier | 7–8 | middleware |
+| **H4** | Change Manifest Discipline | 3–10 (parallel) | Process layer |
+| **H5** | Evaluation Harness Expansion | 10–12 | Eval infrastructure |
+
+Full phase specifications, exit criteria, expected impact, and AHE paper citations are in **[the consolidated PRD §15](docs/PACCA_PRD_v2.3_Consolidated.md)**.
+
+---
+
+## Features
+
+### 📋 Clinical Decision Support
+
+- RAG-powered guideline retrieval using ChromaDB dual-collection
+- Evidence-based recommendations with confidence scores
+- Transparent decision rationale, audit-logged
+- Step therapy and prior treatment requirement support
+
+### 👥 Human Oversight
+
+- Configurable confidence thresholds for autonomous decisions
+- 7-branch escalation tree with 4 pre-flight deterministic checks (experimental treatment, rare condition, conflicting guidelines, prior denial)
+- Medical Director review interface with AI-generated case summaries
+- Complete audit trail for regulatory compliance
+
+### 📚 RAG and Institutional Memory
+
+- **`nccn_guidelines`** — authoritative clinical guidelines (NCCN, CMS, AHA, ADA, ACR), quarterly updates, independent versioning and rollback
+- **`case_precedents`** — Medical Director override decisions with documented rationales, embedded immediately, surfaced in semantically similar future cases
+- v2.3+ adds per-agent `long_term_memory.md` files: human-readable, git-versioned cross-cutting clinical lessons that ride in the prompt context on every request (Phase H2)
+
+### 🛡️ Production-Grade Safety
+
+- **Anti-hallucination guards** on every agent ("only reference clinical evidence explicitly present in the submission")
+- **Hallucination zero-tolerance tests** (GC-018, GC-019) — sparse-notes traps that fail the build on any score-1 hallucination
+- **Tool-use API forced** for structured output — eliminates the most common agentic failure mode
+- **Pre-write audit trail** — correlation-ID-linked event pairs flushed before any state change
+- **JWT + bcrypt + fail-fast SECRET_KEY validation** — server refuses to start with weak or missing keys
+- **Append-only PolicyChangeLogEntry** — immutable record of every guideline amendment, mapped to FDA SaMD Action Plan change-control requirements
+
+### 🔧 Production-Ready Architecture
+
+- FastAPI backend with full async support
+- React 18 frontend with real-time updates
+- PostgreSQL 16 for persistence, SQLite for development (one env-var switch)
+- Dual-collection ChromaDB with metadata filtering
+- OpenTelemetry → Langfuse distributed tracing (Docker Compose included)
+- Comprehensive test coverage: 120 unit tests, 0 failures, ~7 seconds (146 total across unit, integration, and clinical-accuracy tiers)
 
 ---
 
@@ -200,7 +265,7 @@ For the complete architecture, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md
 
 ```bash
 # Clone the repository
-git clone https://github.com/Chaos-6/pacca.git
+git clone https://github.com/drdgreed/pacca.git
 cd pacca
 
 # Set up environment
@@ -221,7 +286,7 @@ docker-compose up -d
 
 ```bash
 # Clone and set up
-git clone https://github.com/Chaos-6/pacca.git
+git clone https://github.com/drdgreed/pacca.git
 cd pacca
 
 # Create virtual environment
@@ -251,7 +316,7 @@ npm run dev
 ### Running Tests
 
 ```bash
-# Full unit test suite (140 tests, ~8 seconds)
+# Full unit test suite (120 tests, ~7 seconds)
 pytest
 
 # With coverage report
@@ -430,7 +495,7 @@ pacca/
 │       ├── iter-0.json
 │       └── iter-N-verdicts.json
 ├── tests/
-│   ├── test_*.py            # 140 unit tests
+│   ├── test_*.py            # 120 unit tests
 │   └── eval/                # v2.3: harness benchmark (Phase H5)
 ├── demo/                    # 53-case synthesized demo dataset
 ├── docs/                    # Documentation
@@ -488,34 +553,32 @@ PACCA's documentation is structured to serve four audiences: engineers, healthca
 - **[`harness/manifests/iter-N.json`](harness/manifests/)** — per-iteration manifest entries
 - **[`harness/manifests/iter-N-verdicts.json`](harness/manifests/)** — per-iteration verdict files (CI-generated)
 
+### Governance framework (external)
+
+- **[CRISP-AG White Paper v2.3](https://drdavidreed.com/portfolio)** — *CRISP-AG: An Artifact-Centered Framework for Enterprise Agentic AI Governance.* Specifies the four implementation artifacts (Delegation Authority Scoping, Contractor Access Governance, Orchestration Contract, Capability Frontier Classification) and nine-phase lifecycle that PACCA's harness engineering implements at the code layer. Sits beneath ISO/IEC 42001 and NIST AI RMF.
+
+---
+
+## About the Author
+
+**David Reed, Ph.D.** — Head of AI/ML & Agentic Delivery at Interview Kickstart. PhD in Computer Science, MBA, PMP, Wharton AI Fellow. Holder of [US Patent 6,850,988](https://patents.google.com/patent/US6850988) — the foundational recommendation-engine architecture developed at Oracle and later widely deployed in commerce. Formerly Master Technologist at Hewlett-Packard (Distinguished/Principal-IC track) and Principal TPM-AI at Microsoft. 35+ years across data warehousing, enterprise AI/ML, and edtech, including leading a $70M data-science curriculum portfolio across R1 universities.
+
+I built PACCA to demonstrate end-to-end agentic AI engineering on a high-stakes, regulated domain — healthcare prior authorization — where correctness, explainability, human oversight, and observability all matter equally. Beginning with v2.3, the project commits to a falsifiable harness-engineering methodology adapted from Lin et al. (arXiv:2604.25850, 2026) — every behavioral change ships as a one-file diff with a recorded prediction, and the next evaluation round verifies or rejects it at file granularity. The discipline is a concrete instance of the [CRISP-AG](https://drdavidreed.com/portfolio) Orchestration Contract artifact applied to a regulated healthcare domain.
+
+[Portfolio](https://drdavidreed.com) · [LinkedIn](https://linkedin.com/in/drdgreed) · drdgreed@gmail.com
+
 ---
 
 ## Contributing
 
 Contributions are welcome. PACCA's contribution model has two paths:
 
-### Non-behavioral changes
+- **Standard PRs** — refactors, documentation, infra, dependency bumps, non-behavioral fixes.
+- **Behavioral PRs (harness-engineering discipline)** — anything that changes how an agent reasons, what tools it can call, what middleware fires, or what memory context it sees. Requires a one-file diff plus a manifest entry under [`harness/manifests/`](harness/manifests/).
 
-Refactors, documentation updates, test additions that do not change agent behavior. Standard PR workflow:
+Full details on local setup, the two-path workflow, the manifest schema, and the predicted-vs-observed verdict cycle are in [`CONTRIBUTING.md`](CONTRIBUTING.md). Security-related findings should follow [`SECURITY.md`](SECURITY.md) instead — please do not open a public issue.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/your-feature`)
-3. Commit using conventional commits (`feat:`, `fix:`, `docs:`, etc.)
-4. Push and open a PR; the PR template's "non-behavioral" checkbox applies
-5. CI runs the full unit test suite
-
-### Behavioral changes (v2.3+)
-
-Any change that modifies how an agent reasons, what tools it can call, what middleware fires, or what memory context it sees. These follow the harness engineering discipline:
-
-1. Read [`docs/HARNESS.md`](docs/HARNESS.md) to identify the correct constraint level
-2. Make the change as a one-file diff (or multiple commits, one per file, if multiple components are touched)
-3. Use the `chg-N:` commit prefix
-4. Add a corresponding entry to [`harness/manifests/iter-N.json`](harness/manifests/) per the [schema](harness/manifests/change_manifest.schema.json)
-5. CI validates the manifest schema and runs the benchmark
-6. After merge, the next evaluation round produces a verdict in [`docs/DECISIONS.md`](docs/DECISIONS.md)
-
-The PR template enforces the choice between paths — every PR is one or the other, never ambiguous.
+By contributing you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
@@ -525,7 +588,7 @@ If you reference PACCA's harness engineering implementation in academic work or 
 
 ```
 Reed, D. (2026). PACCA: Prior Authorization & Care Coordination Agent Platform —
-v2.3 Consolidated PRD. github.com/Chaos-6/pacca.
+v2.3 Consolidated PRD. github.com/drdgreed/pacca.
 
 Methodology adapted from:
 Lin, J., Liu, S., Pan, C., Lin, L., Dou, S., Huang, X., Yan, H., Han, Z., & Gui, T. (2026).
@@ -551,4 +614,4 @@ MIT — see [LICENSE](LICENSE) for details.
 ---
 
 **PACCA v2.3** — Healthcare Prior Authorization, Iterated Like Engineering
-*github.com/Chaos-6/pacca | David Reed, PhD | May 2026*
+*github.com/drdgreed/pacca | David Reed, PhD | May 2026*

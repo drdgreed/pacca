@@ -1,0 +1,37 @@
+digraph IterationCycle {
+    // Source for docs/assets/iteration_cycle.svg
+    // Regenerate with: dot -Tsvg iteration_cycle.dot -o iteration_cycle.svg
+
+    rankdir=TB;
+    bgcolor="transparent";
+    pad=0.3;
+    nodesep=0.3;
+    ranksep=0.45;
+
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=12, margin="0.22,0.12", color="#444444", penwidth=1.2];
+    edge [fontname="Helvetica", fontsize=10, color="#555555", arrowsize=0.8, penwidth=1.3];
+
+    A [label="Observe failure pattern\nin trajectory logs", fillcolor="#9c27b0", fontcolor=white];
+    B [label="Write change_manifest\npredicted impact + rollback plan", fillcolor="#ff9800", fontcolor=white];
+    C [label="One-file diff\nat constrained surface", fillcolor="#ff9800", fontcolor=white];
+    D [label="CI validates manifest schema\n+ unit tests + clinical-accuracy gate", fillcolor="#009688", fontcolor=white];
+    E [label="Merge?", shape=diamond, fillcolor="#607d8b", fontcolor=white, height=0.8, width=1.1];
+    F [label="Tag harness-iter-N\n+ run eval suite (100+ cases, k=2)", fillcolor="#009688", fontcolor=white];
+    H [label="Predicted impact\nverified?", shape=diamond, fillcolor="#607d8b", fontcolor=white, height=1.0, width=1.4];
+    I [label="Ratify\nappend verdict to DECISIONS.md", fillcolor="#e91e63", fontcolor=white];
+    J [label="Revert\nfile-granularity rollback", fillcolor="#e91e63", fontcolor=white];
+
+    A -> B [penwidth=1.5];
+    B -> C [penwidth=1.5];
+    C -> D [penwidth=1.5];
+    D -> E [penwidth=1.5];
+    E -> F [label="  yes", penwidth=1.5];
+    F -> H [penwidth=1.5];
+    H -> I [label="  yes", penwidth=1.5];
+    H -> J [label="  no", penwidth=1.5];
+
+    I -> A [style=dashed, color="#888888", constraint=false, penwidth=1.2, label="  observe again  ", fontsize=9];
+    J -> A [style=dashed, color="#888888", constraint=false, penwidth=1.2];
+
+    { rank=same; I; J; }
+}

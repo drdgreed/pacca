@@ -12,9 +12,10 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from pacca.config import get_settings
+
 # Import models to ensure they're registered with Base.metadata
 from pacca.db.models import Base
-from pacca.config import get_settings
 
 # Alembic Config object
 config = context.config

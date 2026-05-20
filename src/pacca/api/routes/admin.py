@@ -43,9 +43,9 @@ Teaching note — runtime config vs. environment variables:
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from ...agents.evolution import (
@@ -57,8 +57,8 @@ from ...agents.evolution import (
     get_proposal_by_id,
     reject_proposal,
 )
-from ...integrations.vector_store import GuidelineRetriever
 from ...config.settings import get_settings
+from ...integrations.vector_store import GuidelineRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,7 @@ _config_overrides: dict[str, Any] = {}
 # =============================================================================
 # Pydantic models for the Config API
 # =============================================================================
+
 
 class ConfigResponse(BaseModel):
     """
@@ -157,9 +158,7 @@ class ConfigResponse(BaseModel):
             "When False, agents reason without guideline context (lower accuracy)."
         )
     )
-    demo_mode: bool = Field(
-        description="Load sample clinical cases and demo accounts at startup."
-    )
+    demo_mode: bool = Field(description="Load sample clinical cases and demo accounts at startup.")
 
     # ── Metadata ──────────────────────────────────────────────────────────────
     overrides_active: list[str] = Field(
@@ -190,27 +189,14 @@ class ConfigPatchRequest(BaseModel):
         PATCH /api/v1/admin/config
         {"llm_retry_max_attempts": 5, "llm_retry_wait_max_seconds": 60.0}
     """
-    auto_approve_confidence_threshold: float | None = Field(
-        default=None, ge=0.5, le=1.0
-    )
-    escalation_confidence_threshold: float | None = Field(
-        default=None, ge=0.3, le=1.0
-    )
-    high_cost_threshold: int | None = Field(
-        default=None, ge=0
-    )
-    complexity_auto_approve_max: int | None = Field(
-        default=None, ge=1, le=5
-    )
-    llm_retry_max_attempts: int | None = Field(
-        default=None, ge=1, le=10
-    )
-    llm_retry_wait_min_seconds: float | None = Field(
-        default=None, ge=0.1, le=10.0
-    )
-    llm_retry_wait_max_seconds: float | None = Field(
-        default=None, ge=1.0, le=120.0
-    )
+
+    auto_approve_confidence_threshold: float | None = Field(default=None, ge=0.5, le=1.0)
+    escalation_confidence_threshold: float | None = Field(default=None, ge=0.3, le=1.0)
+    high_cost_threshold: int | None = Field(default=None, ge=0)
+    complexity_auto_approve_max: int | None = Field(default=None, ge=1, le=5)
+    llm_retry_max_attempts: int | None = Field(default=None, ge=1, le=10)
+    llm_retry_wait_min_seconds: float | None = Field(default=None, ge=0.1, le=10.0)
+    llm_retry_wait_max_seconds: float | None = Field(default=None, ge=1.0, le=120.0)
     otel_enabled: bool | None = None
     enable_autonomous_decisions: bool | None = None
     enable_rag: bool | None = None
@@ -219,6 +205,7 @@ class ConfigPatchRequest(BaseModel):
 
 class ConfigResetResponse(BaseModel):
     """Response confirming all runtime overrides were cleared."""
+
     message: str
     cleared_overrides: list[str]
 
@@ -226,6 +213,7 @@ class ConfigResetResponse(BaseModel):
 # =============================================================================
 # Helper: resolve effective value (override takes precedence over env var)
 # =============================================================================
+
 
 def _effective(field_name: str, env_value: Any) -> Any:
     """
@@ -240,6 +228,7 @@ def _effective(field_name: str, env_value: Any) -> Any:
 # =============================================================================
 # Config API endpoints
 # =============================================================================
+
 
 @router.get(
     "/config",
@@ -415,8 +404,10 @@ async def reset_config_overrides() -> ConfigResetResponse:
 # System metrics endpoint
 # =============================================================================
 
+
 class MetricsResponse(BaseModel):
     """Operational metrics snapshot."""
+
     config_overrides_active: int = Field(
         description="Number of settings currently overridden at runtime."
     )
@@ -429,15 +420,9 @@ class MetricsResponse(BaseModel):
     autonomous_decisions_enabled: bool = Field(
         description="Whether autonomous AI approvals are currently active."
     )
-    rag_enabled: bool = Field(
-        description="Whether guideline RAG retrieval is currently active."
-    )
-    otel_enabled: bool = Field(
-        description="Whether OpenTelemetry span export is active."
-    )
-    langfuse_note: str = Field(
-        description="Where to view traces for this service."
-    )
+    rag_enabled: bool = Field(description="Whether guideline RAG retrieval is currently active.")
+    otel_enabled: bool = Field(description="Whether OpenTelemetry span export is active.")
+    langfuse_note: str = Field(description="Where to view traces for this service.")
 
 
 @router.get(
@@ -471,8 +456,7 @@ async def get_metrics() -> MetricsResponse:
         rag_enabled=_effective("enable_rag", s.enable_rag),
         otel_enabled=_effective("otel_enabled", s.otel_enabled),
         langfuse_note=(
-            "Traces available at http://localhost:3001 — "
-            "login: admin@pacca.local / pacca_admin_dev"
+            "Traces available at http://localhost:3001 — login: admin@pacca.local / pacca_admin_dev"
         ),
     )
 
@@ -481,8 +465,10 @@ async def get_metrics() -> MetricsResponse:
 # Policy Evolution Governance API (Level 5)
 # =============================================================================
 
+
 class ProposalSummary(BaseModel):
     """Summary of a policy amendment proposal for list views."""
+
     proposal_id: str
     guideline_id: str
     status: str
@@ -490,15 +476,16 @@ class ProposalSummary(BaseModel):
     reasoning_summary: str
     override_count: int
     submitted_at: float
-    reviewed_by: Optional[str] = None
+    reviewed_by: str | None = None
 
 
 class ApprovalRequest(BaseModel):
     """Request body for approving or rejecting a proposal."""
+
     reviewer_id: str = Field(
         description="Username or employee ID of the Medical Director approving this amendment"
     )
-    review_notes: Optional[str] = Field(
+    review_notes: str | None = Field(
         default=None,
         description="Notes explaining the approval/rejection decision (recommended)",
     )
@@ -506,6 +493,7 @@ class ApprovalRequest(BaseModel):
 
 class ChangeLogEntry(BaseModel):
     """A single entry in the policy change log."""
+
     change_id: str
     proposal_id: str
     guideline_id: str
@@ -531,9 +519,7 @@ async def run_policy_optimization():
     Produces a governance-tracked PROPOSAL — does not deploy anything.
     The proposal is stored with status='pending' and requires human approval.
     """
-    spine_overrides = [
-        "Override: Approved MRI for 2 weeks pain due to severe motor weakness."
-    ] * 10
+    spine_overrides = ["Override: Approved MRI for 2 weeks pain due to severe motor weakness."] * 10
 
     current_rule = "Indicated only after 6 weeks of conservative therapy fails."
 
@@ -662,9 +648,7 @@ async def approve_policy_proposal(
         proposal_id=proposal_id,
         approved_by=request.reviewer_id,
         review_notes=request.review_notes,
-        original_guideline_text=(
-            f"Original guideline: {record.proposal.original_guideline_id}"
-        ),
+        original_guideline_text=(f"Original guideline: {record.proposal.original_guideline_id}"),
     )
 
     if not change_entry:

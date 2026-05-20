@@ -30,31 +30,27 @@ Teaching note — how to test retry logic without waiting:
   This lets us test "did it retry 3 times?" in milliseconds, not seconds.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch, call
-from typing import Type
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from anthropic import (
     APIConnectionError,
-    APITimeoutError,
-    RateLimitError,
-    BadRequestError,
     AuthenticationError,
+    BadRequestError,
+    RateLimitError,
 )
 from pydantic import BaseModel
 
-from pacca.agents.base import BaseAgent, AgentConfig, RETRIABLE_ERRORS
-from pacca.models.enums import ReviewTier
-from pacca.models.authorization import AuthorizationDecision
-from pacca.models.enums import AuthorizationStatus
-
+from pacca.agents.base import AgentConfig, BaseAgent
 
 # =============================================================================
 # Minimal concrete agent for testing
 # =============================================================================
 
+
 class _TestOutput(BaseModel):
     """Minimal Pydantic output model for agent testing."""
+
     result: str
     score: float = 0.9
 
@@ -67,6 +63,7 @@ class _ConcreteAgent(BaseAgent):
     etc.) inherit from BaseAgent. For tests, we need a concrete class — we
     can't instantiate the ABC directly because it has abstract methods.
     """
+
     @property
     def name(self) -> str:
         return "TestAgent"
@@ -106,6 +103,7 @@ def make_mock_response(result: str = "approved", score: float = 0.97) -> MagicMo
 # Retry behavior tests
 # =============================================================================
 
+
 class TestRetryLogic:
     """
     Tests for tenacity retry behavior in BaseAgent._call_with_retry().
@@ -122,7 +120,7 @@ class TestRetryLogic:
         # Override settings to use 3 max attempts
         a._settings = MagicMock()
         a._settings.llm_retry_max_attempts = 3
-        a._settings.llm_retry_wait_min_seconds = 0.0   # No real waiting in tests
+        a._settings.llm_retry_wait_min_seconds = 0.0  # No real waiting in tests
         a._settings.llm_retry_wait_max_seconds = 0.0
         return a
 
@@ -197,9 +195,11 @@ class TestRetryLogic:
             side_effect=[rate_limit_error, rate_limit_error, rate_limit_error]
         )
 
-        with patch("pacca.agents.base.wait_exponential", return_value=MagicMock(sleep=0)):
-            with pytest.raises(RateLimitError):
-                await agent.execute("test prompt", _TestOutput)
+        with (
+            patch("pacca.agents.base.wait_exponential", return_value=MagicMock(sleep=0)),
+            pytest.raises(RateLimitError),
+        ):
+            await agent.execute("test prompt", _TestOutput)
 
         # All 3 attempts were made before giving up
         assert agent.client.messages.create.call_count == 3
@@ -271,6 +271,7 @@ class TestRetryLogic:
 # OpenTelemetry span tests
 # =============================================================================
 
+
 class TestOtelSpans:
     """
     Tests that OTel spans are created, attributed, and closed correctly.
@@ -315,8 +316,7 @@ class TestOtelSpans:
             opened_spans.append(name)
             return original_start(name, **kwargs)
 
-        with patch.object(agent._tracer, "start_as_current_span",
-                          side_effect=capturing_start):
+        with patch.object(agent._tracer, "start_as_current_span", side_effect=capturing_start):
             await agent.execute("test prompt", _TestOutput)
 
         assert "agent.TestAgent" in opened_spans, (
@@ -346,13 +346,11 @@ class TestOtelSpans:
 
         mock_span.set_attribute = capture_attribute
 
-        with patch.object(agent._tracer, "start_as_current_span",
-                          return_value=mock_span):
+        with patch.object(agent._tracer, "start_as_current_span", return_value=mock_span):
             await agent.execute("test prompt", _TestOutput)
 
         assert set_attributes.get("agent.name") == "TestAgent", (
-            f"Expected span attribute 'agent.name' = 'TestAgent'. "
-            f"Got attributes: {set_attributes}"
+            f"Expected span attribute 'agent.name' = 'TestAgent'. Got attributes: {set_attributes}"
         )
         assert "llm.model" in set_attributes, (
             "Span must include 'llm.model' attribute for filtering by model."
@@ -375,8 +373,7 @@ class TestOtelSpans:
         mock_span.__exit__ = MagicMock(return_value=False)
         mock_span.set_attribute = lambda k, v: set_attributes.update({k: v})
 
-        with patch.object(agent._tracer, "start_as_current_span",
-                          return_value=mock_span):
+        with patch.object(agent._tracer, "start_as_current_span", return_value=mock_span):
             await agent.execute("test prompt", _TestOutput)
 
         # make_mock_response() sets input_tokens=450, output_tokens=120
@@ -411,10 +408,11 @@ class TestOtelSpans:
         mock_span.record_exception = capture_record_exception
         mock_span.set_status = MagicMock()
 
-        with patch.object(agent._tracer, "start_as_current_span",
-                          return_value=mock_span):
-            with pytest.raises(ValueError):
-                await agent.execute("test prompt", _TestOutput)
+        with (
+            patch.object(agent._tracer, "start_as_current_span", return_value=mock_span),
+            pytest.raises(ValueError),
+        ):
+            await agent.execute("test prompt", _TestOutput)
 
         assert error_recorded["called"], (
             "span.record_exception() must be called when the agent fails. "
@@ -425,6 +423,7 @@ class TestOtelSpans:
 # =============================================================================
 # Tracing configuration tests
 # =============================================================================
+
 
 class TestTracingConfiguration:
     """Tests for configure_tracing() setup."""
@@ -437,8 +436,9 @@ class TestTracingConfiguration:
         up a real OTel exporter. All agent tracing calls become no-ops.
         """
         from opentelemetry import trace as otel_trace
-        from pacca.config.tracing import configure_tracing, _tracing_configured
+
         import pacca.config.tracing as tracing_module
+        from pacca.config.tracing import configure_tracing
 
         # Reset the configured flag so we can call configure_tracing in tests
         tracing_module._tracing_configured = False
@@ -450,6 +450,7 @@ class TestTracingConfiguration:
         with tracer.start_as_current_span("test_span") as span:
             # A no-op span's context should not be recording
             from opentelemetry.trace import NonRecordingSpan
+
             assert isinstance(span, NonRecordingSpan), (
                 "With tracing disabled, spans should be NonRecordingSpan (no-op). "
                 "This ensures tests don't accidentally export real traces."

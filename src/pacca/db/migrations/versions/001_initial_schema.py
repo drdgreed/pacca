@@ -5,17 +5,18 @@ Revises:
 Create Date: 2026-02-03
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "001_initial"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -52,13 +53,26 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_authorization_requests_request_id", "authorization_requests", ["request_id"], unique=True)
+    op.create_index(
+        "ix_authorization_requests_request_id",
+        "authorization_requests",
+        ["request_id"],
+        unique=True,
+    )
     op.create_index("ix_authorization_requests_status", "authorization_requests", ["status"])
-    op.create_index("ix_authorization_requests_patient_id", "authorization_requests", ["patient_id"])
+    op.create_index(
+        "ix_authorization_requests_patient_id", "authorization_requests", ["patient_id"]
+    )
     op.create_index("ix_authorization_requests_payer_id", "authorization_requests", ["payer_id"])
-    op.create_index("ix_authorization_requests_submitted_at", "authorization_requests", ["submitted_at"])
-    op.create_index("ix_authorization_requests_diagnosis", "authorization_requests", ["primary_diagnosis_code"])
-    op.create_index("ix_authorization_requests_treatment", "authorization_requests", ["treatment_code"])
+    op.create_index(
+        "ix_authorization_requests_submitted_at", "authorization_requests", ["submitted_at"]
+    )
+    op.create_index(
+        "ix_authorization_requests_diagnosis", "authorization_requests", ["primary_diagnosis_code"]
+    )
+    op.create_index(
+        "ix_authorization_requests_treatment", "authorization_requests", ["treatment_code"]
+    )
 
     # Authorization decisions table
     op.create_table(
@@ -85,8 +99,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["request_id"], ["authorization_requests.request_id"]),
     )
-    op.create_index("ix_authorization_decisions_decision_id", "authorization_decisions", ["decision_id"], unique=True)
-    op.create_index("ix_authorization_decisions_request_id", "authorization_decisions", ["request_id"])
+    op.create_index(
+        "ix_authorization_decisions_decision_id",
+        "authorization_decisions",
+        ["decision_id"],
+        unique=True,
+    )
+    op.create_index(
+        "ix_authorization_decisions_request_id", "authorization_decisions", ["request_id"]
+    )
     op.create_index("ix_authorization_decisions_outcome", "authorization_decisions", ["outcome"])
 
     # Human reviews table

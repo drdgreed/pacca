@@ -15,9 +15,7 @@ from structlog.types import EventDict, Processor
 from pacca.config.settings import get_settings
 
 
-def add_app_context(
-    logger: logging.Logger, method_name: str, event_dict: EventDict
-) -> EventDict:
+def add_app_context(logger: logging.Logger, method_name: str, event_dict: EventDict) -> EventDict:
     """Add application context to every log entry."""
     settings = get_settings()
     event_dict["app"] = settings.app_name

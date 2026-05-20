@@ -42,7 +42,6 @@ Teaching note — why not just change the import in routes?
 import asyncio
 import logging
 import os
-from typing import Optional
 
 import chromadb
 from chromadb.utils import embedding_functions
@@ -66,7 +65,8 @@ def _get_pipeline():
     global _rag_pipeline
     if _rag_pipeline is None:
         try:
-            from pacca.rag.pipeline import RAGPipeline, GuidelineVectorStore
+            from pacca.rag.pipeline import GuidelineVectorStore, RAGPipeline
+
             db_path = os.path.join(os.getcwd(), "pacca_db")
             vector_store = GuidelineVectorStore(
                 collection_name="clinical_guidelines",
@@ -167,11 +167,7 @@ class GuidelineRetriever:
             rationale:    Why the human made this decision
             outcome:      The correct outcome (e.g., "AUTO_APPROVED")
         """
-        document = (
-            f"SCENARIO: {case_summary}\n"
-            f"OUTCOME: {outcome}\n"
-            f"REASON: {rationale}"
-        )
+        document = f"SCENARIO: {case_summary}\nOUTCOME: {outcome}\nREASON: {rationale}"
         self._precedents.add(
             documents=[document],
             metadatas=[{"type": "human_override", "outcome": outcome}],

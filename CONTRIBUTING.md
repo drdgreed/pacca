@@ -5,7 +5,7 @@ Thank you for your interest in contributing. This document covers local setup, b
 ## Local setup
 
 ```bash
-git clone https://github.com/Chaos-6/pacca.git
+git clone https://github.com/drdgreed/pacca.git
 cd pacca
 
 # Python environment
@@ -41,17 +41,51 @@ docker compose up -d
 ## Tests
 
 ```bash
-# Unit + integration
+# Unit suite (CI-gated; 120 tests, ~7 seconds)
+pytest tests/unit
+
+# Integration + clinical-accuracy tiers (146 tests total across all tiers)
+pytest tests/integration tests/clinical
+
+# Everything
 pytest
 
 # Coverage report
-pytest --cov=pacca --cov-report=html
+pytest tests/unit --cov=pacca --cov-report=term-missing
 
-# LLM evaluation suite (uses Claude API, costs a few cents per run)
-pytest tests/eval -v
+# Manifest schema validation (run before committing any harness change)
+python -m pacca.harness.validate_manifest harness/manifests/iter-N.json
 ```
 
-A change must keep the unit and integration suites green. The eval suite is run on PRs that touch agent prompts, the orchestrator, or the RAG pipeline.
+A change must keep the unit and integration suites green. The clinical-accuracy tier (LLM-as-judge) is run on PRs that touch agent prompts, the orchestrator, or the RAG pipeline.
+
+## Two paths: standard vs. behavioral PRs
+
+Every PR in PACCA falls into one of two paths. The PR template enforces the choice — never ambiguous.
+
+### Standard PRs
+
+Refactors, documentation, infrastructure, build changes, dependency bumps, test additions that do not change agent behavior. Standard workflow:
+
+1. Branch from `main` with a descriptive prefix (see Branching below).
+2. Use conventional commit prefixes (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+3. Run `ruff check src/ tests/`, `ruff format --check src/ tests/`, and `pytest tests/unit` before pushing.
+4. Open a PR; tick the **Standard PR** box in the template.
+5. CI runs lint, format, type-check, unit tests, Docker build, and a security scan.
+
+### Behavioral PRs (harness-engineering discipline)
+
+Any change that modifies how an agent reasons, what tools it can call, what middleware fires, or what memory context it sees. These follow the harness engineering discipline introduced in v2.3:
+
+1. **Read [`docs/HARNESS.md`](docs/HARNESS.md)** to identify the correct constraint level (system_prompt, tool_description, tool_implementation, long_term_memory, middleware, orchestrator, eval_suite).
+2. **Make the change as a one-file diff** (or multiple commits, one per file, if multiple components are touched).
+3. **Use the `chg-N:` commit prefix.**
+4. **Add a manifest entry** at `harness/manifests/iter-N.json` per the [schema](harness/manifests/change_manifest.schema.json). The manifest records: predicted impact, root cause, evidence, rollback plan, and the PACCA-specific `phi_impact` / `audit_relevant` fields.
+5. **Open a PR** with the **Behavioral PR** box ticked. Fill in the manifest section.
+6. CI validates the manifest schema in addition to the standard checks.
+7. **After merge**, the next evaluation round produces a verdict in [`docs/DECISIONS.md`](docs/DECISIONS.md) — ratified or reverted at file granularity per the predicted-vs-observed contract you wrote in the manifest.
+
+The goal of the discipline is *attribution*: when a behavioral metric moves, the manifest log makes it possible to identify which one-file change moved it, instead of bisecting against a wall of mixed commits.
 
 ## Branching
 

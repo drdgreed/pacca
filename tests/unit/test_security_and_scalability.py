@@ -31,14 +31,13 @@ unit suite on every commit.
 
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timedelta
 
 import pytest
-
 
 # =============================================================================
 # Security: SECRET_KEY from environment
 # =============================================================================
+
 
 class TestSecretKeyFromEnvironment:
     """
@@ -58,12 +57,14 @@ class TestSecretKeyFromEnvironment:
 
         # Force re-import to pick up the new env var
         import importlib
+
         import pacca.api.auth as auth_module
+
         importlib.reload(auth_module)
 
-        assert auth_module.SECRET_KEY == test_key, (
+        assert test_key == auth_module.SECRET_KEY, (
             f"SECRET_KEY should equal the environment variable value. "
-            f"Got: {repr(auth_module.SECRET_KEY[:8])}... "
+            f"Got: {auth_module.SECRET_KEY[:8]!r}... "
             f"If this is a hardcoded string, the key is visible to anyone "
             f"who reads the source code."
         )
@@ -75,8 +76,9 @@ class TestSecretKeyFromEnvironment:
         The original code had: SECRET_KEY = "your-super-secret-development-key"
         This test verifies that specific string is gone.
         """
-        import pacca.api.auth as auth_module
         import inspect
+
+        import pacca.api.auth as auth_module
 
         source = inspect.getsource(auth_module)
         assert "your-super-secret-development-key" not in source, (
@@ -88,13 +90,15 @@ class TestSecretKeyFromEnvironment:
         """
         No string that looks like a JWT secret should be in auth.py source.
         """
-        import pacca.api.auth as auth_module
         import inspect
+
+        import pacca.api.auth as auth_module
 
         source = inspect.getsource(auth_module)
         # No long string literals that could be a hardcoded key
         # (excludes docstrings and comments by checking for = assignment)
         import re
+
         suspicious = re.findall(r'SECRET_KEY\s*=\s*"[^"]{8,}"', source)
         assert not suspicious, (
             f"Found suspicious SECRET_KEY assignment with string literal: {suspicious}. "
@@ -153,10 +157,9 @@ class TestValidateSecretKey:
             with pytest.raises(RuntimeError) as exc_info:
                 validate_secret_key()
             # Error should tell the user how to generate a proper key
-            assert "secrets" in str(exc_info.value).lower() or \
-                   "token_hex" in str(exc_info.value), (
+            assert "secrets" in str(exc_info.value).lower() or "token_hex" in str(exc_info.value), (
                 "Error message should include the key generation command: "
-                "python -c \"import secrets; print(secrets.token_hex(32))\""
+                'python -c "import secrets; print(secrets.token_hex(32))"'
             )
 
 
@@ -170,7 +173,9 @@ class TestTokenExpiry:
         monkeypatch.setenv("TOKEN_EXPIRE_MINUTES", "15")
 
         import importlib
+
         import pacca.api.auth as auth_module
+
         importlib.reload(auth_module)
 
         assert auth_module.TOKEN_EXPIRE_MINUTES == 15, (
@@ -191,6 +196,7 @@ class TestTokenExpiry:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("TOKEN_EXPIRE_MINUTES", None)
             import importlib
+
             importlib.reload(auth_module)
             default_expiry = auth_module.TOKEN_EXPIRE_MINUTES
 
@@ -204,6 +210,7 @@ class TestTokenExpiry:
 # =============================================================================
 # Async session consolidation
 # =============================================================================
+
 
 class TestAsyncSessionConsolidation:
     """
@@ -222,6 +229,7 @@ class TestAsyncSessionConsolidation:
         and dependency declarations.
         """
         import inspect
+
         import pacca.api.main as main_module
 
         source = inspect.getsource(main_module.login)
@@ -239,6 +247,7 @@ class TestAsyncSessionConsolidation:
     def test_main_register_route_uses_async_session(self):
         """The /register route must also use the async session."""
         import inspect
+
         import pacca.api.main as main_module
 
         source = inspect.getsource(main_module.register_user)
@@ -268,6 +277,7 @@ class TestAsyncSessionConsolidation:
         Verify the login route uses the async pattern.
         """
         import inspect
+
         import pacca.api.main as main_module
 
         source = inspect.getsource(main_module.login)
@@ -284,10 +294,11 @@ class TestAsyncSessionConsolidation:
         It may import it for the startup table creation, but not for routes.
         """
         import inspect
+
         import pacca.api.main as main_module
 
         # Get the source of main.py
-        source = inspect.getsource(main_module)
+        inspect.getsource(main_module)
 
         # SessionLocal may appear in the import for Base.metadata.create_all
         # but must NOT appear inside route function bodies
@@ -305,6 +316,7 @@ class TestAsyncSessionConsolidation:
 # =============================================================================
 # RAG Pipeline integration
 # =============================================================================
+
 
 class TestRAGPipelineIntegration:
     """
@@ -421,6 +433,7 @@ class TestRAGPipelineIntegration:
 # =============================================================================
 # End-to-end security smoke test
 # =============================================================================
+
 
 class TestPasswordSecurity:
     """Verify password hashing properties."""

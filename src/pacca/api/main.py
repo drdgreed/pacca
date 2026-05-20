@@ -22,9 +22,16 @@ from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from jose import jwt
+from pydantic import BaseModel
 from sqlalchemy import select
+
+# Observability
+from ..config.settings import get_settings
+from ..config.tracing import configure_tracing
+
+# Production async database session — all route handlers use this
+from ..db.session import AsyncSession, get_session, init_database
 
 # Auth helpers — SECRET_KEY, ALGORITHM, and token expiry come from environment
 from .auth import (
@@ -39,23 +46,17 @@ from .auth import (
 
 # Legacy sync setup — used ONLY for Base.metadata.create_all at startup
 # All runtime database operations use the async session below
-from .database import Base, engine as sync_engine
+from .database import Base
+from .database import engine as sync_engine
 from .models import User as SyncUser  # SQLAlchemy model for the users table
-
-# Production async database session — all route handlers use this
-from ..db.session import AsyncSession, get_session, init_database
 
 # Route modules
 from .routes import admin, authorizations
 
-# Observability
-from ..config.settings import get_settings
-from ..config.tracing import configure_tracing
-
-
 # =============================================================================
 # Application lifespan — startup and shutdown
 # =============================================================================
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -104,6 +105,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown: close async database connections
     from ..db.session import close_database
+
     await close_database()
 
 
@@ -159,14 +161,17 @@ app.include_router(
 #   to the async db/models.py schema. That is the production next step.
 # =============================================================================
 
+
 class UserCreate(BaseModel):
     """Request body for user registration."""
+
     username: str
     password: str
 
 
 class LoginRequest(BaseModel):
     """Request body for login."""
+
     username: str
     password: str
 
@@ -192,9 +197,7 @@ async def register_user(
         session: Async database session (injected by FastAPI)
     """
     # Check if username already exists — async query
-    result = await session.execute(
-        select(SyncUser).where(SyncUser.username == user.username)
-    )
+    result = await session.execute(select(SyncUser).where(SyncUser.username == user.username))
     existing = result.scalar_one_or_none()
 
     if existing:
@@ -263,6 +266,7 @@ async def login(
 # =============================================================================
 # Health check
 # =============================================================================
+
 
 @app.get("/health", tags=["Operations"], summary="Service health check")
 async def health():

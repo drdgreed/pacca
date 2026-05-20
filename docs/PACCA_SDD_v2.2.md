@@ -5,7 +5,7 @@
 **Version:** 2.2.0
 **Author:** David Reed, PhD, MBA, PMP | Executive Fellow, Wharton
 **Date:** April 2026
-**Repository:** github.com/Chaos-6/pacca
+**Repository:** github.com/drdgreed/pacca
 
 ---
 
@@ -1337,5 +1337,5 @@ This matrix maps every specification requirement to its implementing source arti
 ---
 
 *PACCA SDD v2.2.0 — April 2026*
-*github.com/Chaos-6/pacca*
+*github.com/drdgreed/pacca*
 *Author: David Reed, PhD | david.reed@interviewkickstart.com*

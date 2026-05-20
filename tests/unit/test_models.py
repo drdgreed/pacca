@@ -15,26 +15,22 @@ sprint. The original tests are preserved in tests/archive/test_models_v1.py.
 
 from datetime import datetime
 
-import pytest
-
+from pacca.models.authorization import (
+    AuditLogEntry,
+    AuthorizationDecision,
+)
+from pacca.models.clinical import ClinicalCase, EvidenceItem
 from pacca.models.enums import (
     AuthorizationStatus,
-    ComplexityLevel,
     EscalationReason,
     EvidenceSourceType,
     ReviewTier,
 )
-from pacca.models.clinical import ClinicalCase, EvidenceItem
-from pacca.models.authorization import (
-    AuditLogEntry,
-    AuthorizationDecision,
-    AuthorizationRequest,
-)
-
 
 # =============================================================================
 # Enum tests
 # =============================================================================
+
 
 class TestAuthorizationStatus:
     """Verify all expected status values exist and are string-compatible."""
@@ -67,11 +63,11 @@ class TestEscalationReason:
         """
         required_reasons = [
             EscalationReason.CONFIDENCE_BELOW_THRESHOLD,  # Branch 3
-            EscalationReason.MEDICAL_DIRECTOR_REQUIRED,   # Branch 2
-            EscalationReason.EXPERIMENTAL_TREATMENT,       # Branch 4
-            EscalationReason.RARE_CONDITION,               # Branch 5
-            EscalationReason.CONFLICTING_GUIDELINES,       # Branch 6
-            EscalationReason.PRIOR_DENIAL_SAME_SERVICE,   # Branch 7
+            EscalationReason.MEDICAL_DIRECTOR_REQUIRED,  # Branch 2
+            EscalationReason.EXPERIMENTAL_TREATMENT,  # Branch 4
+            EscalationReason.RARE_CONDITION,  # Branch 5
+            EscalationReason.CONFLICTING_GUIDELINES,  # Branch 6
+            EscalationReason.PRIOR_DENIAL_SAME_SERVICE,  # Branch 7
             EscalationReason.HIGH_COST,
             EscalationReason.PEDIATRIC_COMPLEX,
         ]
@@ -119,6 +115,7 @@ class TestEvidenceSourceType:
 # =============================================================================
 # ClinicalCase and EvidenceItem tests
 # =============================================================================
+
 
 class TestEvidenceItem:
     """Verify EvidenceItem is constructible and holds expected fields."""
@@ -213,6 +210,7 @@ class TestClinicalCase:
 # AuthorizationDecision tests
 # =============================================================================
 
+
 class TestAuthorizationDecision:
     """Verify AuthorizationDecision matches the shape agents return."""
 
@@ -288,6 +286,7 @@ class TestAuthorizationDecision:
 # =============================================================================
 # AuditLogEntry tests
 # =============================================================================
+
 
 class TestAuditLogEntry:
     """Verify AuditLogEntry — used in authorization decision audit trails."""

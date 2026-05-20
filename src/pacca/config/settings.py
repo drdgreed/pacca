@@ -48,15 +48,9 @@ class Settings(BaseSettings):
     )
 
     # Optional: Pinecone for production vector store
-    pinecone_api_key: SecretStr | None = Field(
-        default=None, description="Pinecone API key"
-    )
-    pinecone_environment: str | None = Field(
-        default=None, description="Pinecone environment"
-    )
-    pinecone_index_name: str = Field(
-        default="pacca-guidelines", description="Pinecone index name"
-    )
+    pinecone_api_key: SecretStr | None = Field(default=None, description="Pinecone API key")
+    pinecone_environment: str | None = Field(default=None, description="Pinecone environment")
+    pinecone_index_name: str = Field(default="pacca-guidelines", description="Pinecone index name")
 
     # ==========================================================================
     # Database
@@ -74,9 +68,7 @@ class Settings(BaseSettings):
     # ==========================================================================
     # Redis
     # ==========================================================================
-    redis_url: str = Field(
-        default="redis://localhost:6379/0", description="Redis connection URL"
-    )
+    redis_url: str = Field(default="redis://localhost:6379/0", description="Redis connection URL")
     redis_enabled: bool = Field(default=False, description="Enable Redis caching")
 
     # ==========================================================================
@@ -106,12 +98,8 @@ class Settings(BaseSettings):
         default="claude-sonnet-4-20250514",
         description="Default Claude model for agents",
     )
-    max_tokens: int = Field(
-        default=4096, ge=256, le=8192, description="Max tokens for responses"
-    )
-    agent_timeout: int = Field(
-        default=60, ge=10, le=300, description="Agent timeout in seconds"
-    )
+    max_tokens: int = Field(default=4096, ge=256, le=8192, description="Max tokens for responses")
+    agent_timeout: int = Field(default=60, ge=10, le=300, description="Agent timeout in seconds")
 
     # Confidence thresholds
     auto_approve_confidence_threshold: float = Field(
@@ -194,9 +182,7 @@ class Settings(BaseSettings):
     # ==========================================================================
     # Rate Limiting
     # ==========================================================================
-    rate_limit_rpm: int = Field(
-        default=60, ge=1, le=1000, description="Requests per minute limit"
-    )
+    rate_limit_rpm: int = Field(default=60, ge=1, le=1000, description="Requests per minute limit")
 
     # ==========================================================================
     # Feature Flags
@@ -204,12 +190,8 @@ class Settings(BaseSettings):
     enable_autonomous_decisions: bool = Field(
         default=True, description="Allow autonomous agent decisions"
     )
-    enable_rag: bool = Field(
-        default=True, description="Enable RAG-based guideline retrieval"
-    )
-    demo_mode: bool = Field(
-        default=True, description="Use mock EHR data for demo"
-    )
+    enable_rag: bool = Field(default=True, description="Enable RAG-based guideline retrieval")
+    demo_mode: bool = Field(default=True, description="Use mock EHR data for demo")
 
     # ==========================================================================
     # Computed Properties

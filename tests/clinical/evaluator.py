@@ -45,11 +45,10 @@ Teaching note — judge prompt design:
 import json
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from anthropic import AsyncAnthropic
 
-from .golden_cases import GoldenCase, ExpectedOutcome
+from .golden_cases import GoldenCase
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +80,7 @@ class JudgeVerdict:
         missing_citations:      Key guideline references the agent failed to cite
         raw_response:     Full judge response for debugging
     """
+
     case_id: str
     score: int
     passed: bool
@@ -105,6 +105,7 @@ class EvaluationReport:
         hallucinations:  Cases where agent invented clinical details
         failed_cases:    Case IDs that scored below passing threshold
     """
+
     verdicts: list[JudgeVerdict]
     total_cases: int
     passed_cases: int
@@ -247,10 +248,10 @@ def _build_judge_prompt(
 {system_rationale}
 
 ### Keywords that MUST appear in rationale for full credit:
-{', '.join(case.reasoning_must_include)}
+{", ".join(case.reasoning_must_include)}
 
 ### Keywords that must NOT appear (hallucination markers):
-{', '.join(case.reasoning_must_not_include) if case.reasoning_must_not_include else 'none specified'}
+{", ".join(case.reasoning_must_not_include) if case.reasoning_must_not_include else "none specified"}
 
 Evaluate this decision and provide your verdict as JSON.
 """.strip()
@@ -259,6 +260,7 @@ Evaluate this decision and provide your verdict as JSON.
 # =============================================================================
 # The evaluator class
 # =============================================================================
+
 
 class ClinicalEvaluator:
     """
@@ -270,11 +272,10 @@ class ClinicalEvaluator:
         report  = await evaluator.evaluate_dataset(results)
     """
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         import os
-        self.client = AsyncAnthropic(
-            api_key=api_key or os.getenv("ANTHROPIC_API_KEY") or ""
-        )
+
+        self.client = AsyncAnthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY") or "")
         # Use a smaller, faster model for evaluation to reduce cost.
         # The judge task is structured scoring — claude-haiku is sufficient.
         self.judge_model = "claude-haiku-4-5-20251001"
@@ -321,9 +322,7 @@ class ClinicalEvaluator:
             clean_text = raw_text.strip()
             if clean_text.startswith("```"):
                 lines = clean_text.split("\n")
-                clean_text = "\n".join(
-                    lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
-                )
+                clean_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
 
             verdict_data = json.loads(clean_text)
 
@@ -352,7 +351,7 @@ class ClinicalEvaluator:
                 case_id=case.case_id,
                 score=1,
                 passed=False,
-                judge_reasoning=f"Judge response could not be parsed: {str(e)}",
+                judge_reasoning=f"Judge response could not be parsed: {e!s}",
                 correct_outcome=False,
                 hallucination_detected=False,
                 missing_citations=[],
@@ -369,7 +368,7 @@ class ClinicalEvaluator:
                 case_id=case.case_id,
                 score=1,
                 passed=False,
-                judge_reasoning=f"Evaluation failed: {str(e)}",
+                judge_reasoning=f"Evaluation failed: {e!s}",
                 correct_outcome=False,
                 hallucination_detected=False,
                 missing_citations=[],
@@ -389,12 +388,8 @@ class ClinicalEvaluator:
         passed = sum(1 for v in verdicts if v.passed)
         accuracy = passed / total if total > 0 else 0.0
 
-        hallucination_cases = [
-            v.case_id for v in verdicts if v.hallucination_detected
-        ]
-        failed_cases = [
-            v.case_id for v in verdicts if not v.passed
-        ]
+        hallucination_cases = [v.case_id for v in verdicts if v.hallucination_detected]
+        failed_cases = [v.case_id for v in verdicts if not v.passed]
 
         return EvaluationReport(
             verdicts=verdicts,

@@ -23,10 +23,9 @@ from pydantic import BaseModel
 
 from ..models.authorization import AuthorizationDecision, ReviewTier
 from ..models.clinical import ClinicalCase
-from .base import BaseAgent
 from ._prompt_loader import load_agent_prompt
+from .base import BaseAgent
 from .prompts.templates import (
-    PROMPT_REGISTRY,
     get_prompt_version,
 )
 
@@ -41,6 +40,7 @@ class DecisionContext(BaseModel):
                              and institutional precedents most relevant to
                              this specific case
     """
+
     case: ClinicalCase
     relevant_guidelines: str
 

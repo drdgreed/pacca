@@ -44,17 +44,15 @@ Teaching note — why a no-op tracer fallback?
 """
 
 import logging
-from contextlib import contextmanager
-from typing import Any, Generator
 
 from opentelemetry import trace
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
     ConsoleSpanExporter,
     SimpleSpanProcessor,
 )
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.trace import NonRecordingSpan, Span, StatusCode
 
 logger = logging.getLogger(__name__)
@@ -107,6 +105,7 @@ def configure_tracing(
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
                 OTLPSpanExporter,
             )
+
             exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
             # BatchSpanProcessor buffers spans and exports them in batches —
             # much more efficient than exporting each span individually.
@@ -116,11 +115,9 @@ def configure_tracing(
             logger.warning(
                 "otel_otlp_exporter_unavailable",
                 detail="opentelemetry-exporter-otlp-proto-http not installed; "
-                       "falling back to console exporter",
+                "falling back to console exporter",
             )
-            provider.add_span_processor(
-                SimpleSpanProcessor(ConsoleSpanExporter())
-            )
+            provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
     else:
         # Development: print spans to console.
         # SimpleSpanProcessor exports each span immediately as it completes.

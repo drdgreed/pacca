@@ -1,7 +1,9 @@
 from datetime import datetime
-from typing import List, Optional
+
 from pydantic import BaseModel, Field
+
 from .enums import EvidenceSourceType
+
 
 class EvidenceItem(BaseModel):
     id: str
@@ -11,8 +13,9 @@ class EvidenceItem(BaseModel):
     confidence: float
     timestamp: datetime = Field(default_factory=datetime.now)
 
+
 class ClinicalCase(BaseModel):
     patient_id: str
     primary_diagnosis_code: str
     procedure_code: str
-    evidence: List[EvidenceItem] = []
+    evidence: list[EvidenceItem] = []

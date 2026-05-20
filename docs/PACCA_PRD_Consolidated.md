@@ -5,7 +5,7 @@
 **Author:** David Reed, PhD, MBA, PMP | Executive Fellow, Wharton
 **Affiliation:** Head of Career Advancement & AI/ML Delivery, Interview Kickstart
 **Former:** Master Technologist (Principal/Distinguished Engineer), Hewlett-Packard
-**Repository:** github.com/Chaos-6/pacca
+**Repository:** github.com/drdgreed/pacca
 **Date:** April 2026
 **Document Type:** Forward-Looking Product Specification — Production Deployment Target
 
@@ -872,5 +872,5 @@ pacca/
 ---
 
 *PACCA v2.2.0 — April 2026*
-*github.com/Chaos-6/pacca*
+*github.com/drdgreed/pacca*
 *Author: David Reed, PhD | david.reed@interviewkickstart.com*
