@@ -102,6 +102,19 @@ One small note for the iter-2 verdict: the test count discrepancy between local 
 <a name="iter-0-baseline-crystallization"></a>
 ## iter-0 — Baseline Crystallization
 
+> **Correction (2026-05-22, recorded in iter-2).** The instrumentation described
+> below as `src/pacca/observability/trajectory.py` does not exist as written.
+> What shipped is OpenTelemetry span emission in `src/pacca/agents/base.py`
+> (`llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `duration_ms`
+> per call, via `src/pacca/config/tracing.py`). There is no per-step JSON
+> trajectory record and no reasoning-step counter — the Decision agent makes a
+> single forced-tool-use call, so verbosity is measured as output-tokens-per-case
+> and rationale length, not as "steps." The "4–6 reasoning steps" observation in
+> the Baseline trajectory pattern below should be read as reasoning *within one
+> rationale*, not as separate agent invocations. See the superseding entry in
+> [`DECISIONS.md`](./DECISIONS.md#correction-iter0-trajectory) and the drift guard
+> at `tests/harness/doc_drift_guard.py`.
+
 **Tag:** `harness-iter-0`
 **Companion tag:** `pre-ahe-baseline`
 **Phase:** H0 (Baseline Crystallization)

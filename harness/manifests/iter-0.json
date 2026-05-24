@@ -3,9 +3,9 @@
   "iteration_tag": "harness-iter-0",
   "iso_date": "2026-04-15",
   "author": "David Reed",
-  "base_model": "claude-sonnet-4-20250514",
+  "base_model": "claude-sonnet-4-5-20250929",
   "previous_iteration_tag": null,
-  "summary": "Phase H0 baseline crystallization. No behavioral change — this iteration establishes the instrumentation surface (OpenTelemetry spans on every agent call, structured trajectory logs, correlation-ID-linked HIPAA audit pairs) that subsequent iterations measure against. The pre-AHE codebase state is captured under tag pre-ahe-baseline; harness-iter-0 marks the first state where every behavioral path is observable end-to-end. Future iterations attribute their predicted-vs-observed deltas relative to this baseline.",
+  "summary": "Phase H0 baseline crystallization. No behavioral change. Establishes the instrumentation surface (OpenTelemetry spans per agent call, correlation-ID-linked HIPAA audit pairs) that subsequent iterations measure against. Pre-AHE state is captured under tag pre-ahe-baseline; harness-iter-0 marks the first state where every behavioral path is observable end-to-end. Future iterations attribute predicted-vs-observed deltas relative to this baseline.",
   "changes": [
     {
       "id": "chg-0",
@@ -36,8 +36,7 @@
       "why_this_component": "Instrumentation is intentionally outside the seven AHE constraint levels because it must precede them. Adding tracing to a system whose components are already extracted creates retrofit problems and obscures attribution.",
       "phi_impact": "none",
       "audit_relevant": true,
-      "rollback_plan": "git revert <sha>. Reverting removes the tracer and trajectory-logger imports, leaving the HIPAA audit trail (which existed pre-H0) as the sole observability surface. No state migration required.",
-      "observed_findings_deferred": []
+      "rollback_plan": "git revert <sha>. Reverting removes the tracer and trajectory-logger imports, leaving the HIPAA audit trail (which existed pre-H0) as the sole observability surface. No state migration required."
     }
   ]
 }

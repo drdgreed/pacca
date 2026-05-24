@@ -3,7 +3,7 @@
   "iteration_tag": "harness-iter-1",
   "iso_date": "2026-05-04",
   "author": "David Reed",
-  "base_model": "claude-sonnet-4-20250514",
+  "base_model": "claude-sonnet-4-5-20250929",
   "previous_iteration_tag": "harness-iter-0",
   "summary": "Phase H1 first extraction. Decision Support and Medical Director system prompts moved from f-string constants in templates.py to file-level mount points at src/pacca/agents/<agent>/system_prompt.md. A Jinja2 loader assembles prompts at runtime from the .md file plus the shared components in templates.py. Byte-identity with pre-H1 output verified character-by-character before any runtime change. Full test suite (120 tests) passes unchanged. Three findings recorded, deferred to separate commits.",
   "changes": [
@@ -41,6 +41,14 @@
         {
           "source": "harness/manifests/change_manifest.schema.json (modified in this commit)",
           "note": "The iter-0 schema's files-path pattern restricted entries to src/pacca/, harness/, docs/, and tests/. The iter-1 PR-CI cycle revealed this was too strict: real harness changes sometimes touch root-level config (pyproject.toml here). The pattern was broadened to include repo-root config files (pyproject.toml, requirements*.txt, setup.py/cfg, Dockerfile, .gitignore, README.md, CHANGELOG.md, LICENSE, Makefile) and CI workflows under .github/. Also generalized src/pacca/ to src/ since the project-specific prefix was unnecessary. This is the methodology working as designed: the schema constraints themselves age into discoveries that age into improvements."
+        },
+        {
+          "source": "src/pacca/agents/decision_agent.py",
+          "note": "Dead code observed during chg-1: defines DecisionSupportAgent at line 52, imported by no module (orchestrator and tests use decision.py's DecisionAgent). Deletion queued as chg-2. Recorded as evidence because the schema has no deferred-work field; the prose record is in DECISIONS.md."
+        },
+        {
+          "source": "src/pacca/agents/decision.py",
+          "note": "Observed during chg-1: houses both Tier 1 DecisionAgent and Tier 2 MedicalDirectorAgent in one module. Both prompts extracted to separate .md mount points without restructuring classes. A class-level split, if later desired, would be its own iteration."
         }
       ],
       "predicted_fixes": [],
@@ -49,11 +57,7 @@
       "why_this_component": "The system prompt is the constraint level being decoupled. Tool descriptions, tool implementations, middleware, and other component types remain unchanged in this commit; their extraction is queued for future iterations. The choice to extract only system prompts in chg-1 keeps the commit scope narrow and the verification gate simple (byte-identity check on rendered prompt strings).",
       "phi_impact": "none",
       "audit_relevant": false,
-      "rollback_plan": "git revert <sha>. The orphaned decision_agent.py was not modified. templates.py was not modified. Reverting decision.py and removing the new directories restores the pre-H1 state exactly. PROMPT_REGISTRY versions remain unchanged across the refactor, so audit logs are reconcilable.",
-      "observed_findings_deferred": [
-        "decision_agent.py is dead code: defines DecisionSupportAgent class that no module imports. The orchestrator and tests reference decision.py's DecisionAgent class. Deletion queued for chg-2 with its own manifest entry.",
-        "decision.py houses two tier-distinguished agents (Tier 1 Frontline Nurse, Tier 2 Medical Director) in one Python module. Both prompts extracted to separate file mount points without restructuring class layout. If a class-level split is later desired, that becomes its own iteration with its own attribution."
-      ]
+      "rollback_plan": "git revert <sha>. The orphaned decision_agent.py was not modified. templates.py was not modified. Reverting decision.py and removing the new directories restores the pre-H1 state exactly. PROMPT_REGISTRY versions remain unchanged across the refactor, so audit logs are reconcilable."
     }
   ]
 }

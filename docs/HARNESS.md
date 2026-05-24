@@ -40,10 +40,10 @@ Beyond the seven NexAU-style component types, PACCA's harness has four additiona
 
 | Surface | Location | Purpose |
 |---------|----------|---------|
-| Escalation branch | `src/pacca/orchestrator/escalation_tree.py` | The 7-branch deterministic escalation tree (4 pre-flight, 3 post-agent) |
+| Escalation branch | `src/pacca/agents/orchestrator.py` (class `Orchestrator`) | The 7-branch deterministic escalation tree (4 pre-flight, 3 post-agent) |
 | RAG collection | `src/pacca/rag/collections/{nccn_guidelines,case_precedents}/` | Dual-collection ChromaDB stores |
 | Prompt registry | `src/pacca/agents/prompts/templates.py` (PROMPT_REGISTRY) | Versioned prompt audit trail |
-| Audit schema | `src/pacca/db/audit/schema.py` | HIPAA audit log structure |
+| Audit schema | `src/pacca/db/models.py` (class `AuditLogModel`, table `audit_logs`) | HIPAA audit log structure |
 
 These four are treated as harness components for change-manifest purposes. Modifying the 7-branch escalation tree, for instance, requires the same manifest entry, predicted-fix list, and rollback granularity as modifying a system prompt.
 

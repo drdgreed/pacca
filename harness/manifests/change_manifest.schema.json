@@ -94,9 +94,10 @@
             "new",
             "improvement",
             "rollback",
-            "removal"
+            "removal",
+            "instrumentation"
           ],
-          "description": "Type of change. 'new' adds a component; 'improvement' refines an existing one; 'rollback' reverts a prior change; 'removal' deletes a component."
+          "description": "Type of change. 'new' adds a component; 'improvement' refines an existing one; 'rollback' reverts a prior change; 'removal' deletes a component; 'instrumentation' adds observability/measurement scaffolding that has no behavioral agent surface (used by H0 baseline crystallization and similar non-behavioral seeds)."
         },
         "description": {
           "type": "string",
@@ -173,9 +174,11 @@
             "escalation_branch",
             "rag_collection",
             "prompt_registry",
-            "audit_schema"
+            "audit_schema",
+            "evaluation_harness",
+            "instrumentation"
           ],
-          "description": "Which component type this change edits. The first seven are AHE/NexAU standard component types; the last four are PACCA-specific harness surfaces (the 7-branch escalation tree, dual-collection ChromaDB, the PROMPT_REGISTRY, and the HIPAA audit log schema)."
+          "description": "Which component type this change edits. The first seven are AHE/NexAU standard component types; the next four are PACCA-specific harness surfaces (the 7-branch escalation tree, dual-collection ChromaDB, the PROMPT_REGISTRY, and the HIPAA audit log schema). 'evaluation_harness' (added iter-2 chg-1) covers changes to the evaluation/measurement apparatus itself (golden cases, judges, regression gates, drift guards) rather than to a behavioral agent surface. 'instrumentation' (added iter-2 chg-1) covers observability scaffolding that must precede the AHE constraint levels — H0's tracing/audit pairs are the canonical example; these changes carry no behavioral predicted_fixes."
         },
         "why_this_component": {
           "type": "string",

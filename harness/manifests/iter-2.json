@@ -1,0 +1,143 @@
+{
+  "iteration": 2,
+  "iteration_tag": "harness-iter-2",
+  "iso_date": "2026-05-22",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-1",
+  "summary": "Phase H5 slice pulled forward: harden the eval net before the first behavioral change. The absolute >=80% gate is blind to silent per-case degradation (a 5->3 slide still passes), and the assumed verbosity metric does not exist in code. Ships a per-case regression gate, near-miss discrimination cases, and a doc-drift guard; reconciles the iter-0 trajectory.py record. No agent-surface change and no case expected to flip; this lets iter-3's H2 memory change be measured and regressions caught.",
+  "changes": [
+    {
+      "id": "chg-1",
+      "type": "improvement",
+      "description": "Extend the schema's enums to cover non-behavioral cycle work: add 'evaluation_harness' to constraint_level (Phase H5 measurement-apparatus changes: golden cases, judges, regression gates), and add 'instrumentation' to BOTH the type enum and the constraint_level enum so H0 baseline crystallization (tracing/audit scaffolding that precedes the AHE constraint levels) validates. Neither is behavioral; both close schema gaps surfaced by iter-2 manifest-validation work.",
+      "files": [
+        "harness/manifests/change_manifest.schema.json"
+      ],
+      "failure_pattern": "Evaluation-harness work (Phase H5) cannot be represented in a manifest because every constraint_level is a behavioral agent surface; an H5 iteration would have to mislabel itself (e.g. as 'audit_schema') to validate.",
+      "root_cause": "The iter-0 schema modeled only behavioral component types, on the implicit assumption that every iteration edits agent behavior. The cycle's own H5 phase (Evaluation Harness Expansion) edits the test apparatus instead, which the enum did not anticipate.",
+      "evidence": [
+        {
+          "source": "harness/manifests/iter-1.json",
+          "note": "iter-1 set the precedent of evolving the schema when reality demanded it (broadening the files-path pattern). This change applies the same pattern to constraint_level."
+        },
+        {
+          "source": "docs/HARNESS.md",
+          "note": "H5 'Evaluation Harness Expansion' is a named phase, confirming eval-apparatus changes are first-class cycle work that needs a representable level."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "evaluation_harness",
+      "why_this_component": "The edit is to the manifest schema that governs the evaluation/measurement layer, so 'evaluation_harness' is the honest level. Labeling it as any behavioral level would corrupt the attribution mechanism the methodology depends on.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. The added enum value is backward-compatible; reverting it only re-narrows the allowed levels and would orphan iter-2's other changes' constraint_level, so revert the whole iteration together."
+    },
+    {
+      "id": "chg-2",
+      "type": "new",
+      "description": "Add a per-case regression gate (regression_gate.py) plus a persisted baseline scoreboard and a validation suite. The gate flags any golden case whose judge score drops versus its baseline, even when the aggregate stays above 80%.",
+      "files": [
+        "tests/clinical/regression_gate.py",
+        "tests/clinical/capture_baseline.py",
+        "tests/clinical/baselines/iter-1-baseline.json",
+        "tests/harness/test_iter2_hardening.py"
+      ],
+      "failure_pattern": "Silent reasoning degradation passes CI: a case sliding from 5 (complete reasoning) to 3 (vague but correct decision) still counts as a pass under the absolute >=3 rule, so the aggregate >=80% gate never fires. This is the exact failure mode an over-aggressive institutional-memory entry (H2) produces.",
+      "root_cause": "evaluator.py's gate is absolute and aggregate: pass = score >= MINIMUM_PASSING_SCORE (3), gate = passed/total >= 0.80. Nothing compares a case to its own prior score, so monotonic per-case erosion above the 3-floor is invisible.",
+      "evidence": [
+        {
+          "source": "tests/clinical/evaluator.py",
+          "note": "compile_report computes accuracy = passed/total with passed keyed off MINIMUM_PASSING_SCORE; no per-case baseline comparison exists."
+        },
+        {
+          "source": "tests/harness/test_iter2_hardening.py::test_CORE_catches_silent_degradation_the_aggregate_gate_misses",
+          "note": "Demonstrates a 100%-aggregate run that the new gate correctly fails because GC-001 slid 5->3."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "evaluation_harness",
+      "why_this_component": "This is a detection capability added to the measurement layer, not a behavioral edit. It complements the existing absolute gate with a relative one; it changes no agent prompt, tool, or routing.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha> and delete tests/clinical/baselines/iter-1-baseline.json. No production code path depends on these modules."
+    },
+    {
+      "id": "chg-3",
+      "type": "new",
+      "description": "Add near-miss 'memory-trap' golden cases (GC-021 PD-L1 45% below threshold; GC-022 EGFR mutation present) as siblings of GC-001 that must NOT auto-approve. They probe false-pattern-matching that the existing 20 cases cannot isolate.",
+      "files": [
+        "tests/clinical/near_miss_cases.py"
+      ],
+      "failure_pattern": "False pattern-matching: an institutional-memory entry that compresses 'NSCLC + pembrolizumab => approve' could cause the Decision agent to recognize a case's shape and skip the verification that catches a single disqualifying detail (sub-threshold PD-L1, or a sensitizing EGFR mutation).",
+      "root_cause": "The existing golden set covers wrong-decision (outcome/branch asserts) and fabrication (GC-018/019) but has no sibling-of-a-canonical-approve case differing by exactly one disqualifier, so over-compression that keeps the decision plausible is untestable today.",
+      "evidence": [
+        {
+          "source": "tests/clinical/golden_cases.py",
+          "note": "GC-001 is the canonical clean approve (PD-L1 62%); no near-miss sibling exists to test discrimination."
+        },
+        {
+          "source": "tests/harness/test_iter2_hardening.py::TestDeliverable2NearMissCases",
+          "note": "Verifies neither near-miss can be AUTO_APPROVED and that both intended traps (sub-threshold PD-L1, EGFR mutation) are present."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "evaluation_harness",
+      "why_this_component": "These are evaluation cases, not behavioral edits. Note on integration: if folded into GOLDEN_CASES, test_dataset_has_twenty_cases must be updated from 20 to 22 (the count is part of the spec by design).",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. If folded into GOLDEN_CASES, also restore the count assertion to 20."
+    },
+    {
+      "id": "chg-4",
+      "type": "new",
+      "description": "Add doc_drift_guard.py (flags src/*.py refs in docs/ that don't resolve) and clear all drift its first run surfaced: reconcile the iter-0 trajectory.py record via superseding entries in DECISIONS.md/ITERATIONS.md (real instrumentation is OTel spans in agents/base.py), and repoint two HARNESS.md surface rows (orchestrator/escalation_tree.py -> agents/orchestrator.py; db/audit/schema.py -> db/models.py AuditLogModel). Erratum drafts ship under docs_reconciliation/.",
+      "files": [
+        "tests/harness/doc_drift_guard.py",
+        "tests/harness/test_iter2_hardening.py",
+        "docs/ITERATIONS.md",
+        "docs/DECISIONS.md",
+        "docs/HARNESS.md"
+      ],
+      "failure_pattern": "Spec-vs-implementation drift in the harness records: docs reference src/pacca/observability/trajectory.py, which does not exist; the real instrumentation is OTel spans in src/pacca/agents/base.py. A behavioral claim resting on 'the iter-0 baseline instrumentation' would rest on a file that isn't there.",
+      "root_cause": "iter-0 documented a planned trajectory module that was implemented differently (span attributes in base.py) without the records being updated; the iter-0 manifest dates were placeholders, indicating the entry was written ahead of execution.",
+      "evidence": [
+        {
+          "source": "src/pacca/agents/base.py",
+          "note": "Records llm.input_tokens/llm.output_tokens/llm.total_tokens/duration_ms as span attributes; this is the actual instrumentation."
+        },
+        {
+          "source": "docs/DECISIONS.md",
+          "note": "iter-0 entry's Files row and baseline-metrics Source column reference src/pacca/observability/trajectory.py; no such file or src/pacca/observability/ directory exists in the tree. Corrected via superseding entry per the log's append-only protocol."
+        },
+        {
+          "source": "docs/ITERATIONS.md",
+          "note": "iter-0 narrative describes 'Trajectory instrumentation at src/pacca/observability/trajectory.py' as shipped; corrected via a dated callout at the top of the iter-0 section. (docs/EVALUATION.md was clean — no src/ trajectory reference present, so no edit needed.)"
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "evaluation_harness",
+      "why_this_component": "The guard is measurement-layer tooling and the edits are to docs; no agent surface changes. The guard also prevents recurrence by turning this drift class into a test.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. The doc edits are additive (an erratum block); the guard is standalone test tooling with no production dependency."
+    }
+  ],
+  "verdicts": [
+    {
+      "change_id": "chg-1",
+      "previous_iteration_tag": "harness-iter-1",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-1 chg-1 (system-prompt extraction to file mount points + Jinja2 loader) had no behavioral target; its success criterion was byte-identical rendered prompts, met at commit time via the character-by-character verification and 120/120 tests. iter-2 introduces no behavioral change to disturb it. DRAFT verdict: confirm by running the full suite (and clinical eval) at iter-2 HEAD before tagging; if green, finalize as 'keep'."
+    }
+  ]
+}
