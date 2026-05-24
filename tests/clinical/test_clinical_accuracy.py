@@ -57,6 +57,7 @@ from tests.clinical.golden_cases import (
     get_dataset_summary,
     get_hallucination_trap_cases,
 )
+from tests.clinical.near_miss_cases import NEAR_MISS_CASES
 
 # =============================================================================
 # Dataset integrity tests — fast, no API calls
@@ -535,7 +536,10 @@ class TestFullClinicalEvaluation:
         evaluator = ClinicalEvaluator()
         verdicts: list[JudgeVerdict] = []
 
-        for golden in GOLDEN_CASES:
+        # GOLDEN_CASES (20) + NEAR_MISS_CASES (iter-2 chg-3 memory-trap siblings).
+        # The near-miss cases run through the same judge but are kept as a
+        # separate list — the `len == 20` integrity assertion above still holds.
+        for golden in GOLDEN_CASES + NEAR_MISS_CASES:
             clinical_case = ClinicalCase(
                 patient_id=f"P-EVAL-{golden.case_id}",
                 primary_diagnosis_code=golden.diagnosis_code,

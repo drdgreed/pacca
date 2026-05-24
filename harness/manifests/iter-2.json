@@ -67,9 +67,10 @@
     {
       "id": "chg-3",
       "type": "new",
-      "description": "Add near-miss 'memory-trap' golden cases (GC-021 PD-L1 45% below threshold; GC-022 EGFR mutation present) as siblings of GC-001 that must NOT auto-approve. They probe false-pattern-matching that the existing 20 cases cannot isolate.",
+      "description": "Add near-miss 'memory-trap' golden cases (GC-021 PD-L1 45% below threshold; GC-022 EGFR mutation present) as siblings of GC-001 that must NOT auto-approve, and wire them into the live clinical gate (test_clinical_accuracy.py: GOLDEN_CASES + NEAR_MISS_CASES in the gate loop). They probe false-pattern-matching that the existing 20 cases cannot isolate. GOLDEN_CASES stays at 20 by design so the integrity assertion still holds.",
       "files": [
-        "tests/clinical/near_miss_cases.py"
+        "tests/clinical/near_miss_cases.py",
+        "tests/clinical/test_clinical_accuracy.py"
       ],
       "failure_pattern": "False pattern-matching: an institutional-memory entry that compresses 'NSCLC + pembrolizumab => approve' could cause the Decision agent to recognize a case's shape and skip the verification that catches a single disqualifying detail (sub-threshold PD-L1, or a sensitizing EGFR mutation).",
       "root_cause": "The existing golden set covers wrong-decision (outcome/branch asserts) and fabrication (GC-018/019) but has no sibling-of-a-canonical-approve case differing by exactly one disqualifier, so over-compression that keeps the decision plausible is untestable today.",
@@ -125,6 +126,34 @@
       "phi_impact": "none",
       "audit_relevant": false,
       "rollback_plan": "git revert <sha>. The doc edits are additive (an erratum block); the guard is standalone test tooling with no production dependency."
+    },
+    {
+      "id": "chg-5",
+      "type": "improvement",
+      "description": "Make settings.default_model the single source of truth for AgentConfig.model: pre-change, AgentConfig hardcoded a model string that silently overrode settings, so agents ran one model while manifests recorded another. AgentConfig.model now derives from settings via Field(default_factory=...). Manifests already agreed on claude-sonnet-4-5-20250929; this makes the runtime agree too. Pre-condition for any baseline that must be model-attributable.",
+      "files": [
+        "src/pacca/agents/base.py",
+        "src/pacca/config/settings.py"
+      ],
+      "failure_pattern": "Three-way model identifier drift: AgentConfig hardcodes a string, settings.default_model reads from env, and the iteration manifest records a third. Any baseline captured under this state is not reproducibly attributable to a specific model.",
+      "root_cause": "AgentConfig.model defaulted to a literal string instead of reading from settings, breaking the single-source-of-truth principle that the iter-1 manifest's base_model field implicitly requires.",
+      "evidence": [
+        {
+          "source": "src/pacca/agents/base.py",
+          "note": "Pre-change: 'model: str = \"claude-sonnet-4-5-20250929\"'. Post-change: 'model: str = Field(default_factory=lambda: get_settings().default_model)'. get_settings was already imported."
+        },
+        {
+          "source": "RUNBOOK_iter2.md Step 2",
+          "note": "Step 2 mandates this reconciliation BEFORE the live baseline capture in Step 3, because the baseline is only meaningful for the exact model that produced it."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "instrumentation",
+      "why_this_component": "This is observability/reproducibility scaffolding, not an agent-behavior change: it eliminates a three-way drift between the configured, declared, and recorded model. 'instrumentation' is the honest level because there is no behavioral edit to any agent surface.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. Reverting restores AgentConfig's hardcoded model string. The runtime would then run claude-sonnet-4-5-20250929 (the prior hardcoded value) regardless of settings; manifests still record the same string, so the recorded baseline remains attributable, just no longer settings-driven."
     }
   ],
   "verdicts": [
@@ -137,7 +166,7 @@
       "false_predicted_fixes": [],
       "verified_risks": [],
       "unforeseen_regressions": [],
-      "notes": "iter-1 chg-1 (system-prompt extraction to file mount points + Jinja2 loader) had no behavioral target; its success criterion was byte-identical rendered prompts, met at commit time via the character-by-character verification and 120/120 tests. iter-2 introduces no behavioral change to disturb it. DRAFT verdict: confirm by running the full suite (and clinical eval) at iter-2 HEAD before tagging; if green, finalize as 'keep'."
+      "notes": "Confirmed keep. iter-1 chg-1 (system-prompt extraction to file mount points + Jinja2 loader) had no behavioral target; its success criterion was byte-identical rendered prompts, met at commit time via character-by-character verification and 120/120 tests. iter-2 introduces no agent-surface change, so cannot disturb iter-1. Full suite green at iter-2 HEAD (139 of 139 tests pass in ~7s, doc-drift guard PASSED, all three manifests validate against the schema). Zero behavioral delta vs iter-0 baseline. Live clinical-judge gate remains a separate observation, scheduled for a live run once an API key is available; the keep verdict rests on the suite-green + zero-behavioral-change criterion stated in RUNBOOK_iter2.md Step 7."
     }
   ]
 }

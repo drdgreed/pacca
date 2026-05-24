@@ -84,7 +84,7 @@ from anthropic import (
     AsyncAnthropic,
     RateLimitError,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from tenacity import (
     RetryCallState,
     retry,
@@ -154,7 +154,8 @@ class AgentConfig(BaseModel):
                      clinical decision output.
     """
 
-    model: str = "claude-sonnet-4-5-20250929"
+    # Single source of truth: settings.default_model (override via env DEFAULT_MODEL).
+    model: str = Field(default_factory=lambda: get_settings().default_model)
     temperature: float = 0.0
     max_tokens: int = 4096
 

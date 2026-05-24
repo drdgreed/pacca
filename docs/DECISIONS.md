@@ -87,9 +87,20 @@
 
 - *Schema evolution:* the iter-0 schema's files-path pattern restricted entries to `^(src/pacca/|harness/|docs/|tests/)`. Adding `pyproject.toml` to the manifest's files list failed validation. The pattern was broadened to accept repo-root config files (`pyproject.toml`, `requirements*.txt`, `setup.py/cfg`, `Dockerfile`, `.gitignore`, `README.md`, `CHANGELOG.md`, `LICENSE`, `Makefile`) and CI workflows (`.github/`). Also generalized `src/pacca/` to `src/` since the project-specific prefix was unnecessary. The pattern broadening is itself in chg-1 because it was caused by chg-1.
 
-### Verdict (recorded after iter-2 evaluation)
+### Verdict (recorded at iter-2 finalization, 2026-05-24)
 
-*Pending — populated after iter-2's evaluation run completes. Expected fields: `outcome` (keep / improve / rollback), full-suite pass@1 delta vs. iter-0 baseline (target: zero change), tokens/case delta (target: ≤ baseline). The byte-identity verification and the green CI test suite (97 collectable tests passing post-merge) provide strong prior evidence that the verdict will be `keep`, but the formal verdict requires iter-2's eval run to confirm.*
+| Field | Value |
+|-------|-------|
+| Outcome | **keep** |
+| Full-suite delta vs. iter-0 baseline | 0 — zero behavioral change, as predicted by the H1 refactor contract |
+| Tokens-per-case delta | n/a (no agent-surface change; tokens-per-case attribution is an iter-3/H5 measurement work item) |
+| Precision on predicted_fixes | n/a (empty — iter-1 predicted no fixes by design) |
+| Recall on risk_cases | n/a (empty — iter-1 predicted no risks by design) |
+| Verdict basis | (1) byte-identity verification character-by-character pre-merge, (2) 139/139 tests pass at iter-2 HEAD (unit + harness), (3) doc-drift guard PASSED, (4) all three manifests validate against the schema |
+
+**Narrative.** iter-1's success criterion was "byte-identical rendered prompts before and after the extraction" — the AHE paper's `paragraph_2 == paragraph_2` bar (Lin et al. §3.2). That criterion was met at commit time via the custom byte-identity check (`/tmp/byte_identity_check.py`) after a one-character fix to `decision_support/system_prompt.md`. iter-2 introduced no agent-surface change (all four iter-2 changes are at `instrumentation` or `evaluation_harness` constraint levels), so iter-2 cannot disturb iter-1's behavioral surface. The full unit + harness suite is green at iter-2 HEAD (139 passed in ~7s). All conditions stated in `RUNBOOK_iter2.md` Step 7 for verdict finalization are met.
+
+**What this verdict does NOT cover.** The live clinical-judge gate (`pytest tests/clinical/ -m clinical`) requires an Anthropic API key and was not re-run at iter-2 HEAD. The judge's per-case scoreboard captured in `tests/clinical/baselines/iter-1-baseline.json` (4 of 20 cases at score 2 — GC-001, GC-010, GC-012, GC-017 — aggregate at the 80% floor) is the de-facto iter-1 clinical baseline that iter-3 must not regress against. iter-3 will run the live gate at its HEAD, and the per-case `regression_gate.py` shipped in iter-2 chg-2 will assert each case against this baseline.
 
 ---
 

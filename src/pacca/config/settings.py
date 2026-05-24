@@ -6,10 +6,10 @@ with validation and sensible defaults.
 """
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
         default=SecretStr("dev-secret-key-change-in-production-min-32-characters"),
         description="Secret key for JWT and session encryption",
     )
-    cors_origins: list[str] = Field(
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default=["http://localhost:3000", "http://localhost:5173"],
         description="Allowed CORS origins",
     )
@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     # LLM / Agent Configuration
     # ==========================================================================
     default_model: str = Field(
-        default="claude-sonnet-4-20250514",
+        default="claude-sonnet-4-5-20250929",
         description="Default Claude model for agents",
     )
     max_tokens: int = Field(default=4096, ge=256, le=8192, description="Max tokens for responses")
