@@ -34,6 +34,7 @@ Teaching note — why hand-crafted cases over auto-generated ones?
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 
 class ExpectedOutcome(StrEnum):
@@ -820,7 +821,7 @@ GOLDEN_CASES: list[GoldenCase] = [
 # =============================================================================
 
 
-def get_dataset_summary() -> dict:
+def get_dataset_summary() -> dict[str, Any]:
     """Return a summary of case distribution for test reporting."""
     outcome_counts: dict[str, int] = {}
     branch_counts: dict[str, int] = {}

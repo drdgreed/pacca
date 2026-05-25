@@ -37,7 +37,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 # A drop of this many points (or more) versus baseline counts as a regression.
 # 1 is intentionally strict: any downward movement on a previously-good case is
@@ -73,6 +76,7 @@ def save_baseline(
     path: str | Path,
     *,
     iteration_tag: str,
+    distributions: dict[str, list[int]] | None = None,
 ) -> Path:
     """
     Write a baseline scoreboard to disk as JSON.
@@ -84,16 +88,26 @@ def save_baseline(
         iteration_tag: The harness tag this baseline represents
                        (e.g. "harness-iter-1"). Stored for provenance so a
                        future reader knows which commit the numbers describe.
+        distributions: iter-3 chg-3 — optional per-case score distributions
+                       from k=N rollouts (when capture_baseline was run with
+                       --rollouts > 1). When present, `scores` should contain
+                       the median (or chosen summary statistic) of each
+                       distribution. Stored alongside `scores` so future
+                       readers can see the underlying variance.
 
     Returns:
         The Path written.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict[str, object] = {
         "iteration_tag": iteration_tag,
         "scores": {cid: int(s) for cid, s in sorted(scores.items())},
     }
+    if distributions is not None:
+        payload["distributions"] = {
+            cid: [int(s) for s in scores_list] for cid, scores_list in sorted(distributions.items())
+        }
     path.write_text(json.dumps(payload, indent=2) + "\n")
     return path
 
@@ -133,7 +147,13 @@ class RegressionReport:
     Result of comparing a current run against a baseline scoreboard.
 
     Attributes:
-        regressions:   Cases that dropped >= REGRESSION_DROP_THRESHOLD.
+        regressions:   Cases that dropped strictly more than noise_threshold
+                       (real regressions — gate fails).
+        jitter:        Cases that dropped within the noise tolerance band
+                       (informational; recorded but does not block).
+                       Added iter-3 chg-3 after the iter-2 GC-017 2->4 and
+                       iter-3 chg-1 GC-005 5->2 same-state-run swings made
+                       LLM-as-judge variance impossible to ignore.
         improvements:  Cases that rose (informational; never blocks).
         missing:       Baseline case_ids absent from the current run
                        (e.g. a case was dropped/renamed) — treated as a
@@ -142,9 +162,11 @@ class RegressionReport:
         new_cases:     Case_ids in the current run but not in the baseline
                        (informational; e.g. the near-miss cases added later).
         passed:        True only if there are no regressions and nothing missing.
+                       Jitter does NOT block.
     """
 
     regressions: list[CaseRegression] = field(default_factory=list)
+    jitter: list[CaseRegression] = field(default_factory=list)
     improvements: list[CaseRegression] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     new_cases: list[str] = field(default_factory=list)
@@ -160,20 +182,25 @@ class RegressionReport:
             lines.append(f"  Regressions ({len(self.regressions)}):")
             for r in self.regressions:
                 lines.append(
-                    f"    {r.case_id}: {r.baseline_score} -> {r.current_score} "
-                    f"(drop {r.drop})"
+                    f"    {r.case_id}: {r.baseline_score} -> {r.current_score} " f"(drop {r.drop})"
                 )
         if self.missing:
             lines.append(f"  Missing from current run: {', '.join(self.missing)}")
+        if self.jitter:
+            jitter_summary = ", ".join(
+                f"{r.case_id} {r.baseline_score}->{r.current_score}" for r in self.jitter
+            )
+            lines.append(
+                f"  Jitter within noise tolerance ({len(self.jitter)}): " f"{jitter_summary}"
+            )
         if self.improvements:
             improved = ", ".join(
-                f"{r.case_id} {r.baseline_score}->{r.current_score}"
-                for r in self.improvements
+                f"{r.case_id} {r.baseline_score}->{r.current_score}" for r in self.improvements
             )
             lines.append(f"  Improvements (informational): {improved}")
         if self.new_cases:
             lines.append(f"  New cases (no baseline yet): {', '.join(self.new_cases)}")
-        if self.passed and not self.improvements and not self.new_cases:
+        if self.passed and not self.jitter and not self.improvements and not self.new_cases:
             lines.append("  No per-case movement versus baseline.")
         return "\n".join(lines)
 
@@ -183,19 +210,34 @@ def check_regression(
     baseline: dict[str, int],
     *,
     drop_threshold: int = REGRESSION_DROP_THRESHOLD,
+    noise_threshold: int = 0,
 ) -> RegressionReport:
     """
     Compare current per-case scores against a baseline scoreboard.
 
     This is the heart of the gate. For every case in the baseline:
-      - if it is missing from the current run        -> recorded in `missing`
-      - if current dropped by >= drop_threshold       -> recorded in `regressions`
-      - if current rose                               -> recorded in `improvements`
+      - if it is missing from the current run                       -> `missing`
+      - if current dropped by > noise_threshold AND >= drop_threshold -> `regressions`
+      - if current dropped within noise_threshold (jitter)           -> `jitter`
+      - if current rose                                              -> `improvements`
     Cases present only in the current run land in `new_cases` (informational).
 
     Crucially, this does NOT look at the 80% aggregate at all. A run can be
     comfortably above 80% and still fail this gate because one previously-strong
     case quietly degraded. That is the whole point.
+
+    iter-3 chg-3 — noise_threshold (default 0, strict):
+      Production usage should set noise_threshold=1 to suppress the +-1
+      LLM-as-judge variance observed on stable runs (e.g. GC-017's
+      2 -> 4 -> 2 swing across three runs at iter-2-final, and GC-005's
+      5 -> 2 swing on iter-3 chg-1's baseline-capture run with identical
+      agent behavior on re-investigation). Tests use strict default to
+      catch any real per-case drop; live runs use the tolerant setting
+      to avoid chasing noise.
+
+      Setting noise_threshold higher than drop_threshold is the caller's
+      choice; the most common configuration is drop_threshold=1 and
+      noise_threshold=1 (a +-1 swing is jitter, a +-2 swing is a regression).
     """
     report = RegressionReport()
 
@@ -204,20 +246,21 @@ def check_regression(
             report.missing.append(case_id)
             continue
         cur_score = current[case_id]
-        if base_score - cur_score >= drop_threshold:
-            report.regressions.append(
-                CaseRegression(case_id, base_score, cur_score)
-            )
+        delta = base_score - cur_score  # positive when score dropped
+        if delta >= drop_threshold and delta > noise_threshold:
+            report.regressions.append(CaseRegression(case_id, base_score, cur_score))
+        elif delta > 0 and delta <= noise_threshold:
+            # Drop, but within the noise tolerance band — recorded as jitter.
+            report.jitter.append(CaseRegression(case_id, base_score, cur_score))
         elif cur_score > base_score:
-            report.improvements.append(
-                CaseRegression(case_id, base_score, cur_score)
-            )
+            report.improvements.append(CaseRegression(case_id, base_score, cur_score))
 
     for case_id in current:
         if case_id not in baseline:
             report.new_cases.append(case_id)
 
     report.regressions.sort(key=lambda r: r.case_id)
+    report.jitter.sort(key=lambda r: r.case_id)
     report.missing.sort()
     report.new_cases.sort()
     return report

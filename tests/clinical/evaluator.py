@@ -315,7 +315,11 @@ class ClinicalEvaluator:
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            raw_text = response.content[0].text if response.content else "{}"
+            # Anthropic SDK content[0] is a union of block types; only TextBlock
+            # has .text. The /v1/messages call always returns a TextBlock here
+            # (no tools / thinking enabled), so the type-ignore is safe in practice.
+            # iter-future: switch to explicit isinstance(block, TextBlock) check.
+            raw_text = response.content[0].text if response.content else "{}"  # type: ignore[union-attr,unused-ignore]
 
             # Parse structured JSON response
             # Strip markdown code fences if present

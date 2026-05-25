@@ -10,6 +10,16 @@ per-case regression gate (regression_gate.py) compares future runs against:
         --tag harness-iter-1 \
         --out tests/clinical/baselines/iter-1-baseline.json
 
+iter-3 chg-3 adds --rollouts N (default 1). When set greater than 1, each
+case runs N times and the saved file includes:
+  - scores: per-case median across the N rollouts (the canonical value the
+            regression gate compares future runs against)
+  - distributions: per-case list of all N scores (visible variance)
+
+Use --rollouts 2 for production baselines once a cycle has observed any
+judge non-determinism. The iter-2 GC-017 2->4 swing + iter-3 chg-1 GC-005
+5->2 swing make 2 the recommended minimum.
+
 WHY A SCRIPT, NOT A FIXTURE
 ---------------------------
 Capturing a baseline is a deliberate, occasional act tied to a known-good
@@ -28,12 +38,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from pathlib import Path
+import statistics
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any
 
 from tests.clinical.regression_gate import save_baseline, scores_from_verdicts
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-async def run_golden_dataset() -> list:
+
+async def run_golden_dataset() -> list[Any]:
     """
     Run every golden case through the real pipeline + judge; return verdicts.
 
@@ -44,14 +59,13 @@ async def run_golden_dataset() -> list:
     from pacca.agents.decision import DecisionAgent, DecisionContext
     from pacca.models.clinical import ClinicalCase, EvidenceItem
     from pacca.models.enums import AuthorizationStatus, EvidenceSourceType
-
     from tests.clinical.evaluator import ClinicalEvaluator
     from tests.clinical.golden_cases import GOLDEN_CASES
 
     detector = ClinicalRiskDetector()
     agent = DecisionAgent()
     evaluator = ClinicalEvaluator()
-    verdicts: list = []
+    verdicts: list[Any] = []
 
     for golden in GOLDEN_CASES:
         clinical_case = ClinicalCase(
@@ -93,7 +107,7 @@ async def run_golden_dataset() -> list:
                 status = decision.status.value
                 rationale = decision.rationale
                 confidence = decision.confidence_score
-            except Exception as exc:  # noqa: BLE001 — capture, don't crash the run
+            except Exception as exc:
                 status = "ERROR"
                 rationale = f"Agent failed: {exc!s}"
                 confidence = 0.0
@@ -110,30 +124,87 @@ async def run_golden_dataset() -> list:
     return verdicts
 
 
-def write_baseline_from_verdicts(verdicts, out_path: str | Path, iteration_tag: str) -> Path:
+def write_baseline_from_verdicts(
+    verdicts: list[Any],
+    out_path: str | Path,
+    iteration_tag: str,
+    distributions: dict[str, list[int]] | None = None,
+) -> Path:
     """
     Pure, testable tail of the flow: turn verdicts into a saved scoreboard.
 
     Separated from run_golden_dataset() so it can be unit-tested with synthetic
     verdicts and no API key.
+
+    iter-3 chg-3: optional `distributions` arg is forwarded to save_baseline
+    when multi-rollout data is available.
     """
     return save_baseline(
-        scores_from_verdicts(verdicts), out_path, iteration_tag=iteration_tag
+        scores_from_verdicts(verdicts),
+        out_path,
+        iteration_tag=iteration_tag,
+        distributions=distributions,
     )
 
 
-async def _amain(out_path: str, tag: str) -> None:
-    verdicts = await run_golden_dataset()
-    path = write_baseline_from_verdicts(verdicts, out_path, tag)
-    print(f"\nWrote baseline ({len(verdicts)} cases) -> {path}")
+def _median_score(scores: list[int]) -> int:
+    """Median of a list of scores. Half-points round down (integer rubric)."""
+    return int(statistics.median(scores))
+
+
+async def _amain(out_path: str, tag: str, rollouts: int) -> None:
+    if rollouts < 1:
+        raise SystemExit(f"--rollouts must be >= 1; got {rollouts}")
+
+    if rollouts == 1:
+        # Single-pass path: unchanged from the iter-2 implementation.
+        verdicts = await run_golden_dataset()
+        path = write_baseline_from_verdicts(verdicts, out_path, tag)
+        print(f"\nWrote baseline ({len(verdicts)} cases) -> {path}")
+        return
+
+    # iter-3 chg-3 multi-rollout path: run the dataset N times, aggregate by
+    # case_id, store the median + the full distribution per case.
+    print(f"Running {rollouts} rollouts of the full golden dataset...")
+    per_case_scores: dict[str, list[int]] = defaultdict(list)
+    final_verdicts: list[Any] = []
+    for i in range(1, rollouts + 1):
+        print(f"\n--- Rollout {i}/{rollouts} ---")
+        verdicts = await run_golden_dataset()
+        for v in verdicts:
+            per_case_scores[v.case_id].append(int(v.score))
+        # Keep the last rollout's verdicts as the seed for save_baseline;
+        # their scores will be overwritten with medians below.
+        final_verdicts = verdicts
+
+    # Overwrite each verdict's score with the median across rollouts.
+    distributions = dict(per_case_scores)
+    for v in final_verdicts:
+        v.score = _median_score(per_case_scores[v.case_id])
+        v.passed = v.score >= 3  # MINIMUM_PASSING_SCORE
+
+    print(f"\n--- Aggregate (median of {rollouts} rollouts) ---")
+    for cid, scores in sorted(distributions.items()):
+        median = _median_score(scores)
+        print(f"  {cid}: scores={scores} median={median}")
+
+    path = write_baseline_from_verdicts(final_verdicts, out_path, tag, distributions=distributions)
+    print(f"\nWrote baseline ({len(final_verdicts)} cases, {rollouts} rollouts) -> {path}")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Capture a per-case baseline scoreboard.")
     ap.add_argument("--tag", required=True, help="harness iteration tag, e.g. harness-iter-1")
     ap.add_argument("--out", required=True, help="output path for the baseline JSON")
+    ap.add_argument(
+        "--rollouts",
+        type=int,
+        default=1,
+        help="number of independent rollouts per case (iter-3 chg-3; default 1; "
+        "recommended 2+ for production baselines to expose LLM-as-judge variance)",
+    )
     args = ap.parse_args()
-    asyncio.run(_amain(args.out, args.tag))
+    asyncio.run(_amain(args.out, args.tag, args.rollouts))
 
 
 if __name__ == "__main__":
