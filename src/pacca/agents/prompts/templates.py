@@ -49,11 +49,13 @@ from typing import Any
 
 PROMPT_REGISTRY: dict[str, dict[str, str]] = {
     "DecisionSupportAgent": {
-        "version": "v2.3",
-        "description": "Frontline UM Nurse — guideline alignment + confidence scoring + institutional memory (H2)",
-        "changed_in": "v2.3 (iter-3 chg-2): Phase H2 institutional memory layer — "
-        "first entry encodes the NSCLC pembrolizumab pattern with full criteria "
-        "and explicit anti-patterns (PD-L1 < 50%, EGFR+, ALK+, stage <IV). "
+        "version": "v2.4",
+        "description": "Frontline UM Nurse — guideline alignment + confidence scoring + institutional memory (H2, 2 entries)",
+        "changed_in": "v2.4 (iter-4 chg-1): H2 memory — second entry, "
+        "first-line biologic DMARD for seropositive RA after conventional DMARD "
+        "failure. Encodes ACR 2021 criteria + explicit interaction with iter-3 "
+        "chg-1's high_cost_check (memory must not override cost escalation). "
+        "v2.3 (iter-3 chg-2): Phase H2 first entry, NSCLC pembrolizumab. "
         "v2.2: Tightened hallucination guard, added precedent weighting.",
     },
     "MedicalDirectorAgent": {

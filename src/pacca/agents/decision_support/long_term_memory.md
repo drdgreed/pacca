@@ -79,6 +79,92 @@ not to skip them.
 
 ---
 
+## Pattern: First-line biologic DMARD for seropositive RA after conventional DMARD failure
+
+**Headline indication:** Seropositive rheumatoid arthritis with documented
+failure of 2+ conventional DMARDs (typically methotrexate plus at least
+one other), moderate-to-severe disease activity, requesting first-line
+biologic DMARD therapy (e.g. abatacept, adalimumab, etanercept,
+infliximab, tocilizumab) per ACR 2021 guidelines.
+
+**Required criteria — ALL must be explicitly documented:**
+
+1. Diagnosis is rheumatoid arthritis with **seropositive markers** —
+   RF (rheumatoid factor) positive AND/OR anti-CCP (anti-cyclic
+   citrullinated peptide) positive, with the specific test results
+   in the chart.
+2. Disease activity is **moderate-to-severe**, with a specific score
+   documented: DAS28 ≥ 3.2, CDAI ≥ 10, or SDAI ≥ 11. Vague language
+   like "active disease" without a score is not sufficient.
+3. Step therapy: failure of **2 or more conventional DMARDs**, each at
+   an adequate dose for an adequate duration. The typical pattern is
+   methotrexate (≥ 3 months at therapeutic dose) plus at least one
+   other conventional DMARD (hydroxychloroquine, sulfasalazine, or
+   leflunomide). Document the specific agents, durations, and
+   reason for failure (inefficacy or intolerance).
+4. Requested agent is on the **ACR-recommended biologic list for RA**
+   (TNF inhibitors, abatacept, tocilizumab, rituximab, JAK inhibitors).
+5. **No active uncontrolled infection** and no contraindication to
+   immunosuppression (e.g. latent TB without treatment, active
+   hepatitis B).
+
+**Anti-patterns — disqualify the shortcut, require human review:**
+
+When ANY of the following is present, the auto-approve shortcut does NOT
+apply and the case **routes to IN_REVIEW for human clinical judgment** —
+**NEVER to DENIED**. These are cases where a clinician must weigh the
+specific context, not cases the system should reject outright.
+
+- Only **ONE** conventional DMARD tried (or none) → insufficient step
+  therapy. The patient may need a second conventional DMARD trial first,
+  OR there may be a documented intolerance pattern that justifies
+  earlier biologic — a human determines that. **Status: IN_REVIEW.**
+  (Not DENIED.)
+- **Seronegative RA** (RF and anti-CCP both negative) → different
+  treatment paradigm. Combination conventional DMARDs are typically
+  preferred first; biologic may still be appropriate in specific
+  contexts. **Status: IN_REVIEW.** (Not DENIED.)
+- **Mild disease activity** (DAS28 < 3.2, CDAI < 10, or SDAI < 11) →
+  biologic generally not indicated; conventional DMARDs may be sufficient.
+  **Status: IN_REVIEW.** (Not DENIED.)
+- **Inadequate trial duration** on prior DMARDs (< 3 months on
+  methotrexate, etc.) → cannot establish true failure. The patient may
+  need to complete the trial OR there may be a tolerability issue. A
+  human determines that. **Status: IN_REVIEW.** (Not DENIED.)
+- **Active infection / pregnancy / live vaccine within 30 days** →
+  contraindication review. **Status: IN_REVIEW.** (Not DENIED.)
+- Requested agent is **not** an ACR-recommended biologic for RA →
+  unusual choice requires clinical justification. **Status: IN_REVIEW.**
+  (Not DENIED.)
+
+**Why this distinction matters.** Same as the NSCLC pembrolizumab entry:
+PACCA's design routes off-pattern cases to human review, not to automatic
+denial. Multiple anti-patterns in one case do not justify denial; they
+reinforce the need for human judgment.
+
+**When the shortcut applies:** AUTO_APPROVE at high confidence (≥ 0.95)
+**conditional on** the policy-level cost check. The rationale MUST
+explicitly cite (a) seropositive status with specific markers (RF and/or
+anti-CCP), (b) each conventional DMARD tried with duration and outcome,
+(c) the disease-activity score, and (d) that the requested agent is
+ACR-recommended for RA.
+
+**Important interaction with policy escalation (iter-3 chg-1):** if
+`ClinicalRiskDetector`'s pre-flight `high_cost_check` fires (estimated
+annual cost > HIGH_COST_THRESHOLD), the case routes to IN_REVIEW
+regardless of clinical eligibility. The memory does **not** override
+that — it gives the agent the clinical-reasoning support to articulate
+"criteria met **but cost escalates per policy**" rather than the
+incorrect "criteria met → approve" (which would be the wrong outcome on
+GC-010 and any future high-cost biologic case). When the pre-flight has
+fired, the agent's rationale should still cite the clinical criteria as
+met, then acknowledge the cost trigger.
+
+**When the shortcut DOES NOT apply:** treat the case as a standard
+evaluation under the framework in the main system prompt.
+
+---
+
 *This file is loaded at agent-initialization time by `_prompt_loader.py`
 (see iter-2 chg-1's Jinja2 mount-point pattern). Updates here propagate
 to the live agent on the next run.*

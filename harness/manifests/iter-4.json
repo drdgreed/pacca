@@ -1,0 +1,110 @@
+{
+  "iteration": 4,
+  "iteration_tag": "harness-iter-4",
+  "iso_date": "2026-05-25",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-3",
+  "summary": "Second H2 memory entry (RA biologic after DMARD failure) + decision_agent.py dead-code deletion queued since iter-1. RA entry interacts cleanly with iter-3 chg-1's high_cost_check (memory as support, not replacement). All 4 risk cases scored 5 first-pass — the iter-3 H2 finding's forward design notes earned out. Dataset survey at iteration start scoped the complexity-score model out of iter-4 scope (only 1 pediatric case in the dataset; need contrastive data before fitting a discriminator).",
+  "changes": [
+    {
+      "id": "chg-1",
+      "type": "new",
+      "description": "Second H2 institutional memory entry — first-line biologic DMARD for seropositive RA after conventional DMARD failure. Follows the forward design notes from iter-3 chg-2's finding (explicit Status: IN_REVIEW per anti-pattern; risk-case enumeration; criterion-preservation test extension; PROMPT_REGISTRY bump). The entry's interaction with iter-3 chg-1's high_cost_check is documented explicitly so the memory does NOT override the cost escalation on GC-010-style cases.",
+      "files": [
+        "src/pacca/agents/decision_support/long_term_memory.md",
+        "src/pacca/agents/prompts/templates.py",
+        "tests/unit/test_h2_memory_criterion_preservation.py"
+      ],
+      "failure_pattern": "Phase H2 expansion risk pattern: a second memory entry could (a) over-fire on cross-condition cases (psoriasis adalimumab, PsA biologic, Crohn's adalimumab) by recognizing the 'biologic after step therapy' shape and skipping disease-specific verification, or (b) override the iter-3 chg-1 high_cost_check on GC-010 by claiming the clinical criteria justify auto-approval despite the cost escalation. Both classes are guarded against by the entry's structure (RA-specific headline, explicit cost-check interaction paragraph) and verified live on the four risk cases.",
+      "root_cause": "Phase H2 is iterative by design; each new entry must respect the contracts established by prior entries + by ClinicalRiskDetector's pre-flight checks. iter-3 chg-2 shipped the first entry with a mid-iteration regression on GC-021 that taught the methodology that memory wording matters semantically; iter-4 chg-1 is the test of whether the iter-3 finding's forward design notes prevent the same class of failure on a second entry.",
+      "evidence": [
+        {
+          "source": "src/pacca/agents/decision_support/long_term_memory.md",
+          "note": "Second entry follows the iter-3 chg-2 format: 5 required criteria, 6 anti-patterns each ending with Status: IN_REVIEW (Not DENIED), explicit cost-check interaction paragraph, 'when shortcut does not apply' fallback."
+        },
+        {
+          "source": "tests/unit/test_h2_memory_criterion_preservation.py",
+          "note": "16 new tests (4 test classes mirroring the iter-3 chg-2 NSCLC entry structure scoped to the RA entry). Aggregate H2 tests: 35."
+        },
+        {
+          "source": "live verification at chg-1 HEAD",
+          "note": "All 4 risk cases scored 5 first-pass. GC-010: IN_REVIEW via cost (memory cites cost-trigger explicitly). GC-005: IN_REVIEW with AAD-NPF cited (RA memory did NOT bleed into psoriasis). GC-017: IN_REVIEW with ACR PsA Guidelines cited (RA memory did NOT bleed into PsA). GC-016: AUTO_APPROVED with ACG cited (RA memory did NOT interfere). iter-3 chg-2 needed a mid-iteration fix; iter-4 chg-1 needed zero."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": ["GC-010", "GC-005", "GC-017", "GC-016"],
+      "constraint_level": "long_term_memory",
+      "why_this_component": "Second H2 entry; same constraint level as iter-3 chg-2. RA chosen as the next-most-defensible target because (a) the canonical case GC-010 already escalates correctly via iter-3 chg-1's cost check, providing the cleanest possible 'memory as support not replacement' test, and (b) GC-005 / GC-017 / GC-016 form a natural cross-condition risk-case set that catches over-firing on related-but-distinct biologic patterns.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert <sha>. Removing the second entry from long_term_memory.md is sufficient; the loader iterates the file's contents so an entry's absence just shrinks the rendered memory section. PROMPT_REGISTRY version reverts to v2.3."
+    },
+    {
+      "id": "chg-2",
+      "type": "removal",
+      "description": "Delete src/pacca/agents/decision_agent.py (330 lines of dead code). The file defined DecisionSupportAgent but was never imported by any module — the orchestrator and all tests reference DecisionAgent in decision.py instead (which returns the string 'DecisionSupportAgent' from its .name property via PROMPT_REGISTRY). Recorded as a deferred finding in iter-1.json chg-1's evidence block and re-noted in every iter narrative since.",
+      "files": [
+        "src/pacca/agents/decision_agent.py"
+      ],
+      "failure_pattern": "Dead code creates cognitive overhead for future readers ('which file is canonical?'), surfaces in code-search results as a misleading hit, and creates a non-zero risk of accidental future import. The iter-1 narrative explicitly named the file as the canonical example of why one-file-per-component matters: 'A naive extraction from decision_agent.py would have produced a working .md file that the runtime never read; we would have shipped a refactor that changed nothing in production.'",
+      "root_cause": "decision_agent.py was a partial migration target from before the v2.3 cycle began that was never cleaned up. iter-1 spotted it during the chg-1 extraction investigation, deferred deletion as the planned iter-1 chg-2, then iter-2 pivoted to eval-net work, iter-3 to H2 + escalation work. iter-4 is the first iteration with bandwidth for the cleanup.",
+      "evidence": [
+        {
+          "source": "harness/manifests/iter-1.json",
+          "note": "chg-1's evidence block records the deferred deletion: 'defines DecisionSupportAgent at line 52, imported by no module (orchestrator and tests use decision.py's DecisionAgent). Deletion queued as chg-2.'"
+        },
+        {
+          "source": "grep -rn 'from .decision_agent\\|import decision_agent' --include='*.py' .",
+          "note": "Zero importers across the codebase (excluding __pycache__). All 'DecisionSupportAgent' string references are test assertions checking agent.name return values or PROMPT_REGISTRY keys."
+        },
+        {
+          "source": "pytest tests/unit tests/harness post-deletion",
+          "note": "192 passed in ~7s, unchanged from pre-deletion. Confirms the file was truly unused."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "tool_implementation",
+      "why_this_component": "Removal of an unused agent file; tool_implementation is the closest constraint level (the file's intent was an alternative DecisionSupportAgent class). No behavioral change because no code path executed any code in the file.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. Restoring the file is safe (the file remains dead afterward; it just exists again). No state, no data, no API surface depends on the file's presence."
+    }
+  ],
+  "verdicts": [
+    {
+      "change_id": "chg-1",
+      "previous_iteration_tag": "harness-iter-3",
+      "outcome": "keep",
+      "verified_fixes": ["GC-010", "GC-012"],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-3 chg-1 (HIGH_COST + PEDIATRIC_COMPLEX wired into ClinicalRiskDetector) predicted GC-010 and GC-012 would flip. Both verified at iter-4 HEAD: GC-010 still routes to IN_REVIEW via the high_cost_check (median score 5 across 2 rollouts); GC-012 still routes to IN_REVIEW via pediatric_complex_check. The iter-4 chg-1 RA memory entry's documented cost-check interaction confirms the high_cost_check remains the authoritative escalation path on cost. Confirmed keep."
+    },
+    {
+      "change_id": "chg-2",
+      "previous_iteration_tag": "harness-iter-3",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": ["GC-001", "GC-021", "GC-022"],
+      "unforeseen_regressions": [],
+      "notes": "iter-3 chg-2 (H2 memory first entry — NSCLC pembrolizumab) had three named risk cases. All three preserved at iter-4 HEAD even with the second H2 entry now active alongside: GC-001 score 5 (canonical clean approve), GC-021 IN_REVIEW (PD-L1 45% near-miss), GC-022 IN_REVIEW (EGFR+ near-miss). The criterion-preservation tests for both entries pass — the second entry did not displace the first's criteria. Confirmed keep."
+    },
+    {
+      "change_id": "chg-3",
+      "previous_iteration_tag": "harness-iter-3",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-3 chg-3 (regression_gate noise_threshold + capture_baseline --rollouts N) is tooling-only. The iter-4 baseline was captured with --rollouts 2 using the chg-3 feature; the new distributions field shows per-case variance (zero jitter in this capture, same pattern as the iter-3 final baseline). The noise_threshold parameter is unused in this iteration (no real regressions to test it against), but the prophylactic infrastructure is in place for iter-5+. Confirmed keep."
+    }
+  ]
+}

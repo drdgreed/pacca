@@ -12,11 +12,81 @@
 
 ## Index
 
+- [iter-4 — Second H2 memory entry + decision_agent.py deletion (2 changes)](#iter-4-h2-second-entry)
 - [iter-3 — H2 Institutional Memory + Escalation-Branch Completion (3 changes)](#iter-3-h2-and-escalation)
 - [iter-2 — Eval-Net Hardening, 6 changes (chg-1 through chg-6)](#iter-2-eval-net-hardening)
 - [Correction (2026-05-22) — iter-0 trajectory instrumentation record](#correction-iter0-trajectory)
 - [iter-1 — chg-1: Decision Support and Medical Director prompt extraction (Phase H1)](#chg-1-iter-1)
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-4-h2-second-entry"></a>
+## iter-4 — Second H2 Memory Entry + decision_agent.py Deletion (2 changes)
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-4` |
+| Date | 2026-05-25 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `long_term_memory` (chg-1), `tool_implementation` (chg-2 removal) |
+| Behavioral surface modified | YES (chg-1: second H2 entry); chg-2 is dead-code removal with zero runtime effect |
+| Changes | 2 |
+| Live clinical gate at iter-4 HEAD | aggregate **20/20 = 100%** preserved (median of 2 rollouts; identical to iter-3-final) |
+| Predicted fixes verified live | — (no behavioral predictions; risk-case preservation only) |
+| Risk cases preserved | GC-010 (5, IN_REVIEW via cost), GC-005 (5, IN_REVIEW psoriasis), GC-017 (5, IN_REVIEW PsA), GC-016 (5, AUTO_APPROVED Crohn's) |
+| Manifest | [`harness/manifests/iter-4.json`](../harness/manifests/iter-4.json) |
+| Narrative | [`docs/ITERATIONS.md` iter-4 section](./ITERATIONS.md#iter-4-h2-second-entry) |
+
+### chg-1 — H2 memory second entry (RA biologic after DMARD failure)
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `long_term_memory` |
+| Files | `src/pacca/agents/decision_support/long_term_memory.md`, `src/pacca/agents/prompts/templates.py` (PROMPT_REGISTRY DecisionSupportAgent v2.3 → v2.4), `tests/unit/test_h2_memory_criterion_preservation.py` (16 new tests, total H2 tests now 35) |
+| Predicted fixes | — |
+| Risk cases | `["GC-010", "GC-005", "GC-017", "GC-016"]` |
+| Verified live | **All 4 scored 5 first-pass.** GC-010 IN_REVIEW via cost (memory cites cost-trigger explicitly); GC-005 IN_REVIEW with AAD-NPF cited (RA memory did NOT bleed into psoriasis); GC-017 IN_REVIEW with ACR PsA Guidelines cited (RA memory did NOT bleed into PsA); GC-016 AUTO_APPROVED with ACG cited (RA memory did NOT interfere) |
+
+The cycle's second Phase H2 institutional memory entry. Follows the forward design notes from [`docs/findings/H2-memory-iteration-1.md`](./findings/H2-memory-iteration-1.md) literally: explicit status routing per anti-pattern (`**Status: IN_REVIEW.** (Not DENIED.)`), risk-case enumeration with live verification, criterion-preservation test extension, PROMPT_REGISTRY version bump.
+
+The entry's most interesting design choice is the **explicit documentation of its non-override of iter-3 chg-1's `high_cost_check`**. The memory's "When the shortcut applies" section says auto-approval is "conditional on" the policy-level cost check; a separate "Important interaction with policy escalation" paragraph teaches the agent the right phrasing on cost-fired cases: "criteria met **but cost escalates per policy**" rather than "criteria met → approve." This is the cleanest possible test of the *memory as support, not replacement* contract from [`docs/findings/GC-001.md`](./findings/GC-001.md). GC-010 scored 5 with the judge praising the explicit policy-trigger reasoning.
+
+iter-3 chg-2's first H2 entry needed a mid-iteration regression fix on GC-021. iter-4 chg-1's second entry needed zero mid-iteration debugging. The cycle's findings are compounding into prescriptive design notes that prevent the failure modes the next iteration would otherwise hit.
+
+### chg-2 — Delete decision_agent.py (dead code, queued since iter-1)
+
+| Field | Value |
+|---|---|
+| Type | `removal` |
+| Constraint level | `tool_implementation` |
+| Files | `src/pacca/agents/decision_agent.py` (deleted, 330 lines) |
+| Predicted fixes | — |
+| Risk cases | — |
+| Verified live | Full suite 192 → 192 passed, unchanged from pre-deletion |
+
+The file defined `DecisionSupportAgent` at line 52 but was never imported by any module — the orchestrator and all tests reference `DecisionAgent` in `decision.py` instead (which returns the string `"DecisionSupportAgent"` from its `.name` property via `PROMPT_REGISTRY`). Recorded as a deferred finding in [`harness/manifests/iter-1.json`](../harness/manifests/iter-1.json) chg-1's evidence block (*"Deletion queued as chg-2"*) and re-noted in every iter narrative since. iter-2 pivoted to eval-net work; iter-3 to H2 + escalation; iter-4 finally has the bandwidth for cleanup.
+
+Zero importers confirmed pre-deletion (`grep -rn "from .decision_agent\|import decision_agent" --include="*.py" .` returned empty). All `DecisionSupportAgent` string references in the codebase are test assertions checking agent name return values or `PROMPT_REGISTRY` keys — none require the dead class. Post-deletion test suite unchanged.
+
+The cleanest commit in the cycle — 330 lines deleted, no behavioral surface affected, no test impact.
+
+### Iteration-level verdict and verdict on iter-3's 3 chgs
+
+iter-4 closed at HEAD (final commit on `harness/iter-4` before merge). All gates green:
+- Manifest validation: all 5 manifests pass (iter-0/1/2/3/4) against schema
+- Doc-drift guard: PASSED
+- Unit + harness suite: 208 passed in ~7s (192 baseline + 16 new H2 tests)
+- Live clinical gate: aggregate 20/20 = 100% preserved (median of 2 rollouts; identical scores to iter-3-final; zero jitter across both rollouts)
+
+**All three iter-3 changes verdict = `keep`** (recorded in [`harness/manifests/iter-4.json`](../harness/manifests/iter-4.json) `verdicts[]`):
+- iter-3 chg-1 verified_fixes: `["GC-010", "GC-012"]` — both still routing correctly with the new memory entry active
+- iter-3 chg-2 verified_risks: `["GC-001", "GC-021", "GC-022"]` — all three preserved with the second H2 entry active alongside; criterion-preservation tests for both entries pass
+- iter-3 chg-3 — used to capture iter-4 baseline with `--rollouts 2`; distributions show zero jitter
+
+iter-4's own chgs have no behavioral predicted_fixes. Risk-case preservation on chg-1 verified live. Verdicts on iter-4 chg-1 / chg-2 will land in iter-5.json's `verdicts` array.
 
 ---
 
