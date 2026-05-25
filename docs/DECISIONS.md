@@ -12,10 +12,85 @@
 
 ## Index
 
+- [iter-3 — H2 Institutional Memory + Escalation-Branch Completion (3 changes)](#iter-3-h2-and-escalation)
 - [iter-2 — Eval-Net Hardening, 6 changes (chg-1 through chg-6)](#iter-2-eval-net-hardening)
 - [Correction (2026-05-22) — iter-0 trajectory instrumentation record](#correction-iter0-trajectory)
 - [iter-1 — chg-1: Decision Support and Medical Director prompt extraction (Phase H1)](#chg-1-iter-1)
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-3-h2-and-escalation"></a>
+## iter-3 — H2 Institutional Memory + Escalation-Branch Completion (3 changes; first behavioral iteration)
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-3` |
+| Date | 2026-05-24 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `escalation_branch` (chg-1), `long_term_memory` (chg-2), `evaluation_harness` (chg-3) |
+| Behavioral surface modified | YES — first behavioral iteration of the cycle |
+| Changes | 3 |
+| Live clinical gate at iter-3 HEAD | aggregate 20/20 = **100%** (median of 2 rollouts; 18 cases score 5, 2 score 4, 0 below 3) |
+| Predicted fixes verified live | GC-010 (1 → 5), GC-012 (2 → 4) |
+| Risk cases preserved | GC-001 (5 → 5), GC-021 (IN_REVIEW), GC-022 (IN_REVIEW) |
+| Manifest | [`harness/manifests/iter-3.json`](../harness/manifests/iter-3.json) |
+| Narrative | [`docs/ITERATIONS.md` iter-3 section](./ITERATIONS.md#iter-3-h2-and-escalation) |
+
+### chg-1 — Wire HIGH_COST + PEDIATRIC_COMPLEX into ClinicalRiskDetector
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `escalation_branch` |
+| Files | `src/pacca/models/clinical.py`, `src/pacca/agents/clinical_risk_detector.py`, `src/pacca/py.typed`, `tests/unit/test_escalation_high_cost_and_pediatric.py`, `tests/clinical/baselines/iter-3-chg1-baseline.json`, `.pre-commit-config.yaml`, `src/pacca/config/tracing.py` |
+| Predicted fixes | `["GC-010", "GC-012"]` |
+| Risk cases | — |
+| Verified live | **GC-010: 1 → 5** (judge cites cost-based escalation); **GC-012: 2 → 4** (judge cites pediatric complexity) |
+
+Closes the SEV-2 findings from iter-2 chg-6 ([`docs/findings/GC-010.md`](./findings/GC-010.md), [`docs/findings/GC-012.md`](./findings/GC-012.md)). Both `EscalationReason` enum values existed in `src/pacca/models/enums.py` since before iter-1; check methods were missing. Hybrid data path: `ClinicalCase` gains three optional structured fields (`estimated_annual_cost`, `patient_age`, `disease_severity`) used when present, with regex parsers on `clinical_notes` as fallback. Cost parser uses **max of all dollar amounts** in the prose — a smoke-test on GC-010 caught a "first-match" bug before unit tests existed. Also adds `src/pacca/py.typed` (PEP 561 marker) which transitively surfaced pre-existing untyped code that was fixed inline; `pydantic-settings` added to the pre-commit mypy hook's `additional_dependencies`; structlog-style `logger.warning(event, detail=...)` calls in `tracing.py` marked with `# type: ignore[call-arg]` + TODO for future structlog migration.
+
+### chg-2 — Phase H2 institutional memory — first entry (NSCLC pembrolizumab)
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `long_term_memory` |
+| Files | `src/pacca/agents/decision_support/long_term_memory.md` (new), `src/pacca/agents/_prompt_loader.py`, `src/pacca/agents/decision_support/system_prompt.md`, `src/pacca/agents/prompts/templates.py` (PROMPT_REGISTRY DecisionSupportAgent v2.2 → v2.3), `tests/unit/test_h2_memory_criterion_preservation.py` |
+| Predicted fixes | — |
+| Risk cases | `["GC-001", "GC-021", "GC-022"]` |
+| Verified live | **GC-001: 5 → 5** (memory as support, all NCCN criteria still cited); **GC-021: IN_REVIEW + score 5** (after in-iteration wording fix; first-pass regressed to DENIED); **GC-022: IN_REVIEW + score 3** |
+
+The cycle's first behavioral change at the `long_term_memory` constraint level. Per the iter-2 findings design constraints, the entry encodes the FULL criteria set for the NSCLC pembrolizumab pattern (six required criteria, five anti-patterns) so it does not compress away the discriminations that catch GC-021 (PD-L1 < 50%) and GC-022 (EGFR+). The `_prompt_loader.py` extension is backward-compatible: agents without a memory file (e.g. MedicalDirectorAgent) render byte-identical prompts via the `{% if long_term_memory %}` guard. The 19 criterion-preservation tests are this iteration's analog of iter-1's byte-identity check.
+
+Mid-iteration debugging cycle (recorded in [`docs/findings/H2-memory-iteration-1.md`](./findings/H2-memory-iteration-1.md)): the first-pass memory wording said "Route to IN_REVIEW" five times but lacked an explicit IN_REVIEW-vs-DENIED boundary. The agent encountered GC-021 with TWO anti-patterns matched and generalized to `DENIED`. Fix: every anti-pattern now ends with `**Status: IN_REVIEW.** (Not DENIED.)` plus a "Why this distinction matters" paragraph. Re-run produced score `5`, judge text: *"demonstrates genuine case-by-case analysis rather than pattern-matching to a canonical approval case"* — exactly the H2 design contract. Methodology learning: memory writing is closer to prompt engineering than data engineering.
+
+### chg-3 — regression_gate noise_threshold + capture_baseline --rollouts N
+
+| Field | Value |
+|---|---|
+| Type | `improvement` |
+| Constraint level | `evaluation_harness` |
+| Files | `tests/clinical/regression_gate.py`, `tests/clinical/capture_baseline.py`, `tests/clinical/golden_cases.py`, `tests/clinical/evaluator.py`, `tests/harness/test_iter2_hardening.py`, `tests/clinical/baselines/iter-3-baseline.json` |
+| Predicted fixes | — |
+| Risk cases | — |
+| Verified live | iter-3 baseline captured with `--rollouts 2`; distributions show **zero jitter** in this capture (every case identical across both rollouts) |
+
+Closes the LLM-as-judge variance false-positive class observed twice in iter-3 chg-1 (GC-005 5→2 with identical agent behavior; GC-017 4→2 across runs). `check_regression` gains a `noise_threshold` parameter (default 0 strict) and `RegressionReport` gains a `jitter` list (drops within band recorded but non-blocking). `capture_baseline.py` gains `--rollouts N` (default 1); the saved baseline file gains an optional `distributions` field for the per-case score lists from multi-rollout runs. Production usage should set `noise_threshold=1` per the recommendation documented in `check_regression`'s docstring.
+
+### Iteration-level verdict and verdict on iter-2's 6 chgs
+
+iter-3 closed at HEAD `0d3342f..` (the final commit on the `harness/iter-3` branch before merge). All gates green:
+- Manifest validation: all 4 manifests pass (iter-0, iter-1, iter-2, iter-3) against the schema
+- Doc-drift guard: PASSED
+- Unit + harness suite: 192 passed in ~7s (139 baseline + 53 new in iter-3)
+- Live clinical gate: 3/3 selected tests pass; aggregate 20/20 = 100%
+- Live baseline at iter-3 HEAD with `--rollouts 2`: zero jitter, 18 cases at 5, 2 cases at 4
+
+**All six iter-2 changes verdict = `keep`** (recorded in [`harness/manifests/iter-3.json`](../harness/manifests/iter-3.json) `verdicts[]`). The substantive verdict is on iter-2 chg-6's predicted GC-001 fix (2 → ≥4 after stage IIIA → stage IV case-def repair): **verified at iter-3 HEAD with score 5**, and the case-def repair holds even with the chg-2 H2 memory active. The two SEV-2 findings recorded by iter-2 chg-6 (GC-010, GC-012) became iter-3 chg-1's predicted_fixes and both verified.
+
+iter-3's own chgs have no behavioral predicted_fixes beyond chg-1's. Risk-case preservation on chg-2 (GC-001, GC-021, GC-022) verified live. Verdicts on iter-3's chg-2 and chg-3 will land in iter-4.json's `verdicts` array.
 
 ---
 
