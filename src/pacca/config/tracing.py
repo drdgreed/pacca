@@ -110,9 +110,14 @@ def configure_tracing(
             # BatchSpanProcessor buffers spans and exports them in batches —
             # much more efficient than exporting each span individually.
             provider.add_span_processor(BatchSpanProcessor(exporter))
-            logger.info("otel_exporter_configured", endpoint=endpoint)
+            # TODO(iter-future): these logger calls use structlog-style kwargs
+            # against stdlib logging.Logger. At runtime the kwargs are silently
+            # dropped (stdlib Logger only consumes extra= / exc_info= /
+            # stack_info=). Fix by switching to structlog or wrapping with
+            # extra={...}. Surfaced by iter-3's py.typed marker.
+            logger.info("otel_exporter_configured", endpoint=endpoint)  # type: ignore[call-arg]
         except ImportError:
-            logger.warning(
+            logger.warning(  # type: ignore[call-arg]
                 "otel_otlp_exporter_unavailable",
                 detail="opentelemetry-exporter-otlp-proto-http not installed; "
                 "falling back to console exporter",
@@ -125,7 +130,7 @@ def configure_tracing(
         logger.debug("otel_console_exporter_configured")
 
     trace.set_tracer_provider(provider)
-    logger.info("otel_tracing_configured", service_name=service_name)
+    logger.info("otel_tracing_configured", service_name=service_name)  # type: ignore[call-arg]
 
 
 def get_tracer(name: str) -> trace.Tracer:

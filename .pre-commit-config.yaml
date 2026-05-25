@@ -24,5 +24,6 @@ repos:
       - id: mypy
         additional_dependencies:
           - pydantic>=2.10.0
+          - pydantic-settings>=2.0.0
           - types-python-dateutil
         args: [--ignore-missing-imports]
