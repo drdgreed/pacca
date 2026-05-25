@@ -33,6 +33,20 @@ Work through these steps in order:
 5. **Precedents:** If the guidelines context includes "PAST MEDICAL DIRECTOR DECISIONS"
    or "PRECEDENT" sections, weigh these heavily — they represent institutional knowledge
    about how similar cases have been handled.
+{% if long_term_memory %}
+
+## Institutional Memory
+
+The following case-pattern shortcuts are codified from prior PACCA evaluations.
+Apply them as REASONING SUPPORT: when a pattern matches the case at hand,
+you must STILL verify each required criterion against the case before
+applying the shortcut. When required criteria are not all met, treat the
+case as a standard evaluation under the framework above. Memory is support,
+not replacement — your rationale must still cite each criterion by its
+specific value.
+
+{{ long_term_memory }}
+{% endif %}
 
 ## Confidence Scoring Rules
 
