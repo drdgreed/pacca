@@ -87,20 +87,38 @@
 
 - *Schema evolution:* the iter-0 schema's files-path pattern restricted entries to `^(src/pacca/|harness/|docs/|tests/)`. Adding `pyproject.toml` to the manifest's files list failed validation. The pattern was broadened to accept repo-root config files (`pyproject.toml`, `requirements*.txt`, `setup.py/cfg`, `Dockerfile`, `.gitignore`, `README.md`, `CHANGELOG.md`, `LICENSE`, `Makefile`) and CI workflows (`.github/`). Also generalized `src/pacca/` to `src/` since the project-specific prefix was unnecessary. The pattern broadening is itself in chg-1 because it was caused by chg-1.
 
-### Verdict (recorded at iter-2 finalization, 2026-05-24)
+### Verdict (recorded at iter-2 finalization, 2026-05-24; live-gate confirmation appended same day)
 
 | Field | Value |
 |-------|-------|
 | Outcome | **keep** |
 | Full-suite delta vs. iter-0 baseline | 0 — zero behavioral change, as predicted by the H1 refactor contract |
+| Live clinical gate at iter-2 HEAD | **PASS** (3 of 3 selected tests in 339.52s; aggregate accuracy ≥ 80% under live LLM-as-judge) |
 | Tokens-per-case delta | n/a (no agent-surface change; tokens-per-case attribution is an iter-3/H5 measurement work item) |
 | Precision on predicted_fixes | n/a (empty — iter-1 predicted no fixes by design) |
 | Recall on risk_cases | n/a (empty — iter-1 predicted no risks by design) |
-| Verdict basis | (1) byte-identity verification character-by-character pre-merge, (2) 139/139 tests pass at iter-2 HEAD (unit + harness), (3) doc-drift guard PASSED, (4) all three manifests validate against the schema |
+| Verdict basis | (1) byte-identity verification character-by-character pre-merge, (2) 139/139 unit + harness tests pass at iter-2 HEAD, (3) live clinical gate PASSED, (4) doc-drift guard PASSED, (5) all three manifests validate against the schema |
 
-**Narrative.** iter-1's success criterion was "byte-identical rendered prompts before and after the extraction" — the AHE paper's `paragraph_2 == paragraph_2` bar (Lin et al. §3.2). That criterion was met at commit time via the custom byte-identity check (`/tmp/byte_identity_check.py`) after a one-character fix to `decision_support/system_prompt.md`. iter-2 introduced no agent-surface change (all four iter-2 changes are at `instrumentation` or `evaluation_harness` constraint levels), so iter-2 cannot disturb iter-1's behavioral surface. The full unit + harness suite is green at iter-2 HEAD (139 passed in ~7s). All conditions stated in `RUNBOOK_iter2.md` Step 7 for verdict finalization are met.
+**Narrative.** iter-1's success criterion was "byte-identical rendered prompts before and after the extraction" — the AHE paper's `paragraph_2 == paragraph_2` bar (Lin et al. §3.2). That criterion was met at commit time via the custom byte-identity check (`/tmp/byte_identity_check.py`) after a one-character fix to `decision_support/system_prompt.md`. iter-2 introduced no agent-surface change (all five iter-2 changes are at `instrumentation` or `evaluation_harness` constraint levels), so iter-2 cannot disturb iter-1's behavioral surface. The live clinical gate confirms this at the system level — 3 of 3 clinical-marked tests passing in 5m39s with `GOLDEN_CASES + NEAR_MISS_CASES` exercised end-to-end.
 
-**What this verdict does NOT cover.** The live clinical-judge gate (`pytest tests/clinical/ -m clinical`) requires an Anthropic API key and was not re-run at iter-2 HEAD. The judge's per-case scoreboard captured in `tests/clinical/baselines/iter-1-baseline.json` (4 of 20 cases at score 2 — GC-001, GC-010, GC-012, GC-017 — aggregate at the 80% floor) is the de-facto iter-1 clinical baseline that iter-3 must not regress against. iter-3 will run the live gate at its HEAD, and the per-case `regression_gate.py` shipped in iter-2 chg-2 will assert each case against this baseline.
+**Live-baseline scoreboard (the new authoritative iter-1 reference).** Captured at iter-2 HEAD via `capture_baseline.py` after the doc-drift run had been resolved and the API auth restored. Stored at `tests/clinical/baselines/iter-1-baseline.json`. Aggregate: **17 of 20 = 85% pass under the absolute ≥3 rule**, comfortably above the 80% gate.
+
+| Case | Score | Note |
+|---|---|---|
+| GC-001 | 2 | persistent fail (canonical NSCLC PD-L1 62% auto-approve case — judge consistently scores the rationale as incomplete despite correct outcome) |
+| GC-009 | 4 | unchanged from prior placeholder |
+| GC-010 | 1 | **anti-pattern threshold crossed** (score 1 in this rubric = hallucination, wrong decision, or invented clinical detail per `evaluator.py` lines 70–76, 173, 177) — investigate before iter-3 |
+| GC-012 | 2 | persistent fail (pediatric IN_REVIEW case — reasoning issues but not anti-pattern) |
+| GC-017 | 4 | improved from prior placeholder (2 → 4); jitter or judge variance worth noting |
+| All others | 5 | clean |
+
+**Findings worth pausing on (recorded for iter-3 consideration).**
+
+1. *GC-010 score-1 floor.* Per the evaluator rubric, score 1 is reserved for critically wrong outcomes — wrong decision, fabricated lab values, invented prior therapy. This is the most serious finding in the run. iter-3's H2 institutional-memory work could *mask* a hallucination by giving it a confident voice; the root cause should be understood before that risk is introduced.
+2. *GC-001 canonical-approve scoring 2.* The cleanest case in the dataset returning a reasoning score below threshold. Implication for iter-3: H2 memory compression should target *stronger* rationales on clean approves, not shorter ones, since the judge already penalizes short reasoning here.
+3. *GC-017 swing 2→4 across two runs.* LLM-as-judge non-determinism: this is the noise floor the per-case `regression_gate.py` shipped in iter-2 chg-2 must respect. Without a tolerance band, the next run could trip the gate on jitter alone — a known weakness recorded for an iter-3 (or iter-2-supplement) hardening pass.
+
+These findings make the iter-1 baseline scoreboard a *non-trivial* reference for iter-3. The regression gate fires on *any* per-case drop today; with a hallucination already sitting at score 1, iter-3's H2 change must demonstrably leave GC-010 at or above score 1 (it cannot go lower) AND demonstrably not introduce *new* anti-pattern cases. The honest measurement frame for iter-3 is: "did H2 fix any of these, while introducing none?"
 
 ---
 
