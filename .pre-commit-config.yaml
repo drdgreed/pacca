@@ -26,4 +26,6 @@ repos:
           - pydantic>=2.10.0
           - pydantic-settings>=2.0.0
           - types-python-dateutil
+          - pytest>=8.0.0
+          - pytest-asyncio>=0.23.0
         args: [--ignore-missing-imports]
