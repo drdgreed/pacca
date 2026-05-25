@@ -25,29 +25,33 @@ import argparse
 import asyncio
 import sys
 
-
 SEP = "=" * 78
 SUB = "-" * 78
 
 
-async def investigate(case_id: str) -> int:
+async def investigate(case_id: str) -> int:  # noqa: PLR0912, PLR0915
     """
     Run one case end-to-end and print the full trace.
 
     Returns the judge's score (1-5) so this can be chained in a shell pipeline
     or asserted in a smoke test.
+
+    The function is intentionally print-heavy (diagnostic CLI tool, not
+    library code) so PLR0912 / PLR0915 are suppressed — the branches and
+    statements are sections of the verbatim trace output, not logical
+    complexity.
     """
     # Heavy imports deferred so this module is importable without an API key.
     from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
     from pacca.agents.decision import DecisionAgent, DecisionContext
     from pacca.models.clinical import ClinicalCase, EvidenceItem
     from pacca.models.enums import AuthorizationStatus, EvidenceSourceType
-
     from tests.clinical.evaluator import ClinicalEvaluator
     from tests.clinical.golden_cases import GOLDEN_CASES
     from tests.clinical.near_miss_cases import NEAR_MISS_CASES
+    from tests.clinical.pediatric_cases import PEDIATRIC_CASES
 
-    all_cases = GOLDEN_CASES + NEAR_MISS_CASES
+    all_cases = GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES
     golden = next((c for c in all_cases if c.case_id == case_id), None)
     if golden is None:
         known = ", ".join(c.case_id for c in all_cases)
@@ -60,9 +64,7 @@ async def investigate(case_id: str) -> int:
     print(SEP)
     print()
     print(f"Expected outcome  : {golden.expected_outcome.value}")
-    expected_branch = (
-        golden.expected_branch.value if golden.expected_branch else "(none)"
-    )
+    expected_branch = golden.expected_branch.value if golden.expected_branch else "(none)"
     print(f"Expected branch   : {expected_branch}")
     print(f"Diagnosis code    : {golden.diagnosis_code}")
     print(f"Procedure code    : {golden.procedure_code}")
@@ -153,7 +155,7 @@ async def investigate(case_id: str) -> int:
             status = decision.status.value
             rationale = decision.rationale
             confidence = decision.confidence_score
-        except Exception as exc:  # noqa: BLE001 — diagnostic script
+        except Exception as exc:
             print(f"  AGENT FAILED: {exc!s}")
             status = "ERROR"
             rationale = f"Agent failed: {exc!s}"
@@ -232,7 +234,7 @@ def main() -> None:
     )
     parser.add_argument(
         "case_id",
-        help="Case ID to investigate (e.g. GC-010). Accepts GOLDEN_CASES or NEAR_MISS_CASES IDs.",
+        help="Case ID to investigate (e.g. GC-010). Accepts GOLDEN_CASES, NEAR_MISS_CASES, or PEDIATRIC_CASES IDs.",
     )
     args = parser.parse_args()
     score = asyncio.run(investigate(args.case_id))

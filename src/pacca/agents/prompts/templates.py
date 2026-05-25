@@ -49,14 +49,15 @@ from typing import Any
 
 PROMPT_REGISTRY: dict[str, dict[str, str]] = {
     "DecisionSupportAgent": {
-        "version": "v2.4",
-        "description": "Frontline UM Nurse — guideline alignment + confidence scoring + institutional memory (H2, 2 entries)",
-        "changed_in": "v2.4 (iter-4 chg-1): H2 memory — second entry, "
-        "first-line biologic DMARD for seropositive RA after conventional DMARD "
-        "failure. Encodes ACR 2021 criteria + explicit interaction with iter-3 "
-        "chg-1's high_cost_check (memory must not override cost escalation). "
-        "v2.3 (iter-3 chg-2): Phase H2 first entry, NSCLC pembrolizumab. "
-        "v2.2: Tightened hallucination guard, added precedent weighting.",
+        "version": "v2.5",
+        "description": "Frontline UM Nurse — guideline alignment + confidence scoring + institutional memory (H2, 3 entries)",
+        "changed_in": "v2.5 (iter-5 chg-4): H2 memory — third entry, dupilumab "
+        "for severe eosinophilic asthma. Documents non-override of BOTH iter-3 "
+        "chg-1 high_cost_check AND iter-5 chg-3 pediatric_complex_check (the "
+        "GC-012 case is the canonical interaction: severe pediatric asthma is "
+        "clinically eligible AND the pediatric_complex check correctly "
+        "escalates). v2.4 (iter-4 chg-1): RA biologic. v2.3 (iter-3 chg-2): "
+        "NSCLC pembrolizumab. v2.2: Tightened hallucination guard.",
     },
     "MedicalDirectorAgent": {
         "version": "v2.2",

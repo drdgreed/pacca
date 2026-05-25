@@ -27,3 +27,8 @@ class ClinicalCase(BaseModel):
     estimated_annual_cost: float | None = None
     patient_age: int | None = None
     disease_severity: str | None = None  # e.g. "severe", "moderate-to-severe"
+    # iter-5 chg-3: integer 1-5 complexity score for the pediatric_complex
+    # check. Matches the Settings schema (complexity_auto_approve_max=2,
+    # complexity_specialist_review_min=4). Optional — the detector computes
+    # it from notes if not provided.
+    complexity_score: int | None = Field(default=None, ge=1, le=5)

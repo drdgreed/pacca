@@ -198,10 +198,20 @@ class TestRABiologicMemoryInjection:
             in rendered
         )
 
-    def test_decision_support_prompt_version_bumped_to_v24(self) -> None:
-        """v2.4 is the audit signal that the RA entry was active at decision time."""
+    def test_decision_support_prompt_version_is_at_least_v24(self) -> None:
+        """
+        v2.4+ signals the RA entry was active. The iter-4 chg-1 floor;
+        the canonical current version is asserted by the iter-5 chg-4 test
+        (test_decision_support_prompt_version_bumped_to_v25). This guards
+        against accidental downgrade below v2.4.
+        """
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
-        assert "Prompt version: v2.4" in rendered
+        import re
+
+        match = re.search(r"Prompt version: v2\.(\d+)", rendered)
+        assert match is not None
+        minor = int(match.group(1))
+        assert minor >= 4, f"prompt version v2.{minor} predates RA entry (floor: v2.4)"
 
     def test_both_h2_entries_present_in_one_prompt(self) -> None:
         """The DecisionSupportAgent now ships with BOTH H2 entries — neither should hide the other."""
@@ -316,3 +326,101 @@ class TestRABiologicCostInteraction:
         """The memory should teach the agent the right phrasing on cost-fired cases."""
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
         assert "criteria met **but cost escalates per policy**" in rendered
+
+
+# =============================================================================
+# iter-5 chg-4 — Third H2 memory entry: dupilumab for severe eosinophilic asthma.
+#
+# Mirrors the iter-3 NSCLC and iter-4 RA test-class structure. Adds explicit
+# coverage of the entry's documented non-override of the iter-5 chg-3
+# pediatric_complex check (which fires on the canonical GC-012 case).
+# =============================================================================
+
+
+class TestAsthmaDupilumabMemoryInjection:
+    def test_decision_support_prompt_contains_asthma_entry(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Dupilumab for severe eosinophilic asthma" in rendered
+
+    def test_decision_support_prompt_version_bumped_to_v25(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Prompt version: v2.5" in rendered
+
+    def test_all_three_h2_entries_present(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "First-line pembrolizumab for metastatic NSCLC" in rendered
+        assert "First-line biologic DMARD for seropositive RA" in rendered
+        assert "Dupilumab for severe eosinophilic asthma" in rendered
+
+
+class TestAsthmaCriterionPreservation:
+    def test_memory_lists_severe_persistent_criterion(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "severe persistent asthma" in rendered.lower()
+        assert "GINA Step" in rendered or "Step 4 or 5" in rendered
+
+    def test_memory_lists_ics_laba_failure_criterion(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Inadequate control on high-dose ICS / LABA" in rendered
+        assert "≥ 3 months" in rendered
+
+    def test_memory_lists_eosinophilic_phenotype_criterion(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Eosinophilic phenotype" in rendered
+        assert "eosinophil count ≥ 300/µL" in rendered
+        assert "FeNO ≥ 25 ppb" in rendered
+
+    def test_memory_lists_age_12_criterion(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "age ≥ 12 years" in rendered
+
+
+class TestAsthmaAntiPatternsPreserved:
+    def test_anti_pattern_mild_moderate_asthma(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Mild or moderate asthma" in rendered
+
+    def test_anti_pattern_insufficient_trial_duration(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Insufficient ICS/LABA trial duration" in rendered
+
+    def test_anti_pattern_non_eosinophilic_phenotype(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Non-eosinophilic phenotype" in rendered
+
+    def test_anti_pattern_age_below_12(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Patient age < 12" in rendered
+
+    def test_every_asthma_anti_pattern_routes_to_in_review_not_denied(self) -> None:
+        """All H2 entries' anti-patterns must say 'Status: IN_REVIEW. (Not DENIED.)'."""
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        # 3 entries now: NSCLC (5 anti-patterns) + RA (6) + asthma (5) = 16
+        not_denied_count = rendered.count("(Not DENIED.)")
+        assert not_denied_count >= 16, (
+            f"expected at least 16 (Not DENIED.) clarifications across three "
+            f"H2 entries; found {not_denied_count}"
+        )
+
+
+class TestAsthmaPediatricComplexInteraction:
+    """
+    The asthma entry's unique-to-iter-5 documentation: explicit non-override
+    of BOTH the iter-3 chg-1 high_cost_check AND the iter-5 chg-3
+    pediatric_complex check. GC-012 is the canonical interaction case —
+    severe pediatric asthma satisfies the clinical criteria AND the
+    pediatric_complex check correctly escalates.
+    """
+
+    def test_memory_documents_pediatric_complex_check_interaction(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "pediatric_complex_check" in rendered
+        assert "iter-5 chg-3" in rendered
+
+    def test_memory_names_gc012_as_canonical_interaction(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "GC-012" in rendered
+
+    def test_memory_explicitly_says_does_not_override(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "memory does **not** override" in rendered

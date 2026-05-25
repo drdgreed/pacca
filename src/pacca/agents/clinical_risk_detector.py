@@ -267,6 +267,92 @@ def _evidence_blob(case: ClinicalCase) -> str:
 
 
 # =============================================================================
+# iter-5 chg-3: complexity-score model for the pediatric_complex check.
+#
+# Honest framing: this is a HEURISTIC IN SCORE-MODEL CLOTHING, not a data-fit
+# discriminator. PACCA's dataset has 4 pediatric cases (GC-012 from iter-1 +
+# GC-023/GC-024/GC-025 added in iter-5 chg-2). Four data points is enough to
+# defend a per-feature weighting based on clinical rationale, not enough to
+# "train" a model. The defensibility comes from each feature having a
+# clinical reason, the integer 1-5 range matching the existing Settings
+# schema, and the four data points validating the chosen weights against
+# expected outcomes.
+#
+# Weights:
+#   - Age extremes (< 18 or > 75):       +2  (developmental / geriatric concerns)
+#   - Severity tier:
+#       "critical":                       +3
+#       "severe" / "moderate-to-severe":  +2
+#       "moderate":                       +1
+#       "mild" (or absent):               +0
+#   - >= 2 prior therapy failures:       +1  (refractory disease pattern)
+#   - Multiple comorbidities:            +1  (interaction risk)
+#
+# Total clamped to [1, 5] to match the Settings schema constraint.
+# Pediatric escalation threshold = 3 (one below complexity_specialist_review_min=4).
+# =============================================================================
+
+_PRIOR_FAILURE_RE = re.compile(
+    r"prior\s+failure|failed\s+(?:trial|to|of)|inadequate\s+(?:response|control)"
+    r"|intoleran(?:t|ce)|refractory",
+    re.IGNORECASE,
+)
+
+_COMORBIDITY_HINTS: tuple[str, ...] = (
+    "comorbid",
+    "history of",
+    "concurrent",
+    "growth delay",
+    "atopic march",
+    "multiple atopic",
+)
+
+
+def _compute_complexity_score(case: ClinicalCase) -> int:
+    """
+    Compute an integer 1-5 complexity score from case features.
+
+    See module-level comment for the weighting rationale.
+    Score is clamped to [1, 5] to match the Settings schema constraint.
+    """
+    notes_blob = _evidence_blob(case)
+    score = 0
+
+    # Age extremes
+    age = case.patient_age
+    if age is None:
+        age = _parse_age_from_notes(notes_blob)
+    if age is not None and (age < 18 or age > 75):
+        score += 2
+
+    # Severity tier
+    severity = (case.disease_severity or "").lower()
+    if not severity:
+        severity = (_parse_severity_from_notes(notes_blob) or "").lower()
+    if "critical" in severity:
+        score += 3
+    elif (
+        "moderate-to-severe" in severity or "moderate to severe" in severity or "severe" in severity
+    ):
+        score += 2
+    elif "moderate" in severity:
+        score += 1
+    # mild contributes 0; absent contributes 0
+
+    # Prior therapy failures: count 2+ in evidence text
+    failure_matches = _PRIOR_FAILURE_RE.findall(notes_blob)
+    if len(failure_matches) >= 2:
+        score += 1
+
+    # Comorbidities
+    lower_blob = notes_blob.lower()
+    if any(hint in lower_blob for hint in _COMORBIDITY_HINTS):
+        score += 1
+
+    return max(1, min(score, 5))
+
+
+# =============================================================================
 # Escalation flag dataclass
 # =============================================================================
 
@@ -579,16 +665,15 @@ class ClinicalRiskDetector:
             f"applies regardless of clinical eligibility per policy.",
         )
 
-    # ── Branch 2: Pediatric complexity (iter-3 chg-1) ─────────────────────────
+    # ── Branch 2: Pediatric complexity (iter-3 chg-1; iter-5 chg-3 score model) ─
 
     PEDIATRIC_AGE_CUTOFF = 18
-    PEDIATRIC_SEVERITY_KEYWORDS: tuple[str, ...] = (
-        "moderate-to-severe",
-        "moderate to severe",
-        "severe",
-        "critical",
-        "complex",
-    )
+
+    # iter-5 chg-3: pediatric escalation threshold = one below the standard
+    # complexity_specialist_review_min (4). The pediatric age weight (+2) plus
+    # any moderate severity (+1) lands at 3 — the boundary. Severe pediatric
+    # cases land at 4+. Mild pediatric cases stay at 2.
+    PEDIATRIC_COMPLEXITY_THRESHOLD = 3
 
     def _check_pediatric_complex(
         self,
@@ -597,18 +682,17 @@ class ClinicalRiskDetector:
     ) -> None:
         """
         Escalate to Medical Director when the patient is under 18 AND the
-        disease severity is at least "moderate-to-severe" (or "severe" /
-        "complex" / "critical").
+        complexity score reaches the pediatric escalation threshold.
 
-        Data source order, applied independently for age and severity:
-          1. ClinicalCase structured fields (patient_age, disease_severity)
-          2. Parser fallback against the evidence text
+        iter-5 chg-3 replaces the iter-3 keyword heuristic with a numeric
+        complexity score (integer 1-5). Data source order for the score:
+          1. ClinicalCase.complexity_score (structured — preferred)
+          2. Computed from case features via _compute_complexity_score
 
-        Why both conditions: a pediatric patient with mild disease does not
-        require specialist review by policy. The conservative complexity
-        definition here (keyword scan on disease_severity) intentionally
-        omits a numeric complexity score; a real score model is its own
-        iteration, justified when a second pediatric case forces it.
+        Age check still gates the whole path — non-pediatric cases never
+        reach the score evaluation here. A non-pediatric complexity check
+        using the standard complexity_specialist_review_min=4 threshold is
+        a separate iteration when a non-pediatric case justifies it.
         """
         notes_blob = _evidence_blob(case)
 
@@ -618,15 +702,18 @@ class ClinicalRiskDetector:
         if age is None or age >= self.PEDIATRIC_AGE_CUTOFF:
             return
 
-        severity = (case.disease_severity or "").lower()
-        if not severity:
-            severity = (_parse_severity_from_notes(notes_blob) or "").lower()
-        if not any(kw in severity for kw in self.PEDIATRIC_SEVERITY_KEYWORDS):
+        score = (
+            case.complexity_score
+            if case.complexity_score is not None
+            else _compute_complexity_score(case)
+        )
+        if score < self.PEDIATRIC_COMPLEXITY_THRESHOLD:
             return
 
         flags.add(
             EscalationReason.PEDIATRIC_COMPLEX,
-            f"Pediatric patient (age {age}) with {severity} disease — "
-            f"specialist review required per policy regardless of clinical "
-            f"eligibility verification.",
+            f"Pediatric patient (age {age}) with complexity score {score} >= "
+            f"threshold {self.PEDIATRIC_COMPLEXITY_THRESHOLD} — specialist "
+            f"review required per policy regardless of clinical eligibility "
+            f"verification.",
         )

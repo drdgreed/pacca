@@ -110,17 +110,19 @@ def configure_tracing(
             # BatchSpanProcessor buffers spans and exports them in batches —
             # much more efficient than exporting each span individually.
             provider.add_span_processor(BatchSpanProcessor(exporter))
-            # TODO(iter-future): these logger calls use structlog-style kwargs
-            # against stdlib logging.Logger. At runtime the kwargs are silently
-            # dropped (stdlib Logger only consumes extra= / exc_info= /
-            # stack_info=). Fix by switching to structlog or wrapping with
-            # extra={...}. Surfaced by iter-3's py.typed marker.
-            logger.info("otel_exporter_configured", endpoint=endpoint)  # type: ignore[call-arg]
+            # iter-5 chg-3: wrap structured fields in extra={} so stdlib
+            # logging.Logger accepts them (the kwargs end up on the LogRecord
+            # for downstream handlers/formatters). Cleared the iter-3 chg-1
+            # type-ignores. iter-future: when the project standardizes on
+            # structlog, this can become structlog.get_logger(__name__).info(...).
+            logger.info("otel_exporter_configured", extra={"endpoint": endpoint})
         except ImportError:
-            logger.warning(  # type: ignore[call-arg]
+            logger.warning(
                 "otel_otlp_exporter_unavailable",
-                detail="opentelemetry-exporter-otlp-proto-http not installed; "
-                "falling back to console exporter",
+                extra={
+                    "detail": "opentelemetry-exporter-otlp-proto-http not installed; "
+                    "falling back to console exporter"
+                },
             )
             provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
     else:
@@ -130,7 +132,7 @@ def configure_tracing(
         logger.debug("otel_console_exporter_configured")
 
     trace.set_tracer_provider(provider)
-    logger.info("otel_tracing_configured", service_name=service_name)  # type: ignore[call-arg]
+    logger.info("otel_tracing_configured", extra={"service_name": service_name})
 
 
 def get_tracer(name: str) -> trace.Tracer:

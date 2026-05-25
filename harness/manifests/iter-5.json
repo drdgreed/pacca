@@ -1,0 +1,156 @@
+{
+  "iteration": 5,
+  "iteration_tag": "harness-iter-5",
+  "iso_date": "2026-05-25",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-4",
+  "summary": "Cycle's largest iteration by change count (4 chgs). chg-1 wraps tracing.py kwargs in extra={...} clearing iter-3 type-ignores. chg-2 adds 3 pediatric cases. chg-3 replaces the iter-3 keyword heuristic in pediatric_complex with an integer 1-5 complexity-score model (honest framing: heuristic-in-score-model-clothing given 4 data points). chg-4 adds the third H2 memory entry (asthma dupilumab) with documented non-override of BOTH the cost check AND the new pediatric_complex check.",
+  "changes": [
+    {
+      "id": "chg-1",
+      "type": "improvement",
+      "description": "Switch src/pacca/config/tracing.py to extra={...} wrap. Three logger.info / logger.warning calls used structlog-style kwargs against stdlib logging.Logger; iter-3 chg-1 added # type: ignore[call-arg] markers with a TODO to switch to structlog or wrap with extra={...}. iter-5 chose the wrap path (no new dependency; documented stdlib mechanism). All three call sites updated; three type-ignore markers removed.",
+      "files": [
+        "src/pacca/config/tracing.py"
+      ],
+      "failure_pattern": "Tech-debt accumulation pattern: type-ignore markers added under a TODO comment are easy to leave indefinitely. iter-3 chg-1's TODO was the trigger event; iter-5 chg-1 is the cleanup.",
+      "root_cause": "Original tracing.py was written assuming structlog or never tested against stdlib Logger's signature. py.typed (iter-3 chg-1) made mypy walk the import graph and surface the type errors.",
+      "evidence": [
+        {
+          "source": "src/pacca/config/tracing.py",
+          "note": "All three logger calls now use extra={...}: extra={'endpoint': ...}, extra={'detail': ...}, extra={'service_name': ...}. Type-ignores removed."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "instrumentation",
+      "why_this_component": "Observability scaffolding only; no agent surface modified. Same level as iter-2 chg-5 (model SSOT).",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. Restoring the structlog-style kwargs returns to the silent-drop runtime behavior + the type-ignore-suppressed mypy errors."
+    },
+    {
+      "id": "chg-2",
+      "type": "new",
+      "description": "Add 3 pediatric cases (GC-023 mild well-controlled, GC-024 moderate Crohn's + failures, GC-025 severe AD different condition) as PEDIATRIC_CASES in tests/clinical/pediatric_cases.py. Together with GC-012, gives the chg-3 complexity-score model 4 pediatric data points across the discriminator's input space. Wired into the live clinical gate loop.",
+      "files": [
+        "tests/clinical/pediatric_cases.py",
+        "tests/clinical/test_clinical_accuracy.py",
+        ".pre-commit-config.yaml"
+      ],
+      "failure_pattern": "Pre-iter-5, the entire 22-case dataset had exactly ONE pediatric case (GC-012). One data point cannot found a discriminator; any score model fit would just be the keyword heuristic with extra steps. Closes the data-coverage gap that iter-4's chg-3 deferral note identified.",
+      "root_cause": "Iter-1 ships a single pediatric case for branch coverage. iter-2 chg-3 added near-miss memory traps but no pediatric expansion. iter-3 chg-1 introduced the pediatric_complex check using a keyword heuristic — defensible with 1 case, insufficient for a score-based discriminator.",
+      "evidence": [
+        {
+          "source": "tests/clinical/pediatric_cases.py",
+          "note": "3 new GoldenCase instances in a separate PEDIATRIC_CASES list mirroring the iter-2 NEAR_MISS_CASES file pattern. GOLDEN_CASES stays at 20."
+        },
+        {
+          "source": ".pre-commit-config.yaml",
+          "note": "Added pytest>=8.0.0 + pytest-asyncio>=0.23.0 to mypy hook additional_dependencies after the modified test_clinical_accuracy.py surfaced untyped @pytest.mark.asyncio decorator errors in the hook env."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "evaluation_harness",
+      "why_this_component": "Data-only addition + test wiring; no agent surface. Same level as iter-2 chg-3 near-miss cases.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. Removing pediatric_cases.py + reverting the gate loop wiring restores the pre-iter-5 22-case live gate."
+    },
+    {
+      "id": "chg-3",
+      "type": "improvement",
+      "description": "Replace iter-3 keyword heuristic in _check_pediatric_complex with integer 1-5 complexity-score model. Matches the Settings schema. Weighted sum (age extremes +2, severity tier +0 to +3, 2+ failures +1, comorbidities +1; clamped 1-5). Pediatric threshold = 3. Honest framing: heuristic in score-model clothing given 4 data points — defensibility is per-feature rationale + integer schema, not data fit. All 4 pediatric cases route correctly live.",
+      "files": [
+        "src/pacca/models/clinical.py",
+        "src/pacca/models/authorization.py",
+        "src/pacca/agents/clinical_risk_detector.py",
+        "src/pacca/agents/base.py",
+        "tests/unit/test_complexity_score_model.py",
+        "tests/clinical/investigate_case.py"
+      ],
+      "failure_pattern": "iter-3 chg-1's keyword heuristic was defensible at 1 pediatric data point but couldn't justify itself once the dataset expanded. The chg-2 expansion forced the model decision.",
+      "root_cause": "Real-world pediatric escalation decisions weight multiple factors (age, severity, prior failures, comorbidities). The chg-1 keyword heuristic collapsed all of them into 'severity language matches'. With 4 data points the limits show: GC-024 needs to escalate despite 'moderate' severity language, GC-023 must NOT escalate despite being pediatric.",
+      "evidence": [
+        {
+          "source": "tests/unit/test_complexity_score_model.py",
+          "note": "23 tests: each weight independently, boundary/clamp behavior, structured vs parser fallback paths, real data points (GC-012 score 4, GC-023 score 2, GC-024 score 4, GC-025 score 5)."
+        },
+        {
+          "source": "live verification at chg-3 HEAD",
+          "note": "GC-012 IN_REVIEW score 4 (preserved); GC-023 AUTO_APPROVED score 5 (judge: 'correctly avoids inappropriate escalation despite pediatric age'); GC-024 IN_REVIEW score 4; GC-025 IN_REVIEW score 5. All 4 pediatric data points correctly routed."
+        },
+        {
+          "source": "Tangential type fixes",
+          "note": "Surfaced by deeper import-chain mypy traversal: __all__ added to authorization.py; base.py _call_with_retry got -> Any return type and Mapping[str, object] tool_def; tenacity @retry got # type: ignore[misc,unused-ignore]; Anthropic create() call got # type: ignore[call-overload,unused-ignore]; bool() cast on APIStatusError check."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": ["GC-012", "GC-023", "GC-024", "GC-025"],
+      "constraint_level": "escalation_branch",
+      "why_this_component": "Same constraint level as iter-3 chg-1 (pediatric_complex check). The change is an improvement to the policy-enforcement logic, not a new branch.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert <sha>. Reverting restores the iter-3 keyword heuristic. ClinicalCase.complexity_score field stays optional (no migration needed). The chg-2 pediatric cases continue to validate against whatever heuristic is current."
+    },
+    {
+      "id": "chg-4",
+      "type": "new",
+      "description": "Third H2 memory entry: dupilumab for severe eosinophilic asthma. Follows the iter-3 chg-2 forward design notes (explicit Status: IN_REVIEW per anti-pattern; risk-case enumeration). Documents non-override of BOTH iter-3 chg-1 high_cost_check AND iter-5 chg-3 pediatric_complex check (GC-012 is the canonical interaction case). PROMPT_REGISTRY DecisionSupportAgent v2.4 -> v2.5.",
+      "files": [
+        "src/pacca/agents/decision_support/long_term_memory.md",
+        "src/pacca/agents/prompts/templates.py",
+        "tests/unit/test_h2_memory_criterion_preservation.py"
+      ],
+      "failure_pattern": "Phase H2 expansion risk: a third memory entry could (a) over-fire on mild pediatric asthma cases by recognizing the indication shape and skipping severity verification, or (b) override the pediatric_complex check on GC-012-style cases. Both classes are guarded against by the entry's structure (explicit severity requirements, explicit non-override documentation) and verified live.",
+      "root_cause": "Phase H2 is iterative by design; each new entry must respect contracts established by prior entries + by ClinicalRiskDetector's pre-flight checks. Adding entries proves the methodology generalizes across disease/biologic families.",
+      "evidence": [
+        {
+          "source": "src/pacca/agents/decision_support/long_term_memory.md",
+          "note": "Third entry: 5 required criteria (severe persistent asthma + named GINA step, high-dose ICS/LABA with adequate trial, eosinophilic phenotype with eos+FeNO thresholds, age >= 12, no contraindication), 5 anti-patterns each with Status: IN_REVIEW (Not DENIED), explicit dual-policy-check non-override paragraph naming GC-012."
+        },
+        {
+          "source": "tests/unit/test_h2_memory_criterion_preservation.py",
+          "note": "4 new test classes for the asthma entry: injection / criterion preservation / anti-patterns / pediatric_complex interaction. Aggregate H2 tests: 51."
+        },
+        {
+          "source": "live verification at chg-4 HEAD",
+          "note": "GC-012 IN_REVIEW via pediatric_complex (memory did NOT override the policy check) score 4. GC-023 AUTO_APPROVED (memory did NOT over-fire on mild) score 5; judge: 'correctly avoiding the anti-pattern of escalating based solely on age'."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": ["GC-012", "GC-023"],
+      "constraint_level": "long_term_memory",
+      "why_this_component": "Third H2 entry; same constraint level as iter-3 chg-2 (NSCLC) and iter-4 chg-1 (RA). Asthma chosen as the next-most-defensible target because GC-012 provides a canonical case where multiple pre-flight checks interact with the memory, giving the cleanest test yet of the 'memory as support, not replacement' contract.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert <sha>. Removing the third entry from long_term_memory.md shrinks the rendered memory section; PROMPT_REGISTRY version reverts to v2.4."
+    }
+  ],
+  "verdicts": [
+    {
+      "change_id": "chg-1",
+      "previous_iteration_tag": "harness-iter-4",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": ["GC-010", "GC-005", "GC-017", "GC-016"],
+      "unforeseen_regressions": [],
+      "notes": "iter-4 chg-1 (RA biologic H2 memory entry) had four named risk cases. All four preserved at iter-5 HEAD with the third H2 entry now active alongside: GC-010 IN_REVIEW via cost, GC-005 IN_REVIEW psoriasis, GC-017 IN_REVIEW PsA, GC-016 AUTO_APPROVED Crohn's. The criterion-preservation tests for all 3 entries pass — adding the asthma entry did not displace the RA entry's criteria or anti-patterns. Confirmed keep."
+    },
+    {
+      "change_id": "chg-2",
+      "previous_iteration_tag": "harness-iter-4",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-4 chg-2 (decision_agent.py deletion) had no risk cases and no predictions. Full suite remains green at iter-5 HEAD; the file remains deleted with no importers. Confirmed keep."
+    }
+  ]
+}

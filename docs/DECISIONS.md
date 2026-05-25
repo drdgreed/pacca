@@ -12,12 +12,99 @@
 
 ## Index
 
+- [iter-5 — Pediatric data + complexity-score model + third H2 entry + structlog cleanup (4 changes)](#iter-5-broad)
 - [iter-4 — Second H2 memory entry + decision_agent.py deletion (2 changes)](#iter-4-h2-second-entry)
 - [iter-3 — H2 Institutional Memory + Escalation-Branch Completion (3 changes)](#iter-3-h2-and-escalation)
 - [iter-2 — Eval-Net Hardening, 6 changes (chg-1 through chg-6)](#iter-2-eval-net-hardening)
 - [Correction (2026-05-22) — iter-0 trajectory instrumentation record](#correction-iter0-trajectory)
 - [iter-1 — chg-1: Decision Support and Medical Director prompt extraction (Phase H1)](#chg-1-iter-1)
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-5-broad"></a>
+## iter-5 — Pediatric data + complexity-score model + third H2 entry + structlog cleanup (4 changes)
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-5` |
+| Date | 2026-05-25 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `instrumentation` (chg-1), `evaluation_harness` (chg-2), `escalation_branch` (chg-3), `long_term_memory` (chg-4) |
+| Behavioral surface modified | YES (chg-3 + chg-4) |
+| Changes | 4 (largest in cycle by count) |
+| Live clinical gate at iter-5 HEAD | aggregate to be captured at iteration close; risk cases verified per-chg |
+| Predicted fixes verified live | — (no behavioral predictions; risk-case preservation only) |
+| Risk cases preserved | GC-012 (IN_REVIEW via pediatric_complex score=4); GC-023 (AUTO_APPROVED score=5); GC-024 (IN_REVIEW score=4); GC-025 (IN_REVIEW score=5) — chg-3 + chg-4 |
+| Manifest | [`harness/manifests/iter-5.json`](../harness/manifests/iter-5.json) |
+| Narrative | [`docs/ITERATIONS.md` iter-5 section](./ITERATIONS.md#iter-5-broad) |
+
+### chg-1 — Switch tracing.py to extra={...} kwargs
+
+| Field | Value |
+|---|---|
+| Type | `improvement` |
+| Constraint level | `instrumentation` |
+| Files | `src/pacca/config/tracing.py` |
+| Predicted fixes | — | Risk cases | — |
+
+Closes the iter-3 chg-1 TODO comment. Three logger.info / logger.warning calls used structlog-style keyword arguments against stdlib `logging.Logger`; iter-3 added `# type: ignore[call-arg]` markers with a TODO to switch to structlog or wrap with `extra={...}`. iter-5 chose the wrap path (no new dependency; documented stdlib mechanism via `extra=` dict on the LogRecord). All three call sites updated; three type-ignore markers removed; full suite unchanged.
+
+### chg-2 — Add 3 pediatric cases (PEDIATRIC_CASES)
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `evaluation_harness` |
+| Files | `tests/clinical/pediatric_cases.py` (new), `tests/clinical/test_clinical_accuracy.py`, `.pre-commit-config.yaml` |
+| Predicted fixes | — | Risk cases | — |
+
+Closes the pediatric-coverage gap from iter-4. GC-023 (10yo mild well-controlled asthma → AUTO_APPROVED), GC-024 (16yo moderate Crohn's with immunomodulator failure + growth-delay comorbidity → IN_REVIEW), GC-025 (9yo severe atopic dermatitis with multiple failures → IN_REVIEW). Together with GC-012, 4 pediatric data points spanning the chg-3 discriminator's input space. Mirrors NEAR_MISS_CASES file pattern; wired into the live gate loop. `.pre-commit-config.yaml` gains pytest + pytest-asyncio mypy deps after the modified `test_clinical_accuracy.py` surfaced untyped decorator errors in the hook env.
+
+### chg-3 — Complexity-score model in pediatric_complex check
+
+| Field | Value |
+|---|---|
+| Type | `improvement` |
+| Constraint level | `escalation_branch` |
+| Files | `src/pacca/models/clinical.py`, `src/pacca/models/authorization.py`, `src/pacca/agents/clinical_risk_detector.py`, `src/pacca/agents/base.py`, `tests/unit/test_complexity_score_model.py` (new), `tests/clinical/investigate_case.py` |
+| Predicted fixes | — |
+| Risk cases | `["GC-012", "GC-023", "GC-024", "GC-025"]` |
+| Verified live | All 4: GC-012 score 4 IN_REVIEW ✓; GC-023 score 5 AUTO_APPROVED ✓ (judge: "correctly avoids inappropriate escalation despite pediatric age"); GC-024 score 4 IN_REVIEW ✓; GC-025 score 5 IN_REVIEW ✓ |
+
+Replaces the iter-3 chg-1 keyword heuristic in `_check_pediatric_complex` with a numeric integer 1-5 complexity-score. Weighted-sum: age extremes (+2), severity tier (+0 to +3), 2+ prior failures (+1), comorbidities (+1), clamped to [1, 5]. Pediatric escalation threshold = 3.
+
+**Honest framing**: this is a heuristic-in-score-model-clothing given only 4 pediatric data points. The defensibility comes from per-feature clinical rationale + matching the existing Settings 1-5 schema + the 4 data points validating chosen weights against expected outcomes — NOT from data fitting. Overstating empirical grounding would be easy; the qualifier matters.
+
+23 new unit tests in `test_complexity_score_model.py` cover each weight independently, boundary/clamp behavior, structured-field vs parser-fallback paths, and the 4 real pediatric data points. Tangential type-fix work absorbed in this commit: `__all__` added to `authorization.py`; base.py `_call_with_retry` got `-> Any` + `Mapping[str, object]`; tenacity `@retry` + Anthropic `create()` got `# type: ignore[…,unused-ignore]` markers; `APIStatusError` check got a `bool()` cast.
+
+### chg-4 — H2 memory third entry (dupilumab for severe eosinophilic asthma)
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `long_term_memory` |
+| Files | `src/pacca/agents/decision_support/long_term_memory.md`, `src/pacca/agents/prompts/templates.py` (v2.4 → v2.5), `tests/unit/test_h2_memory_criterion_preservation.py` |
+| Predicted fixes | — |
+| Risk cases | `["GC-012", "GC-023"]` |
+| Verified live | GC-012 IN_REVIEW via pediatric_complex (memory did NOT override the policy check) score 4 ✓; GC-023 AUTO_APPROVED (memory did NOT over-fire on mild) score 5 ✓ |
+
+Third H2 entry following the iter-3 chg-2 / iter-4 chg-1 format: 5 required criteria, 5 anti-patterns each ending `**Status: IN_REVIEW.** (Not DENIED.)`, when-applies / when-not-applies. PROMPT_REGISTRY DecisionSupportAgent v2.4 → v2.5.
+
+The unique-to-iter-5 design element: the entry documents non-override of **both** pre-flight policy checks — iter-3 chg-1's `high_cost_check` AND iter-5 chg-3's `pediatric_complex` check. GC-012 is the canonical interaction case (severe pediatric eosinophilic asthma satisfies the memory's clinical criteria AND the pediatric_complex check correctly escalates). Memory teaches the agent to articulate "clinical criteria met **but policy escalation applies**" on cases where pre-flight has fired.
+
+19 new tests in `test_h2_memory_criterion_preservation.py` covering injection, each required criterion + anti-pattern, the pediatric_complex interaction documentation. Aggregate H2 tests: 51 (across 3 entries).
+
+### Iteration-level verdict and verdict on iter-4's 2 chgs
+
+iter-5 closed at HEAD (final commit on `harness/iter-5` before merge). All gates green: 5 manifests validate; doc-drift guard PASSED; pytest 246 passed in ~7s.
+
+**Both iter-4 changes verdict = `keep`** (recorded in [`harness/manifests/iter-5.json`](../harness/manifests/iter-5.json) `verdicts[]`):
+- iter-4 chg-1 (RA biologic H2 entry): all 4 risk cases preserved at iter-5 HEAD with the third H2 entry now active alongside — the criterion-preservation tests for all 3 entries pass.
+- iter-4 chg-2 (decision_agent.py deletion): file remains deleted with zero importers; full suite remains green.
+
+iter-5's own chgs have no behavioral predicted_fixes. Risk-case preservation on chg-3 (4 pediatric cases) and chg-4 (GC-012 + GC-023) verified live. Verdicts on iter-5 chg-3 / chg-4 will land in iter-6.json's `verdicts` array.
 
 ---
 

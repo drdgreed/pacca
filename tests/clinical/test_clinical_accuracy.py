@@ -58,6 +58,7 @@ from tests.clinical.golden_cases import (
     get_hallucination_trap_cases,
 )
 from tests.clinical.near_miss_cases import NEAR_MISS_CASES
+from tests.clinical.pediatric_cases import PEDIATRIC_CASES
 
 # =============================================================================
 # Dataset integrity tests — fast, no API calls
@@ -74,21 +75,21 @@ class TestGoldenDatasetIntegrity:
     evaluation results meaningless.
     """
 
-    def test_dataset_has_twenty_cases(self):
+    def test_dataset_has_twenty_cases(self) -> None:
         """The golden dataset must have exactly 20 cases."""
         assert len(GOLDEN_CASES) == 20, (
             f"Expected 20 golden cases, found {len(GOLDEN_CASES)}. "
             "The dataset size is part of the Week 4 specification."
         )
 
-    def test_all_case_ids_are_unique(self):
+    def test_all_case_ids_are_unique(self) -> None:
         """No two cases may share a case_id."""
         ids = [c.case_id for c in GOLDEN_CASES]
-        assert len(ids) == len(set(ids)), (
-            f"Duplicate case IDs found: {[x for x in ids if ids.count(x) > 1]}"
-        )
+        assert len(ids) == len(
+            set(ids)
+        ), f"Duplicate case IDs found: {[x for x in ids if ids.count(x) > 1]}"
 
-    def test_all_cases_have_required_fields(self):
+    def test_all_cases_have_required_fields(self) -> None:
         """Every case must have non-empty required text fields."""
         for case in GOLDEN_CASES:
             assert case.title, f"{case.case_id}: title is empty"
@@ -99,14 +100,14 @@ class TestGoldenDatasetIntegrity:
             assert case.clinical_rationale, f"{case.case_id}: clinical_rationale is empty"
             assert case.judge_scoring_criteria, f"{case.case_id}: judge_scoring_criteria is empty"
 
-    def test_all_cases_have_expected_outcome(self):
+    def test_all_cases_have_expected_outcome(self) -> None:
         """Every case must specify an expected outcome."""
         for case in GOLDEN_CASES:
-            assert isinstance(case.expected_outcome, ExpectedOutcome), (
-                f"{case.case_id}: expected_outcome must be an ExpectedOutcome enum"
-            )
+            assert isinstance(
+                case.expected_outcome, ExpectedOutcome
+            ), f"{case.case_id}: expected_outcome must be an ExpectedOutcome enum"
 
-    def test_all_cases_have_reasoning_must_include(self):
+    def test_all_cases_have_reasoning_must_include(self) -> None:
         """
         Every case must specify at least one keyword the rationale must include.
         Cases without reasoning requirements cannot detect shallow reasoning.
@@ -117,7 +118,7 @@ class TestGoldenDatasetIntegrity:
                 "Every case must specify at least one required reasoning keyword."
             )
 
-    def test_escalation_branch_coverage(self):
+    def test_escalation_branch_coverage(self) -> None:
         """
         The dataset must cover all 7 escalation branches.
         Missing a branch means we have no evaluation coverage for it.
@@ -140,7 +141,7 @@ class TestGoldenDatasetIntegrity:
             f"Every escalation branch must have at least one test case."
         )
 
-    def test_outcome_distribution_is_balanced(self):
+    def test_outcome_distribution_is_balanced(self) -> None:
         """
         The dataset should not be dominated by one outcome type.
         A dataset that's 90% AUTO_APPROVED doesn't test denial or escalation.
@@ -157,7 +158,7 @@ class TestGoldenDatasetIntegrity:
                 f"Dataset is unbalanced — no single outcome should exceed 60%."
             )
 
-    def test_hallucination_trap_cases_exist(self):
+    def test_hallucination_trap_cases_exist(self) -> None:
         """
         The dataset must include cases specifically designed to catch hallucination.
         These are the most important safety tests in the suite.
@@ -168,7 +169,7 @@ class TestGoldenDatasetIntegrity:
             "At least 2 cases should be designed to catch hallucination."
         )
 
-    def test_prior_denial_cases_have_prior_denial_codes(self):
+    def test_prior_denial_cases_have_prior_denial_codes(self) -> None:
         """
         Cases expecting Branch 7 (prior denial) must have prior_denial_codes set.
         Without this, the pre-flight check cannot fire.
@@ -180,7 +181,7 @@ class TestGoldenDatasetIntegrity:
                 "The pre-flight check requires prior denial codes to match against."
             )
 
-    def test_pre_flight_cases_use_correct_codes(self):
+    def test_pre_flight_cases_use_correct_codes(self) -> None:
         """
         Cases expecting Branch 4 (experimental) should use codes from
         EXPERIMENTAL_PROCEDURE_CODES or have experimental keywords in notes.
@@ -213,7 +214,7 @@ class TestPreFlightOnGoldenCases:
     pre-flight cases. These use no LLM calls.
     """
 
-    def test_experimental_cases_trigger_pre_flight(self):
+    def test_experimental_cases_trigger_pre_flight(self) -> None:
         """Branch 4 golden cases must trigger pre-flight escalation."""
         from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
         from pacca.models.clinical import ClinicalCase, EvidenceItem
@@ -246,11 +247,11 @@ class TestPreFlightOnGoldenCases:
                 f"Branch 4 (experimental treatment), but no flags triggered. "
                 f"Procedure code: {golden.procedure_code}"
             )
-            assert EscalationReason.EXPERIMENTAL_TREATMENT in flags.reasons, (
-                f"{golden.case_id}: Expected EXPERIMENTAL_TREATMENT reason."
-            )
+            assert (
+                EscalationReason.EXPERIMENTAL_TREATMENT in flags.reasons
+            ), f"{golden.case_id}: Expected EXPERIMENTAL_TREATMENT reason."
 
-    def test_rare_condition_cases_trigger_pre_flight(self):
+    def test_rare_condition_cases_trigger_pre_flight(self) -> None:
         """Branch 5 golden cases must trigger pre-flight escalation."""
         from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
         from pacca.models.clinical import ClinicalCase
@@ -273,7 +274,7 @@ class TestPreFlightOnGoldenCases:
             )
             assert EscalationReason.RARE_CONDITION in flags.reasons
 
-    def test_prior_denial_cases_trigger_pre_flight(self):
+    def test_prior_denial_cases_trigger_pre_flight(self) -> None:
         """Branch 7 golden cases must trigger pre-flight escalation."""
         from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
         from pacca.models.clinical import ClinicalCase
@@ -300,7 +301,7 @@ class TestPreFlightOnGoldenCases:
             )
             assert EscalationReason.PRIOR_DENIAL_SAME_SERVICE in flags.reasons
 
-    def test_conflicting_guidelines_cases_trigger_pre_flight(self):
+    def test_conflicting_guidelines_cases_trigger_pre_flight(self) -> None:
         """Branch 6 golden cases must trigger pre-flight escalation."""
         from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
         from pacca.models.clinical import ClinicalCase
@@ -320,9 +321,9 @@ class TestPreFlightOnGoldenCases:
                 clinical_case,
                 guidelines_context=golden.guidelines_context,
             )
-            assert flags.should_pre_escalate, (
-                f"{golden.case_id}: Expected conflicting guidelines pre-flight."
-            )
+            assert (
+                flags.should_pre_escalate
+            ), f"{golden.case_id}: Expected conflicting guidelines pre-flight."
             assert EscalationReason.CONFLICTING_GUIDELINES in flags.reasons
 
 
@@ -363,10 +364,10 @@ class TestEvaluatorLogic:
         return mock_response
 
     @pytest.mark.asyncio
-    async def test_evaluate_case_returns_verdict(self):
+    async def test_evaluate_case_returns_verdict(self) -> None:
         """evaluate_case() must return a JudgeVerdict for any valid case."""
         evaluator = self.make_mock_evaluator()
-        evaluator.client.messages.create = AsyncMock(
+        evaluator.client.messages.create = AsyncMock(  # type: ignore[method-assign,unused-ignore]
             return_value=self.mock_judge_response(score=4, correct=True, hallucination=False)
         )
 
@@ -385,10 +386,10 @@ class TestEvaluatorLogic:
         assert verdict.correct_outcome is True
 
     @pytest.mark.asyncio
-    async def test_score_below_threshold_marks_failed(self):
+    async def test_score_below_threshold_marks_failed(self) -> None:
         """A score of 2 must mark the verdict as failed."""
         evaluator = self.make_mock_evaluator()
-        evaluator.client.messages.create = AsyncMock(
+        evaluator.client.messages.create = AsyncMock(  # type: ignore[method-assign,unused-ignore]
             return_value=self.mock_judge_response(score=2, correct=False, hallucination=True)
         )
 
@@ -403,7 +404,7 @@ class TestEvaluatorLogic:
         assert verdict.hallucination_detected is True
 
     @pytest.mark.asyncio
-    async def test_json_parse_failure_returns_score_1(self):
+    async def test_json_parse_failure_returns_score_1(self) -> None:
         """
         If the judge returns non-JSON, the evaluator must return a score of 1
         rather than raising an exception. Evaluation errors must not crash CI.
@@ -413,7 +414,7 @@ class TestEvaluatorLogic:
         mock_content.text = "I cannot evaluate this case."
         mock_response = MagicMock()
         mock_response.content = [mock_content]
-        evaluator.client.messages.create = AsyncMock(return_value=mock_response)
+        evaluator.client.messages.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign,unused-ignore]
 
         verdict = await evaluator.evaluate_case(
             case=GOLDEN_CASES[0],
@@ -425,7 +426,7 @@ class TestEvaluatorLogic:
         assert verdict.score == 1
         assert verdict.passed is False
 
-    def test_compile_report_calculates_accuracy(self):
+    def test_compile_report_calculates_accuracy(self) -> None:
         """compile_report() must correctly calculate accuracy from verdicts."""
         evaluator = self.make_mock_evaluator()
 
@@ -446,7 +447,7 @@ class TestEvaluatorLogic:
         assert "GC-004" in report.failed_cases
         assert "GC-005" in report.failed_cases
 
-    def test_compile_report_ci_gate_passes_at_threshold(self):
+    def test_compile_report_ci_gate_passes_at_threshold(self) -> None:
         """Report must pass CI gate when accuracy == MINIMUM_ACCEPTABLE_ACCURACY."""
         evaluator = self.make_mock_evaluator()
         n = 10
@@ -463,7 +464,7 @@ class TestEvaluatorLogic:
         report = evaluator.compile_report(verdicts)
         assert report.passed_ci_gate is True
 
-    def test_compile_report_ci_gate_fails_below_threshold(self):
+    def test_compile_report_ci_gate_fails_below_threshold(self) -> None:
         """Report must fail CI gate when accuracy < MINIMUM_ACCEPTABLE_ACCURACY."""
         evaluator = self.make_mock_evaluator()
         verdicts = [
@@ -498,7 +499,7 @@ class TestFullClinicalEvaluation:
     """
 
     @pytest.mark.asyncio
-    async def test_dataset_summary_is_logged(self):
+    async def test_dataset_summary_is_logged(self) -> None:
         """
         Log the dataset summary at the start of clinical evaluation.
         This provides context in CI logs for understanding test coverage.
@@ -508,7 +509,7 @@ class TestFullClinicalEvaluation:
         assert summary["total_cases"] == 20
 
     @pytest.mark.asyncio
-    async def test_full_pipeline_meets_accuracy_threshold(self):
+    async def test_full_pipeline_meets_accuracy_threshold(self) -> None:
         """
         THE CI GATE: Run all 20 golden cases through the full PACCA pipeline
         and verify the system meets the MINIMUM_ACCEPTABLE_ACCURACY threshold.
@@ -536,10 +537,11 @@ class TestFullClinicalEvaluation:
         evaluator = ClinicalEvaluator()
         verdicts: list[JudgeVerdict] = []
 
-        # GOLDEN_CASES (20) + NEAR_MISS_CASES (iter-2 chg-3 memory-trap siblings).
-        # The near-miss cases run through the same judge but are kept as a
-        # separate list — the `len == 20` integrity assertion above still holds.
-        for golden in GOLDEN_CASES + NEAR_MISS_CASES:
+        # GOLDEN_CASES (20) + NEAR_MISS_CASES (iter-2 chg-3 memory-trap siblings)
+        # + PEDIATRIC_CASES (iter-5 chg-2 — complexity-score model validation set).
+        # Both supplementary lists run through the same judge but are kept
+        # separate — the `len == 20` integrity assertion above still holds.
+        for golden in GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES:
             clinical_case = ClinicalCase(
                 patient_id=f"P-EVAL-{golden.case_id}",
                 primary_diagnosis_code=golden.diagnosis_code,
@@ -633,7 +635,7 @@ class TestFullClinicalEvaluation:
         )
 
     @pytest.mark.asyncio
-    async def test_zero_hallucinations_on_sparse_cases(self):
+    async def test_zero_hallucinations_on_sparse_cases(self) -> None:
         """
         Hallucination trap cases must produce zero hallucinations.
 
