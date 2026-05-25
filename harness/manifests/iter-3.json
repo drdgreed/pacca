@@ -1,0 +1,192 @@
+{
+  "iteration": 3,
+  "iteration_tag": "harness-iter-3",
+  "iso_date": "2026-05-24",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-2",
+  "summary": "First behavioral-change iteration of the cycle. Three changes: complete the SEV-2 escalation branches iter-2 chg-6 surfaced (GC-010 cost, GC-012 pediatric), ship Phase H2 institutional memory with one entry (NSCLC pembrolizumab), close the LLM-as-judge variance class with noise_threshold + k=N rollouts. Predicted fixes: GC-010, GC-012. Both verified live (1->5, 2->4). Risk cases GC-001, GC-021, GC-022 preserved.",
+  "changes": [
+    {
+      "id": "chg-1",
+      "type": "new",
+      "description": "Wire HIGH_COST + PEDIATRIC_COMPLEX into ClinicalRiskDetector. Both enum values existed since before iter-1; check methods were missing. Hybrid data path: optional structured fields on ClinicalCase (cost, age, severity) are primary; clinical_notes regex is fallback. Cost parser uses MAX of all dollar amounts. Adds src/pacca/py.typed (PEP 561) so mypy treats pacca annotations as authoritative for downstream importers.",
+      "files": [
+        "src/pacca/models/clinical.py",
+        "src/pacca/agents/clinical_risk_detector.py",
+        "src/pacca/py.typed",
+        "src/pacca/config/tracing.py",
+        "tests/unit/test_escalation_high_cost_and_pediatric.py",
+        "tests/clinical/baselines/iter-3-chg1-baseline.json",
+        ".pre-commit-config.yaml",
+        "harness/manifests/change_manifest.schema.json"
+      ],
+      "failure_pattern": "Two SEV-2 cases auto-approve when they should escalate to branch_2_medical_director: GC-010 (high-cost biologic, $288K annual exceeds $100K HIGH_COST_THRESHOLD) and GC-012 (pediatric severe asthma, age 14 with complex condition). Both surfaced as persistent failures in the iter-2 chg-6 baseline diagnostic work.",
+      "root_cause": "branch_2_medical_director triggers exist in spec (HARNESS.md surface table) and in the Settings schema (HIGH_COST_THRESHOLD, COMPLEXITY_AUTO_APPROVE_MAX) and even in the EscalationReason enum, but no code implements the checks. The Decision agent's prompt has no awareness of either policy rule. Half-built feature predating the v2.3 cycle.",
+      "evidence": [
+        {
+          "source": "docs/findings/GC-010.md",
+          "note": "Full pre-iter-3 diagnostic write-up: agent reasoning is exemplary on ACR criteria; cost trigger is never consulted because no code reads HIGH_COST_THRESHOLD on the decision path."
+        },
+        {
+          "source": "docs/findings/GC-012.md",
+          "note": "Same class of failure as GC-010. Confirms a systematic gap in branch_2 triggers, not an isolated bug."
+        },
+        {
+          "source": "tests/unit/test_escalation_high_cost_and_pediatric.py",
+          "note": "26 new tests cover parser primitives, structured-field path, parser-fallback path, and negative cases (adult-severe, pediatric-mild, exact 18yo cutoff)."
+        },
+        {
+          "source": "tests/clinical/baselines/iter-3-chg1-baseline.json",
+          "note": "Live baseline at chg-1 HEAD: GC-010 1->5 (+4), GC-012 2->4 (+2). GC-001 unchanged at 5 (no false positives from parsers). GC-005 and GC-017 showed judge jitter; investigated and confirmed not chg-1 fallout."
+        }
+      ],
+      "predicted_fixes": ["GC-010", "GC-012"],
+      "risk_cases": [],
+      "constraint_level": "escalation_branch",
+      "why_this_component": "PRD SS5.4's branch_2_medical_director path. Cost and pediatric-complexity escalations are POLICY rules, not clinical ones — they must fire regardless of agent confidence. Pre-flight detector is the right tier because (a) it bypasses LLM inference entirely (deterministic), (b) the existing 4 pre-flight checks are the natural neighbors, and (c) putting policy enforcement in the agent prompt creates exactly the silent-failure mode iter-2 surfaced.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. Reverting restores the half-built state. The ClinicalCase optional fields default to None so existing test code is unaffected; deleting them as part of a revert is safe."
+    },
+    {
+      "id": "chg-2",
+      "type": "new",
+      "description": "Phase H2 institutional memory — first entry (NSCLC pembrolizumab). Memory encodes FULL criteria set with explicit anti-patterns routing to IN_REVIEW. _prompt_loader extended with {% if long_term_memory %} guard; agents without the file render byte-identical prompts. Mid-iteration debug: GC-021 first-pass regressed to DENIED; fixed by adding explicit '(Not DENIED.)' clarifications to anti-patterns. Methodology finding recorded in docs/findings/H2-memory-iteration-1.md.",
+      "files": [
+        "src/pacca/agents/decision_support/long_term_memory.md",
+        "src/pacca/agents/_prompt_loader.py",
+        "src/pacca/agents/decision_support/system_prompt.md",
+        "src/pacca/agents/prompts/templates.py",
+        "tests/unit/test_h2_memory_criterion_preservation.py"
+      ],
+      "failure_pattern": "Phase H2 risk pattern (per iter-2 findings GC-001.md design constraints): a memory entry that compresses 'NSCLC + pembrolizumab -> approve' to skip verification steps would (a) fail to cite all required criteria on the canonical case, (b) over-fire on near-miss cases that share the headline but differ on a single disqualifier. Memory must encode FULL criteria sets, not just headlines.",
+      "root_cause": "iter-2 was no agent-surface change; chg-2 is the cycle's first behavioral-change iteration at a constraint level that doesn't exist in the agent code yet (long_term_memory). The H2 design contract from docs/findings/GC-001.md mandates 'memory as support, not replacement' — each shortcut must enumerate the criteria the agent must still verify.",
+      "evidence": [
+        {
+          "source": "src/pacca/agents/decision_support/long_term_memory.md",
+          "note": "Single entry following the iter-3 chg-2 memory format: headline indication + 6 required criteria + 5 anti-patterns + when-applies / when-not-applies. Anti-patterns each say 'Status: IN_REVIEW. (Not DENIED.)' after the mid-iteration GC-021 regression showed simpler wording let the agent over-apply."
+        },
+        {
+          "source": "tests/unit/test_h2_memory_criterion_preservation.py",
+          "note": "19 structural tests on the rendered prompt — the H2 analog of iter-1's byte-identity check. If a future memory edit drops a criterion or anti-pattern line, these tests fail before any live evaluation runs."
+        },
+        {
+          "source": "live verification at chg-2 HEAD",
+          "note": "GC-001 score 5 unchanged (canonical clean approve). GC-021 score 5 IN_REVIEW (PD-L1 45% near-miss — fixed in-iteration after first pass regressed to DENIED). GC-022 score 3 IN_REVIEW (EGFR+ near-miss). All three risk cases preserved or improved."
+        },
+        {
+          "source": "docs/findings/H2-memory-iteration-1.md",
+          "note": "Methodology finding from this commit: memory entries require iterative refinement based on live behavior. First-pass wording let the agent generalize 'multiple anti-patterns matched' into 'DENIED'. Memory writing is closer to prompt engineering than data engineering."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": ["GC-001", "GC-021", "GC-022"],
+      "constraint_level": "long_term_memory",
+      "why_this_component": "Phase H2 in the AHE paper. The cycle's first behavioral change at the long_term_memory constraint level, chosen because (a) it is the AHE paper's highest-leverage single-component contribution (+5.6 pp on Terminal-Bench 2), (b) the iter-2 eval-net hardening was built specifically to detect H2's likely failure modes, and (c) iter-2's findings give the H2 design clear constraints (full criteria, no compression-away of discriminations).",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert <sha>. Removing long_term_memory.md is sufficient — _prompt_loader's existence check returns empty string and the system_prompt.md {% if %} guard renders the prompt byte-identical to its pre-iter-3 form. PROMPT_REGISTRY version v2.3 also reverts to v2.2."
+    },
+    {
+      "id": "chg-3",
+      "type": "improvement",
+      "description": "regression_gate.check_regression gains a noise_threshold parameter (default 0 strict); RegressionReport gains a jitter list. capture_baseline.py gains --rollouts N; saved baseline schema gains optional distributions field. Closes the LLM-as-judge variance false-positive class observed twice in iter-3 chg-1 (GC-005 5->2 with identical agent behavior; GC-017 4->2 across runs).",
+      "files": [
+        "tests/clinical/regression_gate.py",
+        "tests/clinical/capture_baseline.py",
+        "tests/clinical/golden_cases.py",
+        "tests/clinical/evaluator.py",
+        "tests/harness/test_iter2_hardening.py",
+        "tests/clinical/baselines/iter-3-baseline.json"
+      ],
+      "failure_pattern": "Per-case regression-gate false positives caused by judge non-determinism. With drop_threshold=1 (strict iter-2 default) and no noise band, the gate fires on any per-case drop — including the +-1 to +-2 swings the judge produces across same-state runs.",
+      "root_cause": "iter-2 chg-2 shipped the gate before any evidence of judge variance existed. Two iter-3-prelude observations (GC-017 across iter-2-final and iter-3 chg-1; GC-005 across iter-3 chg-1 baseline and same-day investigate_case re-run) confirmed that LLM-as-judge produces +-1 to +-2 variance on same-state runs.",
+      "evidence": [
+        {
+          "source": "tests/harness/test_iter2_hardening.py::TestIter3Chg3NoiseThreshold",
+          "note": "5 tests: strict default preserved; noise_threshold=1 suppresses one-point jitter; two-point drop still fires; explicit GC-017 example with noise_threshold=1 (fires) and noise_threshold=2 (jitter)."
+        },
+        {
+          "source": "tests/clinical/baselines/iter-3-baseline.json",
+          "note": "Captured at iter-3 HEAD with --rollouts 2. Distributions field present and shows zero jitter in this capture (every case scored identically across both rollouts) — the noise_threshold work is prophylactic, not reactive."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "evaluation_harness",
+      "why_this_component": "Eval-net tooling: same level as iter-2 chg-2 (regression gate) and iter-2 chg-3 (near-miss cases) that this enhances. No agent surface modified.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. noise_threshold default 0 preserves the strict iter-2 behavior for any caller that wasn't using the new parameter; the distributions field is optional so existing baseline files remain valid."
+    }
+  ],
+  "verdicts": [
+    {
+      "change_id": "chg-1",
+      "previous_iteration_tag": "harness-iter-2",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-2 chg-1 (schema enum extensions to evaluation_harness and instrumentation) was non-behavioral. No predictions to verify; no regressions surfaced at iter-3 HEAD. Confirmed keep."
+    },
+    {
+      "change_id": "chg-2",
+      "previous_iteration_tag": "harness-iter-2",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-2 chg-2 (regression_gate + iter-1 baseline scoreboard) was non-behavioral. iter-3 chg-3 enhances it with noise_threshold and rollouts but does NOT replace it. The gate caught both real chg-1 fixes (GC-010, GC-012) and the judge-jitter false positives at iter-3 chg-1's baseline capture — exactly the contract. Confirmed keep."
+    },
+    {
+      "change_id": "chg-3",
+      "previous_iteration_tag": "harness-iter-2",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-2 chg-3 (near-miss cases GC-021 / GC-022 wired into the live gate) had no predicted_fixes. At iter-3 HEAD with H2 memory active, both near-miss cases continue to route to IN_REVIEW (verified live; GC-021 score 5, GC-022 score 3). The H2 memory contract from this iteration's chg-2 mandates that no near-miss case auto-approves. Confirmed keep."
+    },
+    {
+      "change_id": "chg-4",
+      "previous_iteration_tag": "harness-iter-2",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-2 chg-4 (doc_drift_guard + iter-0 trajectory.py reconciliation) was non-behavioral. Guard still passes at iter-3 HEAD; no new dangling src/*.py references introduced by any chg-1/2/3 doc additions. Confirmed keep."
+    },
+    {
+      "change_id": "chg-5",
+      "previous_iteration_tag": "harness-iter-2",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-2 chg-5 (AgentConfig.model reads from settings) was reproducibility scaffolding. Verified live: every iter-3 evaluation ran against settings.default_model = claude-sonnet-4-5-20250929 matching the manifest's base_model. Confirmed keep."
+    },
+    {
+      "change_id": "chg-6",
+      "previous_iteration_tag": "harness-iter-2",
+      "outcome": "keep",
+      "verified_fixes": ["GC-001"],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "iter-2 chg-6 (diagnostic findings + GC-001 case-def repair) predicted GC-001 would flip 2 -> >=4 after the stage IIIA -> stage IV repair. iter-3 capture at chg-3 HEAD shows GC-001 score 5 (median of 2 rollouts), confirming the predicted fix survives the chg-1 + chg-2 additions. GC-010 and GC-012 were recorded as iter-3 design constraints (deferred fixes) — both flipped in this iteration's chg-1 as predicted by the findings docs. Confirmed keep."
+    }
+  ]
+}

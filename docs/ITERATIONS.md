@@ -12,9 +12,293 @@
 
 ## Index
 
+- [iter-3 — H2 Institutional Memory + Escalation-Branch Completion, the first behavioral iteration](#iter-3-h2-and-escalation)
 - [iter-2 — Eval-Net Hardening, the boring iteration that earned its keep](#iter-2-eval-net-hardening)
 - [iter-1 — chg-1: Component Decoupling first extraction](#iter-1-component-decoupling)
 - [iter-0 — Baseline Crystallization (seed narrative)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-3-h2-and-escalation"></a>
+## iter-3 — H2 Institutional Memory + Escalation-Branch Completion
+
+**Tag:** `harness-iter-3`
+**Phase:** H2 (Institutional Memory Layer) + completion of branch_2 escalation work surfaced by iter-2
+**Date:** 2026-05-24
+**Changes:** 3 (`chg-1` escalation_branch; `chg-2` long_term_memory; `chg-3` evaluation_harness)
+**Eval delta:** aggregate clinical accuracy **90% → 100%** (18/20 → 20/20). Both predicted_fixes verified live (GC-010 1→5, GC-012 2→4). Risk cases preserved: GC-001 stable at 5, GC-021 IN_REVIEW (after in-iteration fix), GC-022 IN_REVIEW.
+
+### What this iteration shipped
+
+iter-3 is the cycle's **first behavioral-change iteration**. After iter-2's
+deliberately non-behavioral eval-net hardening, iter-3 ships three changes
+that exercise the safety net the prior iteration built. The order matters:
+chg-1 completes the escalation-logic gaps iter-2 surfaced, chg-2 introduces
+the Phase H2 institutional-memory layer (the AHE paper's highest-leverage
+single component), chg-3 hardens the per-case regression gate against the
+LLM-as-judge variance that iter-2's findings predicted would otherwise
+swamp the signal.
+
+The runbook (`RUNBOOK_iter3.md`) prescribed the order, the verification
+gates per change, and the design decisions locked at iteration start
+(hybrid structured-field-plus-parser-fallback for chg-1; one memory entry
+for chg-2 with criterion-preservation contract; strict default for chg-3's
+noise_threshold with documented production override). All three landed
+on the `harness/iter-3` branch via PR #5, restoring the project's
+branch-and-PR workflow after iter-2's accidental direct-to-main drift.
+
+### chg-1 — Completing a half-built feature
+
+Both `EscalationReason.HIGH_COST` and `EscalationReason.PEDIATRIC_COMPLEX`
+existed in `src/pacca/models/enums.py` since before iter-1. The Settings
+schema even had `HIGH_COST_THRESHOLD` and `COMPLEXITY_AUTO_APPROVE_MAX`
+configured in `.env`. What was missing: any code that read those values
+and routed cases. iter-2 chg-6's diagnostic work surfaced both gaps as
+SEV-2 findings; iter-3 chg-1 closes them.
+
+The design decision was hybrid data flow. `ClinicalCase` gained three
+optional structured fields (`estimated_annual_cost`, `patient_age`,
+`disease_severity`). The new `_check_high_cost` and `_check_pediatric_complex`
+methods read those first, falling back to regex parsing of `clinical_notes`
+when the field is `None`. Both code paths got unit tests. The parser-fallback
+path is the one that matters for the existing golden cases (whose data
+lives in prose); the structured-field path is the one that will matter
+for production upstream populated data.
+
+The cost parser had a bug a smoke-test caught before unit tests existed.
+First version preferred the first dollar amount that followed an "annual
+cost" phrase, which on GC-010's `"$24,000/infusion x 12 = $288,000"` text
+returned the per-infusion figure rather than the totalled annual one.
+Switching to "max of all dollar amounts" fixed it. The pattern this
+demonstrates is worth recording: when the parser's contract is "extract
+the figure the policy cares about," and the prose lists multiple figures,
+prefer max over positional heuristics — the totalled figure is almost
+always the largest.
+
+Live verification at chg-1 HEAD captured the two predicted fixes
+unambiguously: GC-010 `1 → 5` (judge text: *"correctly escalated to
+IN_REVIEW based on the high-cost threshold"*) and GC-012 `2 → 4` (judge
+text: *"correctly identified all clinical criteria… correctly escalated
+based on pediatric complexity"*). GC-001 stayed at 5 (no false-positive
+firing on the canonical clean case).
+
+The chg-1 baseline-capture run also surfaced two apparent regressions
+(GC-005 5→2 and GC-017 4→2) that turned out to be judge jitter on
+investigation — the same agent behavior re-ran produced the original
+scores. Both observations fed directly into the chg-3 design.
+
+### chg-2 — The H2 memory entry, and the mid-iteration debugging cycle that taught the methodology
+
+Phase H2 in the AHE paper is the cycle's biggest behavioral-leverage
+target. PACCA's iter-3 chg-2 ships exactly one entry — the NSCLC pembrolizumab
+pattern that GC-001 / GC-021 / GC-022 form a sibling family for. Per the
+iter-2 findings design constraints, the memory file enumerates the FULL
+criteria set (six required criteria; five anti-patterns) and the prompt
+loader's `{% if long_term_memory %}` guard ensures agents without a memory
+file still render byte-identical prompts.
+
+The headline event of chg-2 wasn't the architecture (clean: 7-line loader
+change, single-file memory mount-point, criterion-preservation tests
+pass). It was the live verification on GC-021.
+
+The first-pass memory wording said "Route to IN_REVIEW" five times — once
+per anti-pattern — and the agent, encountering a near-miss case where TWO
+anti-patterns matched (PD-L1 45% AND stage IIIA, which was the original
+GC-001 contradiction that iter-2 chg-6 had fixed in GC-001 but not in
+its near-miss sibling), generalized "two anti-patterns matched" into
+`DENIED`. Routed to denial instead of human review. Score `2`. The
+criterion-preservation test passed (every anti-pattern was present in the
+rendered prompt verbatim) but the agent's behavioral interpretation of
+the wording was wrong.
+
+The fix was wording-level: every anti-pattern now ends with
+`**Status: IN_REVIEW.** (Not DENIED.)` and a "Why this distinction
+matters" paragraph closes the anti-pattern list. After the fix, GC-021
+re-ran scored **5** with the judge text *"demonstrates genuine
+case-by-case analysis rather than pattern-matching to a canonical
+approval case"* — exactly the behavior the H2 design contract was
+meant to produce.
+
+This iteration's most valuable methodology learning is in
+[`docs/findings/H2-memory-iteration-1.md`](./findings/H2-memory-iteration-1.md):
+**memory writing is closer to prompt engineering than data engineering.**
+A memory entry is not a passive lookup row; it is a structured prompt
+fragment the agent reasons over. The criterion-preservation test is
+necessary but not sufficient — it guarantees the entry's *content* is
+intact, not that its *semantics* are clear. Live verification on risk
+cases is the gate that catches semantic gaps. The finding doc records
+forward design notes for every future H2 entry: explicit status routing,
+risk-case enumeration, criterion-preservation test extension,
+PROMPT_REGISTRY version bump.
+
+### chg-3 — Hardening the eval against the judge variance the cycle predicted
+
+iter-2 documented one judge-jitter case (GC-017 swinging 2 → 4 across
+two runs). iter-3 chg-1's baseline-capture surfaced a second (GC-005
+swinging 5 → 2 with the same-state agent re-investigation showing 5
+again). Two cases producing ±2–3 score swings across same-state runs is
+not isolated noise — it is a systematic property of LLM-as-judge
+evaluation that PACCA's per-case regression gate would chase as false
+positives without a tolerance band.
+
+chg-3 adds the band. `check_regression` gains a `noise_threshold`
+parameter (default `0` — preserves the strict iter-2 behavior for tests
+that want it). `RegressionReport` gains a `jitter` field that records
+drops within the noise band for transparency without blocking. The
+production recommendation is `noise_threshold=1`: tolerate ±1 jitter,
+surface ±2 swings as worth investigation. The recommendation is
+documented in the function's docstring and is cited explicitly in the
+chg-3 commit message and the iter-3 manifest.
+
+The companion enhancement is `--rollouts N` on `capture_baseline.py`.
+When set above 1, each case runs N times and the saved file includes both
+the per-case median score AND the full distribution per case. The iter-3
+final baseline was captured with `--rollouts 2`. The distributions show
+**zero jitter in this capture** — every case scored identically across
+both rollouts. The noise_threshold work is therefore prophylactic for
+this iteration; it would have been reactive if iter-3 had landed without
+it.
+
+### The iteration's results, in one table
+
+| Case | iter-2-final | iter-3 (median of 2 rollouts) | Δ | Cause |
+|---|---|---|---|---|
+| GC-001 | 5 | 5 | 0 | iter-2 chg-6 case-def repair holding under H2 memory |
+| GC-009 | 4 | 4 | 0 | (unchanged) |
+| **GC-010** | **1** | **5** | **+4** | **chg-1 high_cost_check (predicted fix verified)** |
+| **GC-012** | **2** | **4** | **+2** | **chg-1 pediatric_complex_check (predicted fix verified)** |
+| GC-017 | 4 | 5 | +1 | jitter case stable in this rollout |
+| GC-005 | 5 | 5 | 0 | jitter case stable in this rollout |
+| GC-021 (near-miss) | IN_REVIEW (live gate) | IN_REVIEW + score 5 | — | H2 memory preserves discrimination after in-iteration fix |
+| GC-022 (near-miss) | IN_REVIEW (live gate) | IN_REVIEW + score 3 | — | H2 memory preserves discrimination |
+| All others | 5 | 5 | 0 | — |
+| **Aggregate** | **18/20 = 90%** | **20/20 = 100%** | **+10 pp** | chg-1 fixes + chg-2 risk-preservation |
+
+### Verdict on iter-2's predictions and risks
+
+iter-2 shipped six changes. None of them predicted behavioral fixes
+(they were all `evaluation_harness` or `instrumentation` scope), and
+only chg-6 named a specific predicted_fix (GC-001 → ≥4 after case-def
+repair). iter-3 verifies:
+
+- **chg-1 (schema enum extensions):** non-behavioral. Confirmed keep —
+  iter-3's chg-1 and chg-3 manifest entries validate against the
+  extended enums.
+- **chg-2 (regression_gate + iter-1 baseline):** iter-3 chg-3 enhances
+  it without replacing. The gate caught both chg-1 fixes AND the
+  judge-jitter false positives — exactly the contract. Confirmed keep.
+- **chg-3 (near-miss cases + gate wiring):** GC-021 and GC-022 continue
+  to route to IN_REVIEW at iter-3 HEAD with H2 memory active.
+  Confirmed keep.
+- **chg-4 (doc-drift guard + iter-0 reconciliation):** guard still
+  passes; no new dangling references from iter-3's doc additions.
+  Confirmed keep.
+- **chg-5 (model SSOT):** every iter-3 evaluation ran against
+  `claude-sonnet-4-5-20250929` matching the manifest's `base_model`.
+  Confirmed keep.
+- **chg-6 (diagnostic findings + GC-001 case-def repair):** the
+  predicted GC-001 fix (2 → ≥4) verified at iter-3 HEAD with the
+  case-def repair holding under H2 memory active (score 5 across both
+  rollouts). The GC-010 and GC-012 findings recorded as iter-3 design
+  constraints both translated to predicted_fixes in iter-3 chg-1 and
+  both verified live. Confirmed keep.
+
+iter-2 is now fully closed with all six chgs verdict=keep.
+
+### What success looks like for iter-4
+
+Two threads worth pursuing in iter-4:
+
+1. **Second H2 memory entry.** RA biologic after DMARD failure is the
+   natural next pattern: GC-010 is the canonical case (now correctly
+   escalating via chg-1's high_cost_check), and a memory entry would
+   compress the clinical-eligibility reasoning while leaving the
+   policy enforcement (cost) to ClinicalRiskDetector. Follow the
+   forward design notes in
+   [`docs/findings/H2-memory-iteration-1.md`](./findings/H2-memory-iteration-1.md):
+   explicit status routing on every anti-pattern; risk-case
+   enumeration; PROMPT_REGISTRY version bump.
+
+2. **The dead-code deletion (`decision_agent.py`)** queued since iter-1.
+   Standalone cleanup chg, bundles cheaply into any iter-4 path. iter-1
+   recorded it in the manifest's deferred-findings section; it has
+   waited long enough.
+
+A third optional thread: **complexity-score model** for the
+pediatric_complex check. iter-3 chg-1 uses a keyword heuristic on
+`disease_severity` (per the conservative recommendation in
+`docs/findings/GC-012.md`). When a second pediatric case forces the
+distinction, that's the iteration to introduce a numeric
+`complexity_score` using the `COMPLEXITY_AUTO_APPROVE_MAX` and
+`COMPLEXITY_SPECIALIST_REVIEW_MIN` settings that already exist in
+`.env` but nothing reads. Defer until the case exists.
+
+### Reflection on cycle methodology
+
+Three observations worth recording at iter-3's close.
+
+**The eval-net-first sequencing earned out.** iter-2's hardening (per-case
+regression gate, near-miss cases, doc-drift guard) all fired in iter-3
+in the way the iter-2 narrative predicted. The regression gate flagged
+chg-1's apparent GC-005 / GC-017 regressions; investigation proved them
+to be judge jitter; chg-3 enhanced the gate so future runs distinguish
+the classes. The near-miss cases caught the chg-2 mid-iteration regression
+on GC-021; investigation proved the memory wording was the cause; the
+fix landed in the same commit. The doc-drift guard remained green
+throughout. None of this would have been visible if iter-3 had been the
+first iteration to ship behavioral changes after iter-1's refactor.
+
+**The cycle is now producing transferable design constraints, not just
+metrics.** iter-2's findings docs (GC-001, GC-010, GC-012) prescribed
+exactly what iter-3 chg-1 needed to build. The iter-3
+[H2-memory-iteration-1.md](./findings/H2-memory-iteration-1.md) finding
+prescribes what every future H2 entry must include. This is the
+methodology becoming self-aware: each iteration's record is also a spec
+fragment for the iterations that follow.
+
+**Pre-commit's mypy strict mode revealed pre-existing tech debt that
+iter-3 chg-1's py.typed marker unearthed.** Adding a PEP 561 marker made
+mypy walk transitive imports across the pacca package; multiple
+pre-existing untyped functions and one structlog-style stdlib-logger
+call surfaced as errors. The right reflex was to fix them inline (TODO
+comments where the fix is non-trivial, type annotations where it is)
+rather than to roll back py.typed. The lesson: tooling hygiene
+improvements are best landed *during* substantive iterations, where
+their cost is amortized against meaningful work, rather than as
+standalone "lint cleanup" commits that have no other forcing function.
+
+### Files changed in this iteration
+
+**Behavioral (agent surface modified):**
+`src/pacca/agents/clinical_risk_detector.py` (chg-1: new check methods + parsers),
+`src/pacca/agents/decision_support/long_term_memory.md` (chg-2: new),
+`src/pacca/agents/_prompt_loader.py` (chg-2: memory injection),
+`src/pacca/agents/decision_support/system_prompt.md` (chg-2: memory section),
+`src/pacca/agents/prompts/templates.py` (chg-2: PROMPT_REGISTRY v2.2 → v2.3).
+
+**Data model:** `src/pacca/models/clinical.py` (chg-1: three optional fields).
+
+**Eval-net (no agent surface):**
+`tests/clinical/regression_gate.py` (chg-3),
+`tests/clinical/capture_baseline.py` (chg-3),
+`tests/clinical/baselines/iter-3-chg1-baseline.json` (chg-1 verification),
+`tests/clinical/baselines/iter-3-baseline.json` (chg-3 final),
+`tests/harness/test_iter2_hardening.py` (chg-3: 8 new tests),
+`tests/unit/test_escalation_high_cost_and_pediatric.py` (chg-1: 26 new tests),
+`tests/unit/test_h2_memory_criterion_preservation.py` (chg-2: 19 new tests).
+
+**Infrastructure surfaced and fixed in chg-1:**
+`src/pacca/py.typed` (PEP 561 marker),
+`src/pacca/config/tracing.py` (TODO-marked type-ignore on structlog-style logger calls),
+`.pre-commit-config.yaml` (pydantic-settings added to mypy hook deps),
+`tests/clinical/golden_cases.py`, `tests/clinical/evaluator.py` (pre-existing type-annotation fixes).
+
+**Documentation:**
+`docs/ITERATIONS.md` (iter-3 narrative — this section),
+`docs/DECISIONS.md` (iter-3 per-chg + iteration verdict),
+`docs/findings/H2-memory-iteration-1.md` (methodology finding),
+`harness/manifests/iter-3.json` (structured manifest + verdicts on iter-2's 6 chgs),
+`RUNBOOK_iter3.md` (committed at iteration start as the spec).
 
 ---
 

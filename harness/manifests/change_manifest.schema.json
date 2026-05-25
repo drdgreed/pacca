@@ -111,8 +111,8 @@
           "description": "Files modified by this change, relative to repo root. The AHE convention is that one logical change touches files within one constraint level only.",
           "items": {
             "type": "string",
-            "pattern": "^(src/|harness/|docs/|tests/|\\.github/|pyproject\\.toml$|requirements.*\\.txt$|setup\\.(py|cfg)$|Dockerfile$|\\.gitignore$|README\\.md$|CHANGELOG\\.md$|LICENSE$|Makefile$)",
-            "description": "Path of a file modified by this change, relative to repo root. Allowed roots: src/ (any source), harness/, docs/, tests/, .github/ (CI workflows). Also allowed at repo root: pyproject.toml, requirements*.txt, setup.py, setup.cfg, Dockerfile, .gitignore, README.md, CHANGELOG.md, LICENSE, Makefile. If a harness change needs to touch a path not in this list, extend the pattern in its own commit with a manifest entry justifying the addition."
+            "pattern": "^(src/|harness/|docs/|docs_reconciliation/|tests/|\\.github/|pyproject\\.toml$|requirements.*\\.txt$|setup\\.(py|cfg)$|Dockerfile$|\\.gitignore$|README\\.md$|RUNBOOK_iter[0-9]+\\.md$|CHANGELOG\\.md$|LICENSE$|Makefile$|\\.pre-commit-config\\.yaml$)",
+            "description": "Path of a file modified by this change, relative to repo root. Allowed roots: src/ (any source), harness/, docs/, docs_reconciliation/ (auxiliary erratum artifacts; added iter-2), tests/, .github/ (CI workflows). Also allowed at repo root: pyproject.toml, requirements*.txt, setup.py, setup.cfg, Dockerfile, .gitignore, README.md, RUNBOOK_iter<N>.md (added iter-3 chg-1 for iteration-specific runbooks committed alongside the iteration), CHANGELOG.md, LICENSE, Makefile, .pre-commit-config.yaml (added iter-3 chg-1 for pre-commit hook configuration changes that ship alongside the iteration that surfaced them). If a harness change needs to touch a path not in this list, extend the pattern in its own commit with a manifest entry justifying the addition."
           }
         },
         "failure_pattern": {

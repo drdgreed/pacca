@@ -35,6 +35,7 @@ Teaching note — pure functions vs. database queries:
   most) and every change should be reviewed.
 """
 
+import re
 from dataclasses import dataclass, field
 
 from ..models.clinical import ClinicalCase
@@ -180,6 +181,92 @@ GUIDELINE_APPROVAL_MARKERS: tuple[str, ...] = (
 
 
 # =============================================================================
+# iter-3 chg-1: parsers for branch_2_medical_director triggers
+#
+# These fall-back parsers extract cost / age / severity from clinical_notes
+# text when the structured ClinicalCase fields are None. They are deliberately
+# simple — a production system would replace them with structured-data
+# requirements upstream — but they let the detector handle the existing
+# golden cases (whose data lives in prose) without forcing a dataset rewrite.
+# =============================================================================
+
+# Matches "$288,000", "$288K", "$1,234.56". Captures the numeric value and
+# any trailing K/k multiplier. The _parse_cost_from_notes function returns
+# the MAX across all matches — see its docstring for why.
+_COST_DOLLAR_RE = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*(K|k)?", re.IGNORECASE)
+
+# Matches "55-year-old", "14 year old", "age 55", "55yo".
+_AGE_RE = re.compile(
+    r"(\d{1,3})[\s-]*(?:year[s]?[\s-]*old|yo\b)|age\s*[:\s]+(\d{1,3})",
+    re.IGNORECASE,
+)
+
+# Severity keywords scanned in priority order (longer phrases first).
+_SEVERITY_KEYWORDS: tuple[str, ...] = (
+    "moderate-to-severe",
+    "moderate to severe",
+    "severe",
+    "critical",
+    "complex",
+)
+
+
+def _parse_cost_from_notes(notes: str) -> float | None:
+    """
+    Best-effort extraction of an estimated annual cost from clinical notes.
+
+    Strategy: return the MAX of all dollar amounts found in the text.
+
+    Rationale: clinical-cost prose typically mentions multiple amounts (e.g.
+    per-infusion cost AND totalled annual cost — "$24,000/infusion x 12 =
+    $288,000"). The annualized/totalled value is almost always the largest.
+    Using max() is more robust than positional preference (first match,
+    last match) and matches the actual semantics of "what does this case
+    cost annually?" — the biggest number in the room is the answer.
+
+    Returns None when no dollar amount appears.
+    """
+    values: list[float] = []
+    for match in _COST_DOLLAR_RE.finditer(notes):
+        raw, k_suffix = match.group(1), match.group(2)
+        try:
+            value = float(raw.replace(",", ""))
+        except ValueError:
+            continue
+        if k_suffix:
+            value *= 1000
+        values.append(value)
+    return max(values) if values else None
+
+
+def _parse_age_from_notes(notes: str) -> int | None:
+    """Best-effort patient-age extraction from clinical notes."""
+    m = _AGE_RE.search(notes)
+    if not m:
+        return None
+    raw = m.group(1) or m.group(2)
+    try:
+        age = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return age if 0 <= age <= 130 else None
+
+
+def _parse_severity_from_notes(notes: str) -> str | None:
+    """Best-effort severity-keyword detection. Returns the first matching keyword."""
+    lower = notes.lower()
+    for kw in _SEVERITY_KEYWORDS:
+        if kw in lower:
+            return kw
+    return None
+
+
+def _evidence_blob(case: ClinicalCase) -> str:
+    """Concatenate evidence text for parser fallback. Defined once for reuse."""
+    return " ".join(item.description + " " + item.original_text for item in case.evidence)
+
+
+# =============================================================================
 # Escalation flag dataclass
 # =============================================================================
 
@@ -272,6 +359,9 @@ class ClinicalRiskDetector:
         self._check_rare_condition(case, flags)
         self._check_conflicting_guidelines(case, guidelines_context, flags)
         self._check_prior_denial(case, prior_denial_codes, flags)
+        # iter-3 chg-1: branch_2_medical_director triggers.
+        self._check_high_cost(case, flags)
+        self._check_pediatric_complex(case, flags)
 
         return flags
 
@@ -449,3 +539,94 @@ class ClinicalRiskDetector:
                 f"Human review required to determine if circumstances have changed "
                 f"or whether this is a repeat claim.",
             )
+
+    # ── Branch 2: High-cost biologic / drug (iter-3 chg-1) ────────────────────
+
+    def _check_high_cost(
+        self,
+        case: ClinicalCase,
+        flags: EscalationFlags,
+    ) -> None:
+        """
+        Escalate to Medical Director when estimated annual cost exceeds
+        settings.high_cost_threshold.
+
+        Data source order:
+          1. ClinicalCase.estimated_annual_cost (structured field — preferred)
+          2. Parser fallback against the evidence text (regex)
+
+        Why this lives in pre-flight: cost-based escalation is a POLICY rule,
+        not a CLINICAL one. It must fire regardless of how convincing the
+        clinical case is. Per the iter-2 GC-010 finding, leaving cost rules
+        in the agent prompt produces silent failures — the agent skips the
+        cost check exactly when it's most confident on clinical merits, which
+        is exactly when the cost trigger is most likely to apply.
+        """
+        from ..config.settings import get_settings
+
+        threshold = float(get_settings().high_cost_threshold)
+
+        cost = case.estimated_annual_cost
+        if cost is None:
+            cost = _parse_cost_from_notes(_evidence_blob(case))
+        if cost is None or cost <= threshold:
+            return
+
+        flags.add(
+            EscalationReason.HIGH_COST,
+            f"Estimated annual cost ${cost:,.0f} exceeds the configured "
+            f"HIGH_COST_THRESHOLD of ${threshold:,.0f}. Cost-based escalation "
+            f"applies regardless of clinical eligibility per policy.",
+        )
+
+    # ── Branch 2: Pediatric complexity (iter-3 chg-1) ─────────────────────────
+
+    PEDIATRIC_AGE_CUTOFF = 18
+    PEDIATRIC_SEVERITY_KEYWORDS: tuple[str, ...] = (
+        "moderate-to-severe",
+        "moderate to severe",
+        "severe",
+        "critical",
+        "complex",
+    )
+
+    def _check_pediatric_complex(
+        self,
+        case: ClinicalCase,
+        flags: EscalationFlags,
+    ) -> None:
+        """
+        Escalate to Medical Director when the patient is under 18 AND the
+        disease severity is at least "moderate-to-severe" (or "severe" /
+        "complex" / "critical").
+
+        Data source order, applied independently for age and severity:
+          1. ClinicalCase structured fields (patient_age, disease_severity)
+          2. Parser fallback against the evidence text
+
+        Why both conditions: a pediatric patient with mild disease does not
+        require specialist review by policy. The conservative complexity
+        definition here (keyword scan on disease_severity) intentionally
+        omits a numeric complexity score; a real score model is its own
+        iteration, justified when a second pediatric case forces it.
+        """
+        notes_blob = _evidence_blob(case)
+
+        age = case.patient_age
+        if age is None:
+            age = _parse_age_from_notes(notes_blob)
+        if age is None or age >= self.PEDIATRIC_AGE_CUTOFF:
+            return
+
+        severity = (case.disease_severity or "").lower()
+        if not severity:
+            severity = (_parse_severity_from_notes(notes_blob) or "").lower()
+        if not any(kw in severity for kw in self.PEDIATRIC_SEVERITY_KEYWORDS):
+            return
+
+        flags.add(
+            EscalationReason.PEDIATRIC_COMPLEX,
+            f"Pediatric patient (age {age}) with {severity} disease — "
+            f"specialist review required per policy regardless of clinical "
+            f"eligibility verification.",
+        )
