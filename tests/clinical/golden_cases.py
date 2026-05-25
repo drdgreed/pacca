@@ -116,13 +116,13 @@ GOLDEN_CASES: list[GoldenCase] = [
         procedure_code="J9271",
         procedure_description="Pembrolizumab (Keytruda) injection",
         clinical_notes=(
-            "58-year-old male with stage IIIA non-small cell lung cancer (NSCLC), "
-            "adenocarcinoma histology. PD-L1 tumor proportion score (TPS) confirmed "
-            "at 62% by recent biopsy (PathLab report dated 14 days ago). No EGFR or "
-            "ALK mutations detected on molecular testing. ECOG performance status 1. "
-            "No prior systemic therapy. No active autoimmune disease. "
-            "Requesting first-line pembrolizumab monotherapy per NCCN Category 1 "
-            "recommendation for PD-L1 TPS >= 50%."
+            "58-year-old male with stage IV (metastatic, M1c) non-small cell lung "
+            "cancer (NSCLC), adenocarcinoma histology. PD-L1 tumor proportion score "
+            "(TPS) confirmed at 62% by recent biopsy (PathLab report dated 14 days "
+            "ago). No EGFR or ALK mutations detected on molecular testing. ECOG "
+            "performance status 1. No prior systemic therapy. No active autoimmune "
+            "disease. Requesting first-line pembrolizumab monotherapy per NCCN "
+            "Category 1 recommendation for PD-L1 TPS >= 50%."
         ),
         guidelines_context=(
             "NCCN Guidelines NSCLC v4.2025: Pembrolizumab monotherapy is a Category 1 "

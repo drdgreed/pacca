@@ -12,8 +12,99 @@
 
 ## Index
 
+- [iter-2 — Eval-Net Hardening, the boring iteration that earned its keep](#iter-2-eval-net-hardening)
 - [iter-1 — chg-1: Component Decoupling first extraction](#iter-1-component-decoupling)
 - [iter-0 — Baseline Crystallization (seed narrative)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-2-eval-net-hardening"></a>
+## iter-2 — Eval-Net Hardening, the boring iteration that earned its keep
+
+**Tag:** `harness-iter-2`
+**Phase:** H5 slice pulled forward (Evaluation Harness Expansion)
+**Date:** 2026-05-22 (manifest) → 2026-05-24 (finalization)
+**Changes:** 6 (`chg-1` schema; `chg-2` regression gate; `chg-3` near-miss cases + gate wiring; `chg-4` doc-drift guard + reconciliation; `chg-5` model SSOT; `chg-6` diagnostic findings + GC-001 repair)
+**Eval delta:** zero behavioral change to any agent surface; aggregate clinical accuracy moved 80% → 90% via test-data correction only (chg-6 GC-001 stage IIIA → stage IV repair)
+
+### What this iteration shipped
+
+iter-2 is the cycle's first "no behavioral change to the agent" iteration. Five of the six changes harden the evaluation/measurement apparatus before the first agent-behavioral iteration (iter-3, Phase H2 institutional memory) lands. The sixth (`chg-5`) is a reproducibility fix to make `AgentConfig.model` derive from `settings.default_model` so the manifest's `base_model` field is no longer a polite fiction.
+
+The pulled-forward Phase H5 slice has a specific charter: detect the *specific* failure modes that H2 is most likely to introduce, before H2 introduces them. Three known classes of failure are addressed by `chg-2` through `chg-4`:
+
+- **Silent per-case degradation.** An over-aggressive memory entry can erode reasoning quality on every case while keeping decisions correct; the aggregate ≥80% gate would never fire. `chg-2` ships `regression_gate.py` and an iter-1 baseline scoreboard that compares each case's current score to its baseline and flags any drop — even when the aggregate stays green.
+
+- **False pattern-matching.** Memory entries that compress to "shape of case → outcome" can fire on near-miss cases where one disqualifying detail would normally flip the outcome. `chg-3` introduces near-miss "memory-trap" siblings of GC-001 (PD-L1 45% below threshold; EGFR mutation present) that must NOT auto-approve. The existing 20 cases couldn't probe this.
+
+- **Documentation drift.** The iter-0 records described a `src/pacca/observability/trajectory.py` file that never shipped; the real instrumentation is OTel spans in `agents/base.py`. `chg-4` adds a CI doc-drift guard, reconciles the iter-0 trajectory record via superseding entries (per the append-only protocol), and repoints two more drifts in HARNESS.md the guard found on its first run (escalation_tree.py → orchestrator.py; db/audit/schema.py → db/models.py AuditLogModel).
+
+### The methodological choice the iteration tested
+
+iter-2's most defensible decision was the *temporal* one: harden the eval net *before* the first behavioral change rather than *after*. The temptation is to ship H2 (the headline iteration — institutional memory, the AHE paper's highest-leverage single component at +5.6 pp on Terminal-Bench 2) immediately after iter-1 and call eval-net hardening a follow-up.
+
+The AHE paper's regression-blindness finding (Lin et al., §4.4.2) is the argument against that order. Self-prediction of regressions sits at ~2x random precision while self-prediction of fixes sits at ~5x. The eval suite IS the safety net, and a safety net deployed after the first risk event is theatre. The whole reason iter-1 chg-1 was a refactor was to put one-file-per-component diffs in place; the parallel argument for iter-2 is to put per-case regression detection in place before any behavioral change can hide in the aggregate.
+
+The decision paid off on the first real run.
+
+### The first-run findings (the iteration's actual punchline)
+
+The chg-2 baseline-capture script ran live against iter-2 HEAD (140 of 140 unit tests already green; this was the LLM-as-judge clinical run). It produced 17 of 20 passes for an aggregate of 85% — comfortably above the 80% gate. Three cases persistently failed. The eval-net hardening worked exactly as advertised: it surfaced bugs the aggregate gate would have ignored.
+
+**GC-010 (high-cost biologic, score 1).** Per the evaluator rubric, score 1 is reserved for "critically wrong" — wrong decision, hallucination, or invented clinical detail. The agent's clinical reasoning on GC-010 is *exemplary* — every ACR 2021 biologic-DMARD criterion cited, step therapy correctly documented. What it missed is the `HIGH_COST_THRESHOLD` ($100K) escalation rule. Annual cost on this case is $288K. The pipeline's `branch_2_medical_director` was designed (per HARNESS.md) to catch this; in code, no component implements the cost check. Neither the `ClinicalRiskDetector` pre-flight nor the `DecisionAgent` system prompt knows the rule exists. The agent has no way to even consider it.
+
+**GC-012 (pediatric severe asthma, score 2).** Same structural gap as GC-010 — `branch_2_medical_director` was meant to catch pediatric + complexity escalations. The `Settings` schema even exposes `COMPLEXITY_AUTO_APPROVE_MAX` and `COMPLEXITY_SPECIALIST_REVIEW_MIN`. No code consults them. The agent correctly notes the patient is 14 (meets the ≥12 age requirement for dupilumab) and approves. Two cases failing the same way is a *pattern*, not incidental: there's a systematic gap in branch_2_medical_director triggers.
+
+**GC-001 (canonical NSCLC clean approve, score 2 — a different kind of finding entirely).** This one was the most surprising. GC-001 is the cleanest case in the dataset: NSCLC, pembrolizumab, PD-L1 62%, no EGFR/ALK, first-line, ECOG 1. Expected outcome `AUTO_APPROVED`. Yet the agent returned `INFORMATION_NEEDED` with a precise, well-reasoned explanation: the clinical notes documented *"stage IIIA"* (locally advanced) but the guidelines_context cited *"metastatic NSCLC"* requirements. The agent correctly noticed that stage IIIA is treated with curative-intent combined modality therapy, not first-line systemic monotherapy for metastatic disease. The judge then penalized the agent for being right.
+
+The case definition had an internal contradiction. The author had set `expected_outcome=AUTO_APPROVED` based on the biomarker criteria (PD-L1 62%, no EGFR/ALK) without noticing the stage/guideline mismatch. **The agent's sophistication exceeded the test author's specification.** This is a positive finding about agent quality and a negative finding about the dataset.
+
+### The repair that belonged in iter-2 vs the repairs that belong in iter-3
+
+`chg-6` ships the only fix that fits at evaluation_harness scope: change GC-001's clinical_notes from "stage IIIA" to "stage IV (metastatic, M1c)". Test data only. No agent code or prompt touched. Predicted_fix: GC-001 flips 2 → ≥4. Verified live the same day: 2 → 5. The judge's reasoning text on the post-repair run explicitly cites "Stage IV (M1c) metastatic NSCLC" — exactly the criterion the fix was meant to enable.
+
+The GC-010 and GC-012 fixes are **deliberately deferred to iter-3**. They require touching `ClinicalRiskDetector.evaluate()` and/or `decision_support/system_prompt.md` — both agent-surface changes that would violate iter-2's "no behavioral change" charter and would conflate iter-2's eval-net hardening with bug fixes. The findings are recorded as design constraints on iter-3 (see `docs/findings/GC-010.md` and `docs/findings/GC-012.md`):
+
+- iter-3 must add a `high_cost_check` and a `pediatric_complexity_check` to `ClinicalRiskDetector`, both routing to `branch_2_medical_director`.
+- iter-3 H2's institutional memory MUST NOT compress away the discriminations these checks enforce. A memory entry like "RA + abatacept after DMARD failure → approve" must encode the cost guard explicitly. A memory entry like "NSCLC + pembrolizumab + PD-L1 ≥50% → approve" must encode the stage and the full criteria set, not just the headline.
+
+### One more finding: judge non-determinism
+
+The chg-2 baseline-capture script ran once; the chg-6 reproducer (`investigate_case.py`) re-ran the same case (GC-010) with no agent change and produced a different judge score (1 vs 2 on different rolls). Same agent output (`correct_outcome=False` both times), different harshness. This is the cycle's first observed evidence of LLM-as-judge per-case variance, and it has direct consequences for `regression_gate.py`: the gate currently fires on *any* per-case drop, which would produce false-positive failures on ±1 jitter. A noise-threshold + k=2 rollouts enhancement is queued for iter-2-supplement or as the first chg of iter-3 — recorded in the spawned-tasks list and in `docs/findings/`.
+
+### Verdict on iter-1's predictions
+
+iter-1 chg-1's predicted_fixes was empty (refactor only) and risk_cases was empty (zero behavioral change predicted). Both fields trivially verified.
+
+The substantive iter-1 verdict — that the H1 byte-identity guarantee survived intact at iter-2 HEAD — is confirmed by three independent gates:
+
+- **Unit + harness suite:** 139 of 139 tests pass at iter-2 HEAD (~7s), unchanged from iter-1 with the iter-2 additions layered on.
+- **Live clinical gate:** 3 of 3 clinical-marked tests pass in 339.52s with `GOLDEN_CASES + NEAR_MISS_CASES` exercised end-to-end. Aggregate accuracy passes the ≥80% gate; the near-miss cases route to IN_REVIEW (implied by the math — if GC-021 or GC-022 had auto-approved, the gate would have failed).
+- **Doc-drift guard:** PASSED — every `src/*.py` reference in `docs/` resolves on disk.
+
+iter-1's formal verdict in `docs/DECISIONS.md` is now **keep**, with the basis recorded.
+
+### What success looks like for iter-3
+
+iter-3 is the cycle's first behavioral-change iteration. Two design constraints inherited from iter-2's findings:
+
+1. **Land the GC-010 / GC-012 escalation-branch fix first**, with its own `chg-` entry at `constraint_level: escalation_branch`. The findings docs in `docs/findings/` are the source-of-truth for what the fix has to do; bundle the two cases into one `chg-` because they're the same class of bug. Predicted_fixes: `["GC-010", "GC-012"]`. After landing, re-run capture_baseline.py to confirm both flip from below-threshold to ≥3.
+
+2. **Then ship H2 institutional memory** with the design constraints from `docs/findings/`. Memory entries must encode the *full* set of conditions for their shortcuts — not just the headline indication. The byte-identity check pattern from iter-1 should be adapted to a "criterion preservation" check: when a memory entry compresses a case class, the agent's rationale on the compressed path must still cite every criterion the uncompressed path cited. Otherwise H2 would risk encoding the false shortcut GC-001 was originally testing.
+
+The chg-1 dead-code observation from iter-1 (`decision_agent.py`, 330 lines, imported by no module) remains queued as a separate cleanup chg, foldable into either iter-3 path as a parallel commit.
+
+### Reflection on cycle methodology
+
+Two observations worth recording at iter-2's close, as calibration anchors for iter-3 and beyond.
+
+**Eval-net hardening is the unglamorous but highest-leverage iteration.** iter-2 produced no behavioral change, no headline metric, and no LinkedIn post that says "we improved X by Y pp." What it produced is three real bugs (two SEV-2 escalation gaps and one test-data inconsistency), one signed-and-dated finding doc per bug, design constraints attached to iter-3, and a regression gate that will catch the *next* round of bugs the same way. The temptation to skip this iteration in favor of H2's behavioral splash was real and was wrong. The cycle is now positioned to ship H2 with the safety net deployed *before* the risk event.
+
+**The agent is more sophisticated than its evaluators.** GC-001 was supposed to be the trivial case. The agent caught a real internal contradiction in the test data that the test author hadn't noticed. The methodological lesson: when the agent and the judge disagree on a "trivial" case, look at the case definition before looking at the agent. This pattern will likely recur. The `docs/findings/` directory is the right place to record each instance.
+
+### Files changed in this iteration
+
+Manifests: `harness/manifests/{change_manifest.schema.json, iter-0.json, iter-1.json, iter-2.json}`. Eval-net: `tests/clinical/{regression_gate.py, capture_baseline.py, near_miss_cases.py, baselines/iter-1-baseline.json, test_clinical_accuracy.py, golden_cases.py, investigate_case.py}`, `tests/harness/{__init__.py, doc_drift_guard.py, test_iter2_hardening.py}`. Reproducibility: `src/pacca/agents/base.py`, `src/pacca/config/settings.py`. Docs: `docs/{DECISIONS.md, ITERATIONS.md, HARNESS.md, EVALUATION.md, findings/}`, `docs_reconciliation/{ITER0_ERRATUM.md, ITER0_ERRATUM_ENTRIES.md}`, `RUNBOOK_iter2.md`. Zero agent-surface files (`src/pacca/agents/decision*.py`, `src/pacca/agents/clinical_risk_detector.py`, `src/pacca/agents/*/system_prompt.md`) modified.
 
 ---
 

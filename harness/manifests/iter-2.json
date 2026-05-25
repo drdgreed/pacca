@@ -154,6 +154,47 @@
       "phi_impact": "none",
       "audit_relevant": false,
       "rollback_plan": "git revert <sha>. Reverting restores AgentConfig's hardcoded model string. The runtime would then run claude-sonnet-4-5-20250929 (the prior hardcoded value) regardless of settings; manifests still record the same string, so the recorded baseline remains attributable, just no longer settings-driven."
+    },
+    {
+      "id": "chg-6",
+      "type": "new",
+      "description": "Diagnostic findings from the iter-1 live baseline + GC-001 case-def repair. The chg-2 baseline surfaced three persistent failures; chg-6 root-causes each in docs/findings/ and applies the only fix at evaluation_harness scope (GC-001 stage IIIA -> stage IV test-data repair). GC-010 and GC-012 deferred to iter-3 as escalation_branch work with design constraints recorded. Adds investigate_case.py as the per-case reproducer.",
+      "files": [
+        "docs/findings/README.md",
+        "docs/findings/GC-001.md",
+        "docs/findings/GC-010.md",
+        "docs/findings/GC-012.md",
+        "tests/clinical/golden_cases.py",
+        "tests/clinical/baselines/iter-1-baseline.json",
+        "tests/clinical/investigate_case.py"
+      ],
+      "failure_pattern": "Three golden cases persistently fail under the live LLM-as-judge with the agent producing the wrong outcome. GC-010 (high-cost biologic) and GC-012 (pediatric complexity) auto-approve when they should escalate to branch_2_medical_director; GC-001 (canonical NSCLC clean approve) returns INFORMATION_NEEDED because the case clinical_notes contradict the cited guideline.",
+      "root_cause": "Two distinct patterns. (1) Missing escalation branches for branch_2_medical_director: neither the ClinicalRiskDetector pre-flight nor the DecisionAgent system prompt implements the HIGH_COST_THRESHOLD or pediatric-complexity rules, although the Settings schema already exposes them. (2) GC-001 has an internal contradiction in test data: clinical_notes say 'stage IIIA' but guidelines_context cites 'metastatic NSCLC'; the agent correctly flagged the mismatch, but the case's expected_outcome was set without noticing the inconsistency.",
+      "evidence": [
+        {
+          "source": "docs/findings/GC-010.md",
+          "note": "Full live-pipeline trace for GC-010 with verbatim agent rationale and judge reasoning. Severity SEV-2 (healthcare PA correctness); fix deferred to iter-3 escalation_branch chg with design constraints recorded."
+        },
+        {
+          "source": "docs/findings/GC-012.md",
+          "note": "Full live-pipeline trace for GC-012. Same class of bug as GC-010. Should bundle with GC-010 fix into a single iter-3 escalation_branch chg."
+        },
+        {
+          "source": "docs/findings/GC-001.md",
+          "note": "Full live-pipeline trace before and after the case-definition repair. Predicted_fix verified live: GC-001 flipped from score 2 to score 5 after stage IIIA -> stage IV change; judge reasoning explicitly cites the corrected stage."
+        },
+        {
+          "source": "tests/clinical/baselines/iter-1-baseline.json",
+          "note": "Baseline scoreboard updated: GC-001 raised from 2 to 5 (the verified post-repair score). GC-010 and GC-012 left at their iter-1 reference values (1 and 2) per the deferred-fix decision."
+        }
+      ],
+      "predicted_fixes": ["GC-001"],
+      "risk_cases": [],
+      "constraint_level": "evaluation_harness",
+      "why_this_component": "All changes are scoped to the evaluation apparatus: findings documents, a per-case diagnostic script, a test-data repair, and a baseline-score update. No agent code or system prompt is touched; the iter-2 no-agent-surface-change charter is preserved. The agent-side fixes that GC-010 and GC-012 require are explicitly out of scope here and recorded as iter-3 design constraints.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert <sha>. Reverting restores the original stage IIIA in GC-001 (re-introducing the case-definition contradiction) and removes the findings + investigate_case.py + baseline-update. The GC-010 / GC-012 findings can be regenerated from the live pipeline at any time; the investigate_case.py script is self-contained and the rollback only deletes a diagnostic tool."
     }
   ],
   "verdicts": [
