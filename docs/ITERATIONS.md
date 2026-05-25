@@ -12,10 +12,211 @@
 
 ## Index
 
+- [iter-4 — Second H2 memory entry + decision_agent.py deletion, the methodology compounding](#iter-4-h2-second-entry)
 - [iter-3 — H2 Institutional Memory + Escalation-Branch Completion, the first behavioral iteration](#iter-3-h2-and-escalation)
 - [iter-2 — Eval-Net Hardening, the boring iteration that earned its keep](#iter-2-eval-net-hardening)
 - [iter-1 — chg-1: Component Decoupling first extraction](#iter-1-component-decoupling)
 - [iter-0 — Baseline Crystallization (seed narrative)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-4-h2-second-entry"></a>
+## iter-4 — Second H2 Memory Entry + decision_agent.py Deletion
+
+**Tag:** `harness-iter-4`
+**Phase:** H2 expansion (second entry) + iter-1 deferred cleanup
+**Date:** 2026-05-25
+**Changes:** 2 (`chg-1` long_term_memory; `chg-2` tool_implementation removal)
+**Eval delta:** baseline aggregate **100% unchanged** (20/20 with zero jitter across 2 rollouts — identical scores to iter-3-final). All 4 chg-1 risk cases scored 5 first-pass; chg-2 deleted 330 lines of dead code with zero test impact.
+
+### What this iteration shipped
+
+iter-4 is a **small-but-substantive** iteration. After iter-3's
+ambitious first-behavioral-change work (escalation completion + H2
+first entry + eval-net polish), iter-4 ships two well-scoped changes
+that fit cleanly into one PR:
+
+- **chg-1 (long_term_memory):** second H2 memory entry — first-line
+  biologic DMARD for seropositive RA after conventional DMARD failure.
+  Follows the forward design notes from
+  [`docs/findings/H2-memory-iteration-1.md`](./findings/H2-memory-iteration-1.md)
+  exactly: explicit status routing per anti-pattern, risk-case
+  enumeration with live verification, criterion-preservation test
+  extension, PROMPT_REGISTRY bump v2.3 → v2.4.
+
+- **chg-2 (tool_implementation removal):** `src/pacca/agents/decision_agent.py`
+  (330 lines of dead code) deleted. Queued since iter-1 (recorded in
+  `iter-1.json` chg-1's evidence block, re-noted in every iter
+  narrative since). Zero importers across the codebase; full suite
+  unchanged at 192 → 192 tests post-deletion.
+
+### The methodology compounding, in two observations
+
+**iter-3 chg-2 needed a mid-iteration regression fix on GC-021. iter-4
+chg-1 needed zero.** That's the entire point of this iteration's
+narrative. The chg-2 finding doc from iter-3
+([`docs/findings/H2-memory-iteration-1.md`](./findings/H2-memory-iteration-1.md))
+prescribed specific forward design notes for every future H2 entry:
+explicit status routing on every anti-pattern (`**Status: IN_REVIEW.**
+(Not DENIED.)`), risk-case enumeration with live verification before
+the entry lands, criterion-preservation test extension, version bump.
+iter-4 chg-1 followed those notes literally. All four risk cases
+scored 5 first-pass — GC-010 (IN_REVIEW via cost, judge cites
+"regardless of clinical eligibility per policy"), GC-005 (psoriasis,
+AAD-NPF cited — no RA-memory bleed), GC-017 (PsA, ACR PsA Guidelines
+cited — no bleed), GC-016 (Crohn's, ACG cited — no interference).
+
+The cycle is now producing findings that turn into clean second
+implementations. That's the methodology being self-aware: each
+iteration's record is a spec fragment for the iterations that follow.
+The cost of writing
+[`H2-memory-iteration-1.md`](./findings/H2-memory-iteration-1.md) was
+~30 minutes at iter-3 close; the benefit was zero mid-iteration
+debugging on iter-4 chg-1.
+
+**The dataset survey at iter-4 start scoped the complexity-score
+model out of iter-4 — and made the scoping itself defensible.**
+[`docs/findings/GC-012.md`](./findings/GC-012.md) had recorded the
+deferral with the conservative rule: "defer until a second pediatric
+case forces the distinction." iter-4 made the survey rigorous: the
+entire 22-case dataset (20 GOLDEN + 2 NEAR_MISS) contains exactly
+**one** pediatric case (GC-012). A discriminator needs contrastive
+data on both sides of its threshold — with one data point, any
+score-model fit would just be the keyword heuristic with extra
+steps. The defensible path forward (recorded in
+`RUNBOOK_iter4.md`'s final section) is a small data-only iter-5
+candidate that adds 2–3 pediatric cases (mild + moderate ambiguous +
+severe in a different condition) before a complexity-score iteration
+can be empirically founded.
+
+### The RA entry's interaction with iter-3 chg-1's cost check
+
+iter-4 chg-1's most interesting design choice is the **explicit
+documentation of the memory's non-override of iter-3 chg-1's
+`high_cost_check`**. The RA entry's "When the shortcut applies"
+section says auto-approval is "conditional on" the policy-level
+cost check, and a separate "Important interaction with policy
+escalation" paragraph teaches the agent the right phrasing when
+the pre-flight has fired: *"criteria met but cost escalates per
+policy"* rather than the incorrect *"criteria met → approve"*.
+
+This is the cleanest possible test of the *memory as support, not
+replacement* contract from
+[`docs/findings/GC-001.md`](./findings/GC-001.md). GC-010 has clinical
+criteria fully met (seropositive RA, DMARD failures documented, ACR-
+recommended biologic) and the cost trigger fires at $288K. Without
+the explicit interaction documentation, the memory could plausibly
+override the cost escalation by claiming clinical merit justifies
+auto-approval. With it, the agent cites both — the clinical
+satisfaction AND the cost-trigger escalation. GC-010 scored 5 with
+the judge praising the explicit policy-trigger reasoning. The memory
+support did not bleed into a policy override.
+
+### chg-2 — the cleanest commit in the cycle
+
+The `decision_agent.py` deletion was queued in iter-1's manifest as
+*"chg-2"* — a planned iter-1 follow-up that never landed because
+iter-2 pivoted to eval-net work and iter-3 to H2 + escalation. iter-4
+was the first iteration with bandwidth for the cleanup. 330 lines
+deleted; zero importers (verified by `grep -rn`); full suite
+unchanged at 192 → 192 tests; no behavioral surface affected.
+
+The historical lesson: dead-code deletion is *easier when you wait
+until the cycle has bandwidth for it*. Forcing it earlier (e.g.
+into iter-1's chg-2 slot) would have absorbed iteration capacity
+better spent on the methodology-establishing work. The deletion is
+a 30-second commit. The runbook ordering choice (chg-2 before
+chg-1 to clean the import graph before extending it) was the right
+call — it added zero time and gave chg-1 a cleaner baseline.
+
+### Verdict on iter-3's predictions and risks
+
+iter-3 shipped three changes. All three preserved at iter-4 HEAD:
+
+- **chg-1 (HIGH_COST + PEDIATRIC_COMPLEX):** verified_fixes
+  `["GC-010", "GC-012"]` both still routing correctly at iter-4
+  HEAD with the new memory entry active. The iter-4 chg-1 RA memory's
+  explicit cost-check interaction confirms `high_cost_check` remains
+  the authoritative escalation path. Confirmed keep.
+- **chg-2 (H2 NSCLC pembrolizumab entry):** all three named risk
+  cases (GC-001, GC-021, GC-022) preserved with the second entry
+  active alongside. Criterion-preservation tests for both entries
+  pass — the second entry did not displace the first's criteria.
+  Confirmed keep.
+- **chg-3 (regression_gate noise_threshold + --rollouts):** tooling
+  used to capture iter-4's baseline with `--rollouts 2`. The
+  distributions field shows zero jitter in this capture (identical
+  to iter-3-final pattern). The `noise_threshold` parameter is
+  unused in this iteration because there are no real regressions
+  to test it against — but the prophylactic infrastructure is in
+  place. Confirmed keep.
+
+### What success looks like for iter-5
+
+Three threads worth pursuing in iter-5:
+
+1. **Pediatric case-set expansion (data-only iteration).** Add 2–3
+   pediatric cases to the golden dataset: one MILD case that should
+   auto-approve (e.g. 10yo with mild well-controlled asthma), one
+   MODERATE ambiguous case (e.g. 16yo with moderate Crohn's on
+   first-line), one SEVERE case in a different condition (e.g. 9yo
+   with severe atopic dermatitis on biologic). This is data-engineering
+   work, not behavioral — it doesn't need a runbook, just careful
+   case authoring with the same `GoldenCase` dataclass + the
+   in-iteration live-verification pattern.
+
+2. **Then (iter-6 candidate) complexity-score model.** With contrastive
+   pediatric data in hand, fit a numeric `complexity_score` model
+   using the `COMPLEXITY_AUTO_APPROVE_MAX` and
+   `COMPLEXITY_SPECIALIST_REVIEW_MIN` settings that already exist in
+   `.env` but nothing reads. This is the iteration the iter-3
+   chg-1 deferral was waiting for.
+
+3. **Third H2 memory entry.** Asthma dupilumab is the next candidate
+   (GC-012's case family). It would test the H2 forward design notes
+   for a third entry on a *third* disease/biologic family, further
+   validating that the methodology generalizes. Follows the same
+   pattern as iter-4 chg-1.
+
+A fourth optional thread: **structured logger migration.** iter-3 chg-1
+left three `# type: ignore[call-arg]` comments in
+`src/pacca/config/tracing.py` marking structlog-style
+`logger.warning(event, detail=...)` calls against stdlib `logging.Logger`.
+A small iter-5 chg could switch to `structlog` (or wrap with `extra={...}`)
+and remove the ignores. Standalone cleanup with no behavioral risk.
+
+### Reflection: the cycle at iter-4 close
+
+The v2.3 harness-engineering cycle has now produced five distinct
+iteration types:
+
+- **iter-0:** baseline crystallization (instrumentation seed)
+- **iter-1:** structural refactor (Component Decoupling)
+- **iter-2:** eval-net hardening (no behavioral change)
+- **iter-3:** first behavioral change (escalation + H2 + eval-net polish)
+- **iter-4:** behavioral consolidation (second H2 entry + deferred cleanup)
+
+The shape of this iteration sequence is the methodology's own product:
+each iteration's deliverables earn the next iteration's bandwidth.
+iter-1's byte-identity check pattern earned iter-3's criterion-
+preservation check. iter-2's eval-net hardening earned iter-3's
+behavioral-change safety. iter-3's H2 memory finding earned iter-4
+chg-1's clean first-pass. The cycle is producing transferable
+artifacts, not just metrics.
+
+### Files changed in this iteration
+
+**Behavioral:**
+`src/pacca/agents/decision_support/long_term_memory.md` (chg-1: second entry appended),
+`src/pacca/agents/prompts/templates.py` (chg-1: PROMPT_REGISTRY v2.3 → v2.4).
+
+**Removal:** `src/pacca/agents/decision_agent.py` (chg-2: deleted, 330 lines).
+
+**Tests:** `tests/unit/test_h2_memory_criterion_preservation.py` (chg-1: 16 new tests, total H2 tests now 35).
+
+**Baseline:** `tests/clinical/baselines/iter-4-baseline.json` (live capture at HEAD with `--rollouts 2`).
+
+**Documentation:** `docs/ITERATIONS.md` (this section), `docs/DECISIONS.md` (iter-4 entries), `harness/manifests/iter-4.json`, `RUNBOOK_iter4.md`.
 
 ---
 
