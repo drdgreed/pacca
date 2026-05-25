@@ -12,11 +12,195 @@
 
 ## Index
 
+- [iter-5 — Pediatric data + complexity-score model + third H2 entry + structlog cleanup, the broadest iteration](#iter-5-broad)
 - [iter-4 — Second H2 memory entry + decision_agent.py deletion, the methodology compounding](#iter-4-h2-second-entry)
 - [iter-3 — H2 Institutional Memory + Escalation-Branch Completion, the first behavioral iteration](#iter-3-h2-and-escalation)
 - [iter-2 — Eval-Net Hardening, the boring iteration that earned its keep](#iter-2-eval-net-hardening)
 - [iter-1 — chg-1: Component Decoupling first extraction](#iter-1-component-decoupling)
 - [iter-0 — Baseline Crystallization (seed narrative)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-5-broad"></a>
+## iter-5 — Pediatric data + complexity-score model + third H2 entry + structlog cleanup
+
+**Tag:** `harness-iter-5`
+**Phase:** mixed — pediatric data expansion (chg-2), policy logic refinement (chg-3), H2 third entry (chg-4), instrumentation cleanup (chg-1)
+**Date:** 2026-05-25
+**Changes:** 4 (largest iteration by change count in the cycle so far)
+**Eval delta:** all 4 chg-3 + chg-4 risk cases (GC-012, GC-023, GC-024, GC-025) score ≥ 4 first-pass. iter-3's keyword heuristic replaced with an integer 1-5 score model; iter-3's tracing.py type-ignores cleared; third H2 entry shipped with documented non-override of both pre-flight policy checks.
+
+### What this iteration shipped
+
+iter-5 is the cycle's broadest iteration so far — four changes spanning
+four constraint levels (`instrumentation`, `evaluation_harness`,
+`escalation_branch`, `long_term_memory`). The changes are well-scoped
+individually; what's new is the cross-iteration *interaction surface*
+they exercise. The chg-4 asthma memory entry documents non-override of
+**both** the iter-3 chg-1 cost check AND the new iter-5 chg-3
+pediatric_complex check. GC-012 is the canonical case where all three
+contracts converge: severe pediatric eosinophilic asthma satisfies the
+memory's clinical criteria AND the pediatric_complex check correctly
+escalates. The agent's rationale cites both, the judge praises both,
+and the cycle's "memory as support, not replacement" contract has its
+strongest test yet.
+
+### The complexity-score model: honest framing matters
+
+chg-3 replaces the iter-3 keyword heuristic ("if severity language
+matches 'severe' / 'moderate-to-severe' / 'complex' / 'critical' →
+escalate") with an integer 1-5 complexity-score model. Weighted-sum:
+age extremes +2, severity tier +0 to +3, 2+ prior failures +1,
+comorbidities +1, clamped to [1, 5]. Pediatric escalation threshold = 3.
+All 4 pediatric data points route correctly: GC-012 (score 4),
+GC-023 (score 2 — below threshold, AUTO_APPROVED), GC-024 (score 4),
+GC-025 (score 5).
+
+The iteration's most defensible methodological move is the **honest
+framing in the commit message and the manifest**: *"This is a
+HEURISTIC IN SCORE-MODEL CLOTHING, not a data-fit discriminator.
+PACCA's dataset has 4 pediatric data points — enough to defend a
+per-feature weighting based on clinical rationale, not enough to
+'train' a model. The defensibility comes from each feature having a
+clinical reason, the integer 1-5 range matching the existing schema,
+and the four data points validating the chosen weights against
+expected outcomes."*
+
+Overstating empirical grounding would have been easy. The model has
+the *form* of a discriminator and the *behavior* of a discriminator;
+calling it a "score model" without qualification is technically true.
+The honest qualifier — "with 4 data points" — keeps the methodology
+record defensible. A future iteration with 10+ pediatric data points
+could legitimately re-tune the weights and call it a fit.
+
+### The dataset expansion that made the score model defensible
+
+chg-2 added three pediatric cases (GC-023 mild well-controlled, GC-024
+moderate ambiguous, GC-025 severe in a different condition) following
+the dataset survey at iter-4 close. The survey identified that the
+entire 22-case dataset had exactly one pediatric case (GC-012). One
+data point couldn't found a score-based discriminator. Three new cases
+spanning the discriminator's input space (below, at, above threshold)
+are still few but enable per-feature validation against expected
+outcomes.
+
+The chg-2 file structure mirrors the iter-2 NEAR_MISS_CASES precedent
+exactly: a separate `PEDIATRIC_CASES` list in
+`tests/clinical/pediatric_cases.py`, wired into the live clinical gate
+loop alongside GOLDEN_CASES + NEAR_MISS_CASES. GOLDEN_CASES stays at
+20; the `test_dataset_has_twenty_cases` integrity assertion is
+preserved. Same separation-as-discrimination-suite pattern.
+
+### The third H2 entry, and the dual-policy-check non-override
+
+chg-4 ships the third H2 memory entry: dupilumab for severe
+eosinophilic asthma. Mirrors the iter-3 NSCLC and iter-4 RA entry
+formats exactly (5 required criteria, 5 anti-patterns each ending
+`**Status: IN_REVIEW.** (Not DENIED.)`, explicit when-applies /
+when-not-applies sections). PROMPT_REGISTRY bumps v2.4 → v2.5.
+
+The new design element: the entry documents non-override of **both**
+pre-flight policy checks — iter-3 chg-1's `high_cost_check` AND iter-5
+chg-3's `pediatric_complex` check. GC-012 is the canonical interaction
+case. Live verification confirms: GC-012 routes to IN_REVIEW via the
+pediatric_complex check; the agent's rationale cites both the
+pediatric trigger and (when prompted) the clinical-eligibility
+satisfaction; the memory did not override the policy escalation.
+GC-023 (mild pediatric asthma) auto-approves cleanly; the memory did
+not over-fire on a case that doesn't match the severity criterion.
+
+### The structlog-style cleanup that earned out
+
+chg-1 closes the iter-3 chg-1 TODO comment by wrapping three
+structlog-style kwargs in `extra={...}` instead of switching to
+`structlog` (no new dependency added). The three `# type: ignore[call-arg]`
+markers from iter-3 are removed. This was the smallest, safest change
+in iter-5 — landed first to prove the branch worked before larger
+behavioral work.
+
+### Tangential type-fix work the iteration absorbed
+
+iter-3 chg-1's `py.typed` marker continues to surface pre-existing
+untyped code as the import graph gets walked deeper by each iteration's
+new files. iter-5 added 6 tangential type-fix markers (across
+`authorization.py`, `base.py`, `test_clinical_accuracy.py`) and 2
+additional pre-commit hook dependencies (`pytest`, `pytest-asyncio`).
+The pattern by now is well-established: each iteration that touches a
+new import surface absorbs the type-debt that surface contains, with
+explicit TODO comments where the fix is non-trivial.
+
+This is a feature of the methodology, not a bug. Inline tooling fixes
+landed during substantive work are amortized against meaningful
+changes; standalone "lint cleanup" iterations have no other forcing
+function. iter-5 is now four iterations into the py.typed cascade
+without a dedicated cleanup iteration — and the cumulative fixes are
+all defensible, narrowly scoped, and explicitly documented.
+
+### What success looks like for iter-6
+
+Three threads:
+
+1. **Generalize the complexity-score model beyond pediatric cases.**
+   The iter-5 chg-3 model is currently scoped to `_check_pediatric_complex`
+   only. The `Settings.complexity_specialist_review_min=4` threshold
+   exists for adult cases too. A non-pediatric complexity check is a
+   straightforward next iteration when a non-pediatric case justifies
+   it (e.g. an adult with multiple failures + comorbidities that
+   warrants specialist review even without cost or pediatric triggers).
+
+2. **Fourth H2 memory entry.** The three current entries cover NSCLC,
+   RA, and severe eosinophilic asthma. A fourth on a fundamentally
+   different decision pattern (e.g. a *deny* case like the GC-005
+   psoriasis-without-step-therapy class) would test that H2 entries
+   work for denial patterns too, not just approve patterns.
+
+3. **The structlog migration (full).** chg-1 took the
+   minimum-change path (wrap with `extra={...}`). A full migration to
+   `structlog` would clear the `# type: ignore` markers in `base.py`
+   (the tenacity decorator + the Anthropic SDK overload) and put
+   PACCA on a unified structured-logging foundation. Standalone
+   iteration; no behavioral risk.
+
+### Reflection: the cycle at iter-5 close
+
+The cycle has now produced six distinct iteration types:
+
+- **iter-0:** baseline crystallization (instrumentation seed)
+- **iter-1:** structural refactor (Component Decoupling)
+- **iter-2:** eval-net hardening (no behavioral change)
+- **iter-3:** first behavioral change (escalation + H2 + eval-net polish)
+- **iter-4:** behavioral consolidation (second H2 entry + cleanup)
+- **iter-5:** broad iteration (data + model + H2 + instrumentation)
+
+iter-5 is the first iteration that combined a *data* expansion, a
+*model* change that depends on the data, an *agent-surface* memory
+entry that depends on the model, AND an unrelated cleanup chg into
+one branch. The interaction surface — chg-2 enables chg-3 enables
+chg-4 documents-interaction-with-chg-3 — is the most complex
+dependency graph the cycle has executed. It landed cleanly with all
+risk cases preserved, demonstrating that the prior iterations'
+infrastructure (per-case regression gate, criterion-preservation
+tests, live verification on risk cases, runbook-driven execution
+with branch + PR workflow) scales to this complexity.
+
+### Files changed in this iteration
+
+**chg-1 (instrumentation):** `src/pacca/config/tracing.py`.
+
+**chg-2 (evaluation_harness):** `tests/clinical/pediatric_cases.py` (new),
+`tests/clinical/test_clinical_accuracy.py`, `.pre-commit-config.yaml`.
+
+**chg-3 (escalation_branch):** `src/pacca/models/clinical.py`,
+`src/pacca/models/authorization.py`, `src/pacca/agents/clinical_risk_detector.py`,
+`src/pacca/agents/base.py`, `tests/unit/test_complexity_score_model.py` (new),
+`tests/clinical/investigate_case.py`.
+
+**chg-4 (long_term_memory):** `src/pacca/agents/decision_support/long_term_memory.md`,
+`src/pacca/agents/prompts/templates.py`, `tests/unit/test_h2_memory_criterion_preservation.py`.
+
+**Documentation:** `docs/ITERATIONS.md`, `docs/DECISIONS.md`,
+`harness/manifests/iter-5.json`, `RUNBOOK_iter5.md`,
+`tests/clinical/baselines/iter-5-baseline.json` (live capture with `--rollouts 2`).
 
 ---
 
