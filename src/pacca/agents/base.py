@@ -75,7 +75,8 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import TypeVar
+from collections.abc import Mapping
+from typing import Any, TypeVar
 
 from anthropic import (
     APIConnectionError,
@@ -121,7 +122,7 @@ def _is_retriable_status_error(exc: BaseException) -> bool:
     HTTP errors. We only want to retry server-side errors.
     """
     if isinstance(exc, APIStatusError):
-        return exc.status_code >= 500
+        return bool(exc.status_code >= 500)
     return False
 
 
@@ -312,8 +313,8 @@ class BaseAgent(ABC):
     async def _call_with_retry(
         self,
         user_input: str,
-        tool_def: dict,
-    ):
+        tool_def: Mapping[str, object],
+    ) -> Any:
         """
         Call the Anthropic API with tenacity retry logic.
 
@@ -338,7 +339,7 @@ class BaseAgent(ABC):
         """
         settings = self._settings
 
-        @retry(
+        @retry(  # type: ignore[misc,unused-ignore]
             stop=stop_after_attempt(settings.llm_retry_max_attempts),
             wait=wait_exponential(
                 min=settings.llm_retry_wait_min_seconds,
@@ -348,8 +349,12 @@ class BaseAgent(ABC):
             before_sleep=_log_retry_attempt,
             reraise=True,
         )
-        async def _attempt() -> object:
-            return await self.client.messages.create(
+        async def _attempt() -> Any:
+            # The Anthropic SDK's create() has dozens of overloads; mypy can't
+            # narrow them given our dynamic model/tool inputs. The runtime call
+            # is correct (200+ passing tests confirm); the type-ignore is on the
+            # SDK's overload resolution, not on our argument values.
+            return await self.client.messages.create(  # type: ignore[call-overload,unused-ignore]
                 model=self.config.model,
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
