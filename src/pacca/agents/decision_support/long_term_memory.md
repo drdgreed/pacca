@@ -165,6 +165,84 @@ evaluation under the framework in the main system prompt.
 
 ---
 
+## Pattern: Dupilumab for severe eosinophilic asthma after high-dose ICS / LABA failure
+
+**Headline indication:** Severe persistent asthma uncontrolled on high-dose
+ICS/LABA with eosinophilic phenotype (eosinophils ≥ 300/µL OR FeNO ≥ 25 ppb),
+patient age ≥ 12, requesting dupilumab as add-on therapy per NIST/GINA
+guidelines.
+
+**Required criteria — ALL must be explicitly documented:**
+
+1. Diagnosis is **severe persistent asthma** with the severity tier
+   stated in the chart. Vague language like "active asthma" is not
+   sufficient; specific GINA Step 4 or 5 classification preferred.
+2. **Inadequate control on high-dose ICS / LABA**, with a specific agent
+   (e.g. fluticasone/salmeterol, budesonide/formoterol) at maximum dose
+   for ≥ 3 months. Objective markers of inadequate control documented
+   (multiple ED visits, exacerbations requiring oral steroids, decreased
+   PEF, or persistent symptoms despite adherence).
+3. **Eosinophilic phenotype** confirmed: eosinophil count ≥ 300/µL OR
+   FeNO ≥ 25 ppb. Both values with specific numbers in the chart.
+4. **Patient age ≥ 12 years** (per dupilumab label and NIST/GINA).
+5. **No contraindication**: no active uncontrolled infection, no live
+   vaccine within 30 days, no known dupilumab hypersensitivity.
+
+**Anti-patterns — disqualify the shortcut, require human review:**
+
+When ANY of the following is present, the auto-approve shortcut does NOT
+apply and the case **routes to IN_REVIEW for human clinical judgment** —
+**NEVER to DENIED**.
+
+- **Mild or moderate asthma** (not severe) → step-up to medium-/high-dose
+  ICS/LABA may be appropriate before biologic. **Status: IN_REVIEW.**
+  (Not DENIED.)
+- **Insufficient ICS/LABA trial duration** (< 3 months at maximum dose) →
+  cannot establish inadequate-control criterion. **Status: IN_REVIEW.**
+  (Not DENIED.)
+- **Non-eosinophilic phenotype** (eos < 300/µL AND FeNO < 25 ppb) →
+  alternative biologics (e.g. omalizumab for IgE-mediated, tezepelumab
+  for thymic stromal lymphopoietin) may be more appropriate.
+  **Status: IN_REVIEW.** (Not DENIED.)
+- **Patient age < 12** → dupilumab not labeled for this age group in
+  asthma; off-label use requires specialist review. **Status: IN_REVIEW.**
+  (Not DENIED.)
+- **Active infection / live vaccine / known hypersensitivity** →
+  contraindication review. **Status: IN_REVIEW.** (Not DENIED.)
+
+**Why this distinction matters.** Same as the NSCLC and RA entries:
+PACCA's design routes off-pattern cases to human review, not to
+automatic denial.
+
+**When the shortcut applies:** AUTO_APPROVE at high confidence (≥ 0.95)
+**conditional on** the policy-level pre-flight checks (iter-3 chg-1
+high_cost_check and pediatric_complex check from iter-5 chg-3). The
+rationale MUST explicitly cite (a) severe asthma classification, (b) the
+specific high-dose ICS/LABA agent and trial duration, (c) the specific
+eosinophil count and/or FeNO value, (d) age, (e) NIST/GINA citation.
+
+**Important interactions with policy escalations (iter-3 chg-1, iter-5 chg-3):**
+
+- If `ClinicalRiskDetector.high_cost_check` fires (annual cost > $100K),
+  the case routes to IN_REVIEW regardless of clinical eligibility.
+- If `ClinicalRiskDetector.pediatric_complex_check` fires (patient < 18
+  with complexity score ≥ 3), the case routes to IN_REVIEW regardless of
+  clinical eligibility — even for the canonical severe eosinophilic
+  pediatric asthma pattern (this is exactly the GC-012 case, which the
+  pediatric_complex check correctly escalates).
+
+The memory does **not** override either policy check. Its role is to
+give the agent the clinical-reasoning support to articulate "clinical
+criteria met **but policy escalation applies**" rather than the
+incorrect "clinical criteria met → approve" on cases like GC-012 (where
+the pediatric_complex check fires) or any hypothetical high-cost asthma
+biologic case (where high_cost_check fires).
+
+**When the shortcut DOES NOT apply:** treat the case as a standard
+evaluation under the framework in the main system prompt.
+
+---
+
 *This file is loaded at agent-initialization time by `_prompt_loader.py`
 (see iter-2 chg-1's Jinja2 mount-point pattern). Updates here propagate
 to the live agent on the next run.*
