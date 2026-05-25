@@ -12,7 +12,12 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
+    # rev pinned to match the project's local + CI ruff version. CI uses
+    # `pip install ruff` (latest); when CI's ruff and the pre-commit hook's
+    # ruff disagree on formatting, format drift lands on main and breaks CI.
+    # iter-3/4/5 hit this repeatedly until iter-5 autonomous fix-up bumped
+    # the pin. Re-pin when CI's installed ruff diverges materially.
+    rev: v0.15.12
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]

@@ -47,8 +47,8 @@ _SRC_PATH_RE = re.compile(r"src/[A-Za-z0-9_./-]+\.py")
 class DanglingReference:
     """A documented source path that does not exist on disk."""
 
-    doc_file: str          # path of the markdown file containing the reference
-    referenced_path: str   # the src/... path it points at
+    doc_file: str  # path of the markdown file containing the reference
+    referenced_path: str  # the src/... path it points at
 
 
 def find_dangling_references(
@@ -86,9 +86,7 @@ def find_dangling_references(
                 continue
             seen.add(match)
             if not (repo_root / match).exists():
-                dangling.append(
-                    DanglingReference(doc_file=str(md), referenced_path=match)
-                )
+                dangling.append(DanglingReference(doc_file=str(md), referenced_path=match))
     return dangling
 
 

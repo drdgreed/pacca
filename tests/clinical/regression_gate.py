@@ -182,7 +182,7 @@ class RegressionReport:
             lines.append(f"  Regressions ({len(self.regressions)}):")
             for r in self.regressions:
                 lines.append(
-                    f"    {r.case_id}: {r.baseline_score} -> {r.current_score} " f"(drop {r.drop})"
+                    f"    {r.case_id}: {r.baseline_score} -> {r.current_score} (drop {r.drop})"
                 )
         if self.missing:
             lines.append(f"  Missing from current run: {', '.join(self.missing)}")
@@ -190,9 +190,7 @@ class RegressionReport:
             jitter_summary = ", ".join(
                 f"{r.case_id} {r.baseline_score}->{r.current_score}" for r in self.jitter
             )
-            lines.append(
-                f"  Jitter within noise tolerance ({len(self.jitter)}): " f"{jitter_summary}"
-            )
+            lines.append(f"  Jitter within noise tolerance ({len(self.jitter)}): {jitter_summary}")
         if self.improvements:
             improved = ", ".join(
                 f"{r.case_id} {r.baseline_score}->{r.current_score}" for r in self.improvements

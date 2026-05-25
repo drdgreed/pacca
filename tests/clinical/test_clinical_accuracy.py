@@ -85,9 +85,9 @@ class TestGoldenDatasetIntegrity:
     def test_all_case_ids_are_unique(self) -> None:
         """No two cases may share a case_id."""
         ids = [c.case_id for c in GOLDEN_CASES]
-        assert len(ids) == len(
-            set(ids)
-        ), f"Duplicate case IDs found: {[x for x in ids if ids.count(x) > 1]}"
+        assert len(ids) == len(set(ids)), (
+            f"Duplicate case IDs found: {[x for x in ids if ids.count(x) > 1]}"
+        )
 
     def test_all_cases_have_required_fields(self) -> None:
         """Every case must have non-empty required text fields."""
@@ -103,9 +103,9 @@ class TestGoldenDatasetIntegrity:
     def test_all_cases_have_expected_outcome(self) -> None:
         """Every case must specify an expected outcome."""
         for case in GOLDEN_CASES:
-            assert isinstance(
-                case.expected_outcome, ExpectedOutcome
-            ), f"{case.case_id}: expected_outcome must be an ExpectedOutcome enum"
+            assert isinstance(case.expected_outcome, ExpectedOutcome), (
+                f"{case.case_id}: expected_outcome must be an ExpectedOutcome enum"
+            )
 
     def test_all_cases_have_reasoning_must_include(self) -> None:
         """
@@ -247,9 +247,9 @@ class TestPreFlightOnGoldenCases:
                 f"Branch 4 (experimental treatment), but no flags triggered. "
                 f"Procedure code: {golden.procedure_code}"
             )
-            assert (
-                EscalationReason.EXPERIMENTAL_TREATMENT in flags.reasons
-            ), f"{golden.case_id}: Expected EXPERIMENTAL_TREATMENT reason."
+            assert EscalationReason.EXPERIMENTAL_TREATMENT in flags.reasons, (
+                f"{golden.case_id}: Expected EXPERIMENTAL_TREATMENT reason."
+            )
 
     def test_rare_condition_cases_trigger_pre_flight(self) -> None:
         """Branch 5 golden cases must trigger pre-flight escalation."""
@@ -321,9 +321,9 @@ class TestPreFlightOnGoldenCases:
                 clinical_case,
                 guidelines_context=golden.guidelines_context,
             )
-            assert (
-                flags.should_pre_escalate
-            ), f"{golden.case_id}: Expected conflicting guidelines pre-flight."
+            assert flags.should_pre_escalate, (
+                f"{golden.case_id}: Expected conflicting guidelines pre-flight."
+            )
             assert EscalationReason.CONFLICTING_GUIDELINES in flags.reasons
 
 

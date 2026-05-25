@@ -42,9 +42,9 @@ class TestDeliverable1RegressionGate:
 
         baseline = load_baseline(path)
         golden_ids = {c.case_id for c in GOLDEN_CASES}
-        assert (
-            set(baseline) == golden_ids
-        ), "baseline scoreboard must cover exactly the golden case IDs"
+        assert set(baseline) == golden_ids, (
+            "baseline scoreboard must cover exactly the golden case IDs"
+        )
 
     def test_save_then_load_roundtrip(self, tmp_path: Path) -> None:
         from tests.clinical.regression_gate import load_baseline, save_baseline
@@ -265,9 +265,9 @@ class TestDeliverable2NearMissCases:
         from tests.clinical.near_miss_cases import NEAR_MISS_CASES
 
         for c in NEAR_MISS_CASES:
-            assert (
-                c.expected_outcome != ExpectedOutcome.AUTO_APPROVED
-            ), f"{c.case_id} is a near-miss but expects AUTO_APPROVED"
+            assert c.expected_outcome != ExpectedOutcome.AUTO_APPROVED, (
+                f"{c.case_id} is a near-miss but expects AUTO_APPROVED"
+            )
 
     def test_ids_unique_and_disjoint_from_golden(self) -> None:
         from tests.clinical.golden_cases import GOLDEN_CASES
@@ -304,9 +304,9 @@ class TestDeliverable2NearMissCases:
 
         for c in NEAR_MISS_CASES:
             forbidden = {s.lower() for s in c.reasoning_must_not_include}
-            assert (
-                "auto-approved" in forbidden
-            ), f"{c.case_id} should forbid 'auto-approved' in rationale"
+            assert "auto-approved" in forbidden, (
+                f"{c.case_id} should forbid 'auto-approved' in rationale"
+            )
 
 
 # =============================================================================
