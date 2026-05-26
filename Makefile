@@ -18,7 +18,8 @@
 #   make install
 # =============================================================================
 
-.PHONY: install test test-cov test-all test-clinical lint typecheck clean help
+.PHONY: install test test-cov test-all test-clinical lint typecheck clean help \
+        sme-author sme-author-test sme-author-status sme-author-help
 
 # ── Installation ──────────────────────────────────────────────────────────────
 
@@ -77,11 +78,39 @@ clean:
 
 help:
 	@echo "Available commands:"
-	@echo "  make install        Install package + dev dependencies"
-	@echo "  make test           Fast unit tests (no API calls)"
-	@echo "  make test-cov       Unit tests + HTML coverage report"
-	@echo "  make test-all       All fast tests"
-	@echo "  make test-clinical  Clinical LLM evaluation (needs API key)"
-	@echo "  make lint           Ruff linter"
-	@echo "  make typecheck      Mypy type checker"
-	@echo "  make clean          Remove build artifacts"
+	@echo "  make install            Install package + dev dependencies"
+	@echo "  make test               Fast unit tests (no API calls)"
+	@echo "  make test-cov           Unit tests + HTML coverage report"
+	@echo "  make test-all           All fast tests"
+	@echo "  make test-clinical      Clinical LLM evaluation (needs API key)"
+	@echo "  make lint               Ruff linter"
+	@echo "  make typecheck          Mypy type checker"
+	@echo "  make clean              Remove build artifacts"
+	@echo ""
+	@echo "SME Case Authoring Agent:"
+	@echo "  make sme-author         Launch the interactive new-case workflow"
+	@echo "  make sme-author-status  Print dataset state + milestone gaps"
+	@echo "  make sme-author-test    Run unit tests for the SME-authoring module"
+	@echo "  make sme-author-help    Print the SME-author CLI help"
+
+# ── SME Case Authoring Agent ──────────────────────────────────────────────────
+# Convenience targets for clinicians + engineers using the SME authoring tool.
+# See docs/SME_CASE_AGENT_USER_MANUAL.md for the full walkthrough.
+
+sme-author:
+	@if [ -z "$$ANTHROPIC_API_KEY" ]; then \
+		echo "ERROR: ANTHROPIC_API_KEY is not set. Export it before running."; \
+		echo "  export ANTHROPIC_API_KEY=sk-ant-..."; \
+		exit 1; \
+	fi
+	pacca sme-author new
+
+sme-author-status:
+	pacca sme-author status
+
+sme-author-test:
+	@echo "Running SME-authoring module unit tests..."
+	pytest tests/unit/sme_authoring/ -v
+
+sme-author-help:
+	pacca sme-author --help
