@@ -49,6 +49,7 @@ from tests.clinical.evaluator import (
     ClinicalEvaluator,
     JudgeVerdict,
 )
+from tests.clinical.expansion_cases import EXPANSION_CASES
 from tests.clinical.golden_cases import (
     GOLDEN_CASES,
     EscalationBranch,
@@ -87,6 +88,34 @@ class TestGoldenDatasetIntegrity:
         ids = [c.case_id for c in GOLDEN_CASES]
         assert len(ids) == len(set(ids)), (
             f"Duplicate case IDs found: {[x for x in ids if ids.count(x) > 1]}"
+        )
+
+    def test_no_case_id_collisions_across_lists(self) -> None:
+        """
+        Case IDs (GC-NNN) are monotonically allocated across the entire
+        dataset. NEAR_MISS, PEDIATRIC, and EXPANSION suites must not collide
+        with GOLDEN or each other. This is the real invariant — per-list
+        uniqueness is necessary but not sufficient.
+        """
+        all_ids = [
+            c.case_id for c in (GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES + EXPANSION_CASES)
+        ]
+        duplicates = sorted({x for x in all_ids if all_ids.count(x) > 1})
+        assert not duplicates, (
+            f"Cross-list duplicate case IDs found: {duplicates}. "
+            "case_id is monotonic across all case files — see "
+            "docs/CASE_AUTHORING_GUIDE.md § 8."
+        )
+
+    def test_expansion_dataset_has_eight_cases(self) -> None:
+        """
+        EXPANSION_CASES (iter-6 gap-closure) is sized at 8. Size is encoded
+        as part of the spec so that drift (a case silently dropped or
+        duplicated) is caught by integrity.
+        """
+        assert len(EXPANSION_CASES) == 8, (
+            f"Expected 8 expansion cases, found {len(EXPANSION_CASES)}. "
+            "See docs/CASE_PROVENANCE.md and docs/EVALUATION_COVERAGE.md."
         )
 
     def test_all_cases_have_required_fields(self) -> None:
@@ -538,10 +567,11 @@ class TestFullClinicalEvaluation:
         verdicts: list[JudgeVerdict] = []
 
         # GOLDEN_CASES (20) + NEAR_MISS_CASES (iter-2 chg-3 memory-trap siblings)
-        # + PEDIATRIC_CASES (iter-5 chg-2 — complexity-score model validation set).
-        # Both supplementary lists run through the same judge but are kept
-        # separate — the `len == 20` integrity assertion above still holds.
-        for golden in GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES:
+        # + PEDIATRIC_CASES (iter-5 chg-2 — complexity-score model validation set)
+        # + EXPANSION_CASES (iter-6 — gap-closure suite per EVALUATION_COVERAGE.md).
+        # All supplementary lists run through the same judge but are kept separate
+        # — the `len == 20` integrity assertion above still holds for GOLDEN_CASES.
+        for golden in GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES + EXPANSION_CASES:
             clinical_case = ClinicalCase(
                 patient_id=f"P-EVAL-{golden.case_id}",
                 primary_diagnosis_code=golden.diagnosis_code,
