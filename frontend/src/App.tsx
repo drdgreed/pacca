@@ -12,9 +12,14 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { DirectorQueue } from './components/DirectorQueue';
 import { LoginScreen } from './components/LoginScreen';
 import { ProviderDashboard } from './components/ProviderDashboard';
+import { BatchDetail } from './sme-authoring/pages/BatchDetail';
+import { BatchList } from './sme-authoring/pages/BatchList';
 import { Dashboard as SMEDashboard } from './sme-authoring/pages/Dashboard';
+import { DatasetStatus } from './sme-authoring/pages/DatasetStatus';
+import { GapList } from './sme-authoring/pages/GapList';
 import { NewCaseWizard } from './sme-authoring/pages/NewCaseWizard';
-import { NotImplementedYet } from './sme-authoring/pages/NotImplementedYet';
+import { SessionDetail } from './sme-authoring/pages/SessionDetail';
+import { SessionList } from './sme-authoring/pages/SessionList';
 import { SMEAuthoringLayout } from './sme-authoring/SMEAuthoringLayout';
 
 /**
@@ -172,42 +177,12 @@ function App() {
         >
           <Route index element={<SMEDashboard />} />
           <Route path="new" element={<NewCaseWizard />} />
-          <Route
-            path="sessions"
-            element={
-              <NotImplementedYet pageTitle="Sessions" arrivingIn="PR-WUI-4" />
-            }
-          />
-          <Route
-            path="sessions/:sessionId"
-            element={
-              <NotImplementedYet
-                pageTitle="Session detail"
-                arrivingIn="PR-WUI-4"
-              />
-            }
-          />
-          <Route
-            path="batches"
-            element={
-              <NotImplementedYet pageTitle="Batches" arrivingIn="PR-WUI-4" />
-            }
-          />
-          <Route
-            path="batches/:batchId"
-            element={
-              <NotImplementedYet
-                pageTitle="Batch detail"
-                arrivingIn="PR-WUI-4"
-              />
-            }
-          />
-          <Route
-            path="gaps"
-            element={
-              <NotImplementedYet pageTitle="Priority gaps" arrivingIn="PR-WUI-4" />
-            }
-          />
+          <Route path="sessions" element={<SessionList />} />
+          <Route path="sessions/:sessionId" element={<SessionDetail />} />
+          <Route path="batches" element={<BatchList />} />
+          <Route path="batches/:batchId" element={<BatchDetail />} />
+          <Route path="gaps" element={<GapList />} />
+          <Route path="status" element={<DatasetStatus />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

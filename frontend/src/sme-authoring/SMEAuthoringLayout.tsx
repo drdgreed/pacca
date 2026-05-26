@@ -95,6 +95,14 @@ export function SMEAuthoringLayout({ onLogout }: SMEAuthoringLayoutProps) {
           >
             Gaps
           </NavLink>
+          <NavLink
+            to="/sme-author/status"
+            className={({ isActive }) =>
+              `sme-nav-link${isActive ? ' is-active' : ''}`
+            }
+          >
+            Status
+          </NavLink>
         </div>
         <div
           style={{
