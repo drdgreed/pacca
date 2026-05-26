@@ -81,6 +81,16 @@ PROMPT_REGISTRY: dict[str, dict[str, str]] = {
         "changed_in": "v2.2: Added governance framing; removed auto_deploy language; "
         "proposals require human approval gate",
     },
+    "SMECaseAuthoringAgent": {
+        "version": "v1.0",
+        "description": "Dev-tool drafter — converts SME plain-English scenarios into "
+        "CaseDraftResponse drafts for PACCA's clinical evaluation dataset",
+        "changed_in": "v1.0 (iter-7 chg-1): initial release. Enforces no-hallucination, "
+        "PHI-free, recognized-guideline-body, outcome-branch-consistency, and "
+        "specific-judge-criteria rules from CASE_AUTHORING_GUIDE.md at draft "
+        "time. Downstream validators in src/pacca/agents/sme_authoring/validators.py "
+        "verify deterministically.",
+    },
 }
 
 
