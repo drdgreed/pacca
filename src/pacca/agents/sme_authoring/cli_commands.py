@@ -279,6 +279,196 @@ def validate_draft(draft_path: Path) -> None:
 
 
 # =============================================================================
+# `pacca sme-author status` — dataset state + milestone distance
+# =============================================================================
+
+
+@sme_author.command(name="status")
+def status_cmd() -> None:
+    """Report dataset state + distance to 100/300/500 milestones."""
+    from pacca.agents.sme_authoring.gap_analyzer import compute_gaps, read_coverage
+
+    snapshot = read_coverage()
+    if not snapshot.parsed_ok:
+        click.secho(f"Coverage not available: {snapshot.parse_error}", fg="yellow")
+        return
+
+    click.echo(f"Total cases: {snapshot.total_cases}")
+    click.echo("\nPer-list counts:")
+    for row in snapshot.per_list_counts:
+        click.echo(f"  {row.list_name:<35} {row.count:>4}  {row.id_range}")
+
+    gaps = compute_gaps()
+    milestone_gaps = [g for g in gaps if g.category == "milestone"]
+    if milestone_gaps:
+        click.echo("\nNext milestones:")
+        for g in milestone_gaps:
+            click.echo(f"  {g.label:<45} {g.cases_needed:>3} cases needed")
+
+
+# =============================================================================
+# `pacca sme-author list-batches` — show roadmap batches
+# =============================================================================
+
+
+@sme_author.command(name="list-batches")
+def list_batches_cmd() -> None:
+    """List batches from docs/DATASET_GROWTH_ROADMAP.md."""
+    from pacca.agents.sme_authoring.roadmap_reader import read_batches
+
+    batches = read_batches()
+    if not batches:
+        click.secho(
+            "No batches found. Either docs/DATASET_GROWTH_ROADMAP.md "
+            "is missing or has no parseable batches.",
+            fg="yellow",
+        )
+        return
+
+    click.echo(f"Available batches ({len(batches)}):\n")
+    for b in batches:
+        new_marker = " [NEW FILE]" if b.is_new_file else ""
+        click.echo(
+            f"  Batch {b.batch_id}  {b.name}  ({b.case_count} cases)  → {b.target_file}{new_marker}"
+        )
+
+
+# =============================================================================
+# `pacca sme-author list-gaps` — surface prioritized coverage gaps
+# =============================================================================
+
+
+@sme_author.command(name="list-gaps")
+@click.option(
+    "--top",
+    default=10,
+    help="Show only the top-N gaps. Defaults to 10.",
+)
+def list_gaps_cmd(top: int) -> None:
+    """List the highest-priority coverage gaps."""
+    from pacca.agents.sme_authoring.gap_analyzer import compute_gaps
+
+    gaps = compute_gaps()
+    if not gaps:
+        click.secho("No gaps found. Dataset may already be balanced.", fg="green")
+        return
+
+    click.echo(f"Top {min(top, len(gaps))} gaps:\n")
+    for g in gaps[:top]:
+        click.echo(
+            f"  P{g.priority}  [{g.category:<18}] {g.label:<40} (need {g.cases_needed} more)"
+        )
+        click.echo(f"        {g.description}")
+
+
+# =============================================================================
+# `pacca sme-author list-sessions` — show saved sessions
+# =============================================================================
+
+
+@sme_author.command(name="list-sessions")
+def list_sessions_cmd() -> None:
+    """List saved SME-authoring sessions (most-recent first)."""
+    from pacca.agents.sme_authoring.session import list_sessions
+
+    sessions = list_sessions()
+    if not sessions:
+        click.echo("No saved sessions.")
+        return
+
+    click.echo(f"Saved sessions ({len(sessions)}):\n")
+    for s in sessions:
+        ts = s.last_updated_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        scenario_desc = s.scenario.description[:50] if s.scenario else "(no scenario)"
+        click.echo(
+            f"  {s.session_id}  [{s.mode:<10}] step={s.last_step:<22} "
+            f"updated={ts}\n      {scenario_desc}..."
+        )
+
+
+# =============================================================================
+# `pacca sme-author resume <session_id>` — show a saved session
+# =============================================================================
+
+
+@sme_author.command(name="resume")
+@click.argument("session_id")
+def resume_cmd(session_id: str) -> None:
+    """
+    Show a saved session's state.
+
+    PR-3 ships read-only display; full interactive resume (continue
+    drafting from the saved step) is queued for PR-4.
+    """
+    from pacca.agents.sme_authoring.session import (
+        SessionStorageError,
+        load_session,
+    )
+
+    try:
+        state = load_session(session_id)
+    except FileNotFoundError as exc:
+        raise click.ClickException(str(exc)) from exc
+    except SessionStorageError as exc:
+        raise click.ClickException(f"Session corrupt: {exc}") from exc
+
+    click.echo(f"Session {state.session_id}")
+    click.echo(f"  Mode:         {state.mode}")
+    click.echo(f"  Created:      {state.created_at.isoformat()}")
+    click.echo(f"  Last updated: {state.last_updated_at.isoformat()}")
+    click.echo(f"  Last step:    {state.last_step}")
+    if state.scenario:
+        click.echo(f"  Scenario:     {state.scenario.description}")
+    if state.sme_attestation:
+        click.echo(f"  Attestation:  {state.sme_attestation}")
+    if state.draft:
+        click.echo(f"  Draft case_id: {state.draft.case_id}")
+        click.echo(f"  Draft outcome: {state.draft.expected_outcome}")
+    click.secho(
+        "\nFull interactive resume queued for PR-4. Use `pacca sme-author "
+        "new` to start a fresh session.",
+        fg="yellow",
+    )
+
+
+# =============================================================================
+# `pacca sme-author batch <BATCH_ID>` — list the batch's case slots
+# =============================================================================
+
+
+@sme_author.command(name="batch")
+@click.argument("batch_id")
+def batch_cmd(batch_id: str) -> None:
+    """
+    Show a roadmap batch's case-slot manifest.
+
+    PR-3 displays the batch's planned cases (read-only). PR-4 adds
+    `--draft-all` to iterate through the cases via the new-case
+    workflow.
+    """
+    from pacca.agents.sme_authoring.roadmap_reader import get_batch
+
+    batch = get_batch(batch_id)
+    if batch is None:
+        raise click.ClickException(
+            f"Batch '{batch_id}' not found in docs/DATASET_GROWTH_ROADMAP.md."
+        )
+
+    click.echo(f"Batch {batch.batch_id}: {batch.name}")
+    click.echo(f"  Target file: {batch.target_file}{' (NEW)' if batch.is_new_file else ''}")
+    click.echo(f"  ID range:    {batch.id_range}")
+    click.echo(f"  Case count:  {batch.case_count}")
+    click.echo("\nCase slots:")
+    for case in batch.cases:
+        click.echo(f"  {case.case_id}  {case.description}")
+    click.secho(
+        "\nFull batch-mode drafting queued for PR-4. For now, use these "
+        "slots as authoring prompts via `pacca sme-author new`.",
+        fg="yellow",
+    )
+
+
+# =============================================================================
 # Helpers (private — not part of the public command surface)
 # =============================================================================
 
