@@ -16,6 +16,25 @@ See:
 - /Users/davidreed/.claude/plans/mutable-tinkering-candle.md for the plan
 """
 
+from pacca.agents.sme_authoring.case_writer import (
+    CaseAlreadyExists,
+    CaseWriterError,
+    FileSyntaxError,
+    append_case_to_file,
+    create_new_case_file,
+    format_case_as_python,
+)
+from pacca.agents.sme_authoring.coverage_updater import (
+    CoverageBump,
+    CoverageUpdaterError,
+    bump_coverage_for_case,
+)
+from pacca.agents.sme_authoring.file_router import (
+    FILE_TO_LIST_NAME,
+    SPECIALTY_TO_FILE,
+    RoutingDecision,
+    route_case,
+)
 from pacca.agents.sme_authoring.id_allocator import (
     allocate_ids,
     find_max_existing_id,
@@ -29,9 +48,16 @@ from pacca.agents.sme_authoring.models import (
     SMEScenario,
     ValidationOutcome,
     ValidationReport,
+    ValidatorName,
+)
+from pacca.agents.sme_authoring.provenance_writer import (
+    ProvenanceRow,
+    ProvenanceWriterError,
+    append_provenance_row,
+    case_id_already_in_provenance,
 )
 from pacca.agents.sme_authoring.validators import (
-    ValidatorName,
+    RECOGNIZED_GUIDELINE_BODIES,
     run_all_validators,
     validate_guideline_citation,
     validate_judge_criteria_specificity,
@@ -42,17 +68,42 @@ from pacca.agents.sme_authoring.validators import (
 )
 
 __all__ = [
+    # File router
+    "FILE_TO_LIST_NAME",
+    # Validators
+    "RECOGNIZED_GUIDELINE_BODIES",
+    "SPECIALTY_TO_FILE",
+    # Case writer
+    "CaseAlreadyExists",
+    # Models
     "CaseDraftRequest",
     "CaseDraftResponse",
+    "CaseWriterError",
+    # Coverage updater
+    "CoverageBump",
+    "CoverageUpdaterError",
+    "FileSyntaxError",
+    # Provenance writer
+    "ProvenanceRow",
+    "ProvenanceWriterError",
+    "RoutingDecision",
     "SMEScenario",
     "SessionState",
     "ValidationOutcome",
     "ValidationReport",
     "ValidatorName",
+    # ID allocator
     "allocate_ids",
+    "append_case_to_file",
+    "append_provenance_row",
+    "bump_coverage_for_case",
+    "case_id_already_in_provenance",
+    "create_new_case_file",
     "find_max_existing_id",
+    "format_case_as_python",
     "next_id",
     "release_reservation",
+    "route_case",
     "run_all_validators",
     "validate_guideline_citation",
     "validate_judge_criteria_specificity",
