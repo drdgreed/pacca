@@ -20,7 +20,7 @@ Architecture notes:
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from jose import jwt
 from pydantic import BaseModel
@@ -51,7 +51,8 @@ from .database import engine as sync_engine
 from .models import User as SyncUser  # SQLAlchemy model for the users table
 
 # Route modules
-from .routes import admin, authorizations
+from .routes import admin, authorizations, sme_authoring
+from .websockets.draft_stream import handle_draft_stream
 
 # =============================================================================
 # Application lifespan — startup and shutdown
@@ -148,6 +149,20 @@ app.include_router(
     dependencies=[Depends(verify_token)],
     tags=["Admin — Configuration & Operations"],
 )
+
+# SME Case Authoring Web UI backend (v1.1, PR-WUI-1).
+# Auth is enforced per-endpoint via Depends(verify_token) inside the
+# router module rather than as a router-wide dependency, because the
+# WebSocket endpoint needs its own auth-via-first-message protocol.
+app.include_router(sme_authoring.router)
+
+
+# SME Case Authoring WebSocket — live LLM drafting progress.
+# Path mirrors the REST route shape for discoverability.
+@app.websocket("/api/v1/sme-authoring/sessions/{session_id}/draft-stream")
+async def sme_draft_stream(websocket: "WebSocket", session_id: str) -> None:
+    """Live drafting stream — see websockets/draft_stream.py for the protocol."""
+    await handle_draft_stream(websocket, session_id)
 
 
 # =============================================================================
