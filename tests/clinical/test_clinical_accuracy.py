@@ -44,22 +44,67 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.clinical.ambiguous_completeness_cases import AMBIGUOUS_COMPLETENESS_CASES
+from tests.clinical.cardiology_cases import CARDIOLOGY_CASES
+from tests.clinical.denial_cases import DENIAL_CASES
+from tests.clinical.depth_extension_cases import DEPTH_EXTENSION_CASES
+from tests.clinical.endocrinology_cases import ENDOCRINOLOGY_CASES
 from tests.clinical.evaluator import (
     MINIMUM_ACCEPTABLE_ACCURACY,
     ClinicalEvaluator,
     JudgeVerdict,
 )
 from tests.clinical.expansion_cases import EXPANSION_CASES
+from tests.clinical.geriatric_cases import GERIATRIC_CASES
 from tests.clinical.golden_cases import (
     GOLDEN_CASES,
     EscalationBranch,
     ExpectedOutcome,
+    GoldenCase,
     get_cases_by_branch,
     get_dataset_summary,
     get_hallucination_trap_cases,
 )
+from tests.clinical.hematology_cases import HEMATOLOGY_CASES
+from tests.clinical.mental_health_cases import MENTAL_HEALTH_CASES
 from tests.clinical.near_miss_cases import NEAR_MISS_CASES
+from tests.clinical.neurology_cases import NEUROLOGY_CASES
+from tests.clinical.ob_cases import OB_CASES
+from tests.clinical.oncology_depth_cases import ONCOLOGY_DEPTH_CASES
 from tests.clinical.pediatric_cases import PEDIATRIC_CASES
+from tests.clinical.pulmonology_adult_cases import PULMONOLOGY_ADULT_CASES
+from tests.clinical.transplant_cases import TRANSPLANT_CASES
+
+# Aggregate of ALL supplementary case lists for the cross-list integrity check
+# and the full-pipeline evaluation. Add new list imports + this tuple in
+# alphabetical order when a new file lands.
+ALL_SUPPLEMENTARY_LISTS: tuple[list[GoldenCase], ...] = (
+    NEAR_MISS_CASES,
+    PEDIATRIC_CASES,
+    EXPANSION_CASES,
+    DENIAL_CASES,
+    CARDIOLOGY_CASES,
+    MENTAL_HEALTH_CASES,
+    GERIATRIC_CASES,
+    PULMONOLOGY_ADULT_CASES,
+    AMBIGUOUS_COMPLETENESS_CASES,
+    TRANSPLANT_CASES,
+    NEUROLOGY_CASES,
+    OB_CASES,
+    HEMATOLOGY_CASES,
+    ENDOCRINOLOGY_CASES,
+    ONCOLOGY_DEPTH_CASES,
+    DEPTH_EXTENSION_CASES,
+)
+
+
+def _all_cases() -> list[GoldenCase]:
+    """Concatenate GOLDEN_CASES + every supplementary list."""
+    out: list[GoldenCase] = list(GOLDEN_CASES)
+    for lst in ALL_SUPPLEMENTARY_LISTS:
+        out.extend(lst)
+    return out
+
 
 # =============================================================================
 # Dataset integrity tests — fast, no API calls
@@ -93,13 +138,11 @@ class TestGoldenDatasetIntegrity:
     def test_no_case_id_collisions_across_lists(self) -> None:
         """
         Case IDs (GC-NNN) are monotonically allocated across the entire
-        dataset. NEAR_MISS, PEDIATRIC, and EXPANSION suites must not collide
-        with GOLDEN or each other. This is the real invariant — per-list
-        uniqueness is necessary but not sufficient.
+        dataset. All supplementary suites must not collide with GOLDEN or
+        with each other. This is the real invariant — per-list uniqueness
+        is necessary but not sufficient.
         """
-        all_ids = [
-            c.case_id for c in (GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES + EXPANSION_CASES)
-        ]
+        all_ids = [c.case_id for c in _all_cases()]
         duplicates = sorted({x for x in all_ids if all_ids.count(x) > 1})
         assert not duplicates, (
             f"Cross-list duplicate case IDs found: {duplicates}. "
@@ -107,15 +150,51 @@ class TestGoldenDatasetIntegrity:
             "docs/CASE_AUTHORING_GUIDE.md § 8."
         )
 
-    def test_expansion_dataset_has_eight_cases(self) -> None:
+    def test_dataset_has_one_hundred_cases(self) -> None:
         """
-        EXPANSION_CASES (iter-6 gap-closure) is sized at 8. Size is encoded
-        as part of the spec so that drift (a case silently dropped or
-        duplicated) is caught by integrity.
+        Total dataset (GOLDEN + every supplementary list) is sized at 100 —
+        the production-pilot milestone per DATASET_SUFFICIENCY.md and
+        DATASET_GROWTH_ROADMAP.md § 2 (iter-6 close).
         """
-        assert len(EXPANSION_CASES) == 8, (
-            f"Expected 8 expansion cases, found {len(EXPANSION_CASES)}. "
-            "See docs/CASE_PROVENANCE.md and docs/EVALUATION_COVERAGE.md."
+        total = len(_all_cases())
+        assert total == 100, (
+            f"Expected 100 cases at iter-6 milestone, found {total}. "
+            "See docs/DATASET_GROWTH_ROADMAP.md § 2 'Validation gates at 100-case milestone'."
+        )
+
+    def test_per_file_case_counts(self) -> None:
+        """
+        Per-file count assertions — locks the size of each supplementary
+        list as part of the spec. Drift (case silently dropped or duplicated)
+        is caught here.
+        """
+        expected_sizes = {
+            "GOLDEN_CASES": (GOLDEN_CASES, 20),
+            "NEAR_MISS_CASES": (NEAR_MISS_CASES, 2),
+            "PEDIATRIC_CASES": (PEDIATRIC_CASES, 3),
+            "EXPANSION_CASES": (EXPANSION_CASES, 11),
+            "DENIAL_CASES": (DENIAL_CASES, 3),
+            "CARDIOLOGY_CASES": (CARDIOLOGY_CASES, 4),
+            "MENTAL_HEALTH_CASES": (MENTAL_HEALTH_CASES, 5),
+            "GERIATRIC_CASES": (GERIATRIC_CASES, 4),
+            "PULMONOLOGY_ADULT_CASES": (PULMONOLOGY_ADULT_CASES, 5),
+            "AMBIGUOUS_COMPLETENESS_CASES": (AMBIGUOUS_COMPLETENESS_CASES, 5),
+            "TRANSPLANT_CASES": (TRANSPLANT_CASES, 4),
+            "NEUROLOGY_CASES": (NEUROLOGY_CASES, 4),
+            "OB_CASES": (OB_CASES, 5),
+            "HEMATOLOGY_CASES": (HEMATOLOGY_CASES, 4),
+            "ENDOCRINOLOGY_CASES": (ENDOCRINOLOGY_CASES, 3),
+            "ONCOLOGY_DEPTH_CASES": (ONCOLOGY_DEPTH_CASES, 6),
+            "DEPTH_EXTENSION_CASES": (DEPTH_EXTENSION_CASES, 12),
+        }
+        mismatches = []
+        for name, (lst, expected) in expected_sizes.items():
+            if len(lst) != expected:
+                mismatches.append(f"{name}: expected {expected}, found {len(lst)}")
+        assert not mismatches, (
+            "Per-file count drift detected: "
+            + "; ".join(mismatches)
+            + ". Update both the file and this test in the same PR."
         )
 
     def test_all_cases_have_required_fields(self) -> None:
@@ -566,12 +645,10 @@ class TestFullClinicalEvaluation:
         evaluator = ClinicalEvaluator()
         verdicts: list[JudgeVerdict] = []
 
-        # GOLDEN_CASES (20) + NEAR_MISS_CASES (iter-2 chg-3 memory-trap siblings)
-        # + PEDIATRIC_CASES (iter-5 chg-2 — complexity-score model validation set)
-        # + EXPANSION_CASES (iter-6 — gap-closure suite per EVALUATION_COVERAGE.md).
-        # All supplementary lists run through the same judge but are kept separate
-        # — the `len == 20` integrity assertion above still holds for GOLDEN_CASES.
-        for golden in GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES + EXPANSION_CASES:
+        # All 100 cases (GOLDEN_CASES + every supplementary list) run through
+        # the same evaluator + judge. The per-list integrity assertions above
+        # lock individual sizes; this loop aggregates them for the pipeline.
+        for golden in _all_cases():
             clinical_case = ClinicalCase(
                 patient_id=f"P-EVAL-{golden.case_id}",
                 primary_diagnosis_code=golden.diagnosis_code,

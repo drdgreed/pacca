@@ -1,7 +1,7 @@
 # Case Provenance — Per-Case Rationale, Failure Mode, and Iteration of Origin
 
 > **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md) — this document provides the audit-trail "why does each case exist" answer for every case in the dataset.
-> **Status:** v1.1 at iter-6 open (33-case state — added 8 expansion cases per `EVALUATION_COVERAGE.md` gaps). New rows added per case; iteration column tracks when the case landed.
+> **Status:** v1.2 at iter-6 close (100-case state — production-pilot milestone hit). New rows added per case; iteration column tracks when the case landed.
 
 ## Schema
 
@@ -50,6 +50,73 @@ A reviewer asking "why is this case here?" can answer from this table without re
 | GC-031 | expansion_cases.py | 14-month post-renal-transplant maintenance tacrolimus refill, stable graft function, target trough | **Coverage** (nephrology/transplant auto-approve, 1st); probes that procedure-class complexity (transplant immunosuppression) does not over-escalate routine refills | iter-6 |
 | GC-032 | expansion_cases.py | Chronic migraine (18 HA-days/month, MIDAS 28) with documented failure of 2 preventives (topiramate + propranolol); CGRP per AAN/AHS | **Coverage** (neurology auto-approve, 1st); probes that the agent does NOT demand onabotulinumtoxinA step-up before CGRP (common mis-application) | iter-6 |
 | GC-033 | expansion_cases.py | 29yo with stage II breast cancer, pre-chemo oocyte cryopreservation per ASCO/ASRM (medically-indicated fertility preservation) | **Coverage** (reproductive-endocrine / OB-overlap auto-approve, 1st); probes that the agent distinguishes medically-indicated fertility preservation from elective fertility services | iter-6 |
+| GC-034 | denial_cases.py | Off-label nivolumab for pancreatic adenocarcinoma without NCCN compendia support | **Coverage** (DENY — off-label oncology category); also tests CMS NCD compendia-based coverage logic | iter-6 Batch A |
+| GC-035 | denial_cases.py | PT visits exceeded annual benefit cap (50 of 30 used); no documented exception criteria | **Coverage** (DENY — benefit-cap category); probes contractual vs medical-necessity distinction | iter-6 Batch A |
+| GC-036 | denial_cases.py | Re-request for adalimumab 60 days after prior denial with identical documentation | **Coverage** (DENY — prior-denial-without-new-evidence category); also probes branch_7 interaction (pre-flight fires but no new evidence supports approve) | iter-6 Batch A |
+| GC-037 | cardiology_cases.py | TAVR for severe symptomatic AS, intermediate STS, heart-team consensus documented | **Coverage** (cardiology AUTO_APPROVE — interventional); per CMS NCD 20.32 | iter-6 Batch B |
+| GC-038 | cardiology_cases.py | AFib catheter ablation after failure of 2 antiarrhythmics (flecainide intolerance + sotalol inefficacy) | **Coverage** (cardiology AUTO_APPROVE — electrophysiology); ACC/AHA two-drug-failure criterion | iter-6 Batch B |
+| GC-039 | cardiology_cases.py | ICD primary prevention denied — LVEF 36% just above CMS NCD 35% cutoff; ischemic CM | **Coverage** (DENY — threshold-boundary) + **near-miss to GC-028** (LVEF 28% AUTO_APPROVED); tests threshold discrimination at cardiology surface | iter-6 Batch B |
+| GC-040 | cardiology_cases.py | Statin in 38yo with genetically-confirmed FH + strong family history; ACC/AHA FH exemption from age-based ASCVD | **Coverage** (cardiology AUTO_APPROVE — preventive); probes FH exemption to age-based ASCVD thresholds (common mis-application) | iter-6 Batch B |
+| GC-041 | mental_health_cases.py | TMS for treatment-resistant MDD after 2 AD trials + augmentation failure | **Coverage** (psychiatry AUTO_APPROVE — TRD); APA + CMS NCD criteria | iter-6 Batch C |
+| GC-042 | mental_health_cases.py | Esketamine intranasal for TRD requires SPRAVATO REMS + certified clinic | **REMS-required gate** (psychiatry IN_REVIEW); probes correct routing of REMS-program initiation | iter-6 Batch C |
+| GC-043 | mental_health_cases.py | Inpatient psychiatric admission for active SI with specific plan + intent | **Coverage** (psychiatry AUTO_APPROVE — urgent level-of-care); CMS InterQual / MCG criteria; time-sensitive | iter-6 Batch C |
+| GC-044 | mental_health_cases.py | LAI antipsychotic (paliperidone palmitate) for schizophrenia with documented non-adherence + 3 hospitalizations | **Coverage** (psychiatry AUTO_APPROVE — chronic disease management); same-molecule oral-to-LAI transition | iter-6 Batch C |
+| GC-045 | mental_health_cases.py | 16yo MDD SSRI initiation triggers specialist review per FDA black box + suicidality monitoring | **Coverage** (psychiatry IN_REVIEW — pediatric safety gate); FDA black-box warning surface | iter-6 Batch C |
+| GC-046 | geriatric_cases.py | 85yo cataract surgery with documented falls history + 20/100 vision | **Coverage** (geriatric AUTO_APPROVE — ophthalmology); probes that complexity-score model does NOT over-escalate purely on age | iter-6 Batch D |
+| GC-047 | geriatric_cases.py | 88yo adjuvant FOLFOX for stage III colon cancer; G8 score 13 (impaired) | **Coverage** (geriatric IN_REVIEW — oncology with frailty); SIOG/NCCN comprehensive geriatric assessment | iter-6 Batch D |
+| GC-048 | geriatric_cases.py | 82yo elective THA, ASA 2, independent in ADLs | **Coverage** (geriatric AUTO_APPROVE — orthopedic elective); probes age-only over-escalation failure mode | iter-6 Batch D |
+| GC-049 | geriatric_cases.py | 84yo dialysis initiation with frailty + cognitive impairment + family ambivalence | **Coverage** (geriatric IN_REVIEW — shared decision-making); KDIGO + RPA SDM Guideline | iter-6 Batch D |
+| GC-050 | pulmonology_adult_cases.py | Adult severe eosinophilic asthma dupilumab per GINA + EMA | **Coverage** (adult pulm AUTO_APPROVE); canonical positive for iter-5 chg-4 asthma H2 memory | iter-6 Batch E |
+| GC-051 | pulmonology_adult_cases.py | COPD escalation to triple LABA/LAMA/ICS after exacerbation; eos 280 | **Coverage** (adult pulm AUTO_APPROVE — COPD); GOLD Group E step-up | iter-6 Batch E |
+| GC-052 | pulmonology_adult_cases.py | Pulmonary rehab post-COPD-exacerbation, mMRC 3 | **Coverage** (adult pulm AUTO_APPROVE — rehab); CMS NCD 240.8 | iter-6 Batch E |
+| GC-053 | pulmonology_adult_cases.py | CPAP initiation post-AASM-conformant home sleep study, AHI 28 | **Coverage** (adult pulm AUTO_APPROVE — sleep med); CMS NCD 240.4; probes that home study is acceptable | iter-6 Batch E |
+| GC-054 | pulmonology_adult_cases.py | Adult severe asthma mepolizumab (anti-IL-5) | **Coverage** (adult pulm AUTO_APPROVE — biologic class diversity); sibling of GC-050 tests no class hierarchy | iter-6 Batch E |
+| GC-055 | ambiguous_completeness_cases.py | Psoriasis biologic — prior MTX duration and dose omitted | **Documentation-completeness graded** (ambiguous-tier IN_REVIEW); tests INFORMATION_NEEDED vs DENIED distinction | iter-6 Batch G |
+| GC-056 | ambiguous_completeness_cases.py | MS DMT — severity described qualitatively but EDSS score omitted | **Documentation-completeness graded** (ambiguous-tier IN_REVIEW); tests hallucination avoidance on missing standard metric | iter-6 Batch G |
+| GC-057 | ambiguous_completeness_cases.py | T2DM intensification — HbA1c value present but measurement date omitted | **Documentation-completeness graded** (ambiguous-tier IN_REVIEW); ADA 90-day recency rule | iter-6 Batch G |
+| GC-058 | ambiguous_completeness_cases.py | Oncology 2nd-line — prior regimen named but response not characterized | **Documentation-completeness graded** (ambiguous-tier IN_REVIEW); regimen choice depends on response classification | iter-6 Batch G |
+| GC-059 | ambiguous_completeness_cases.py | CGRP migraine prevention — "tried multiple preventives" without naming agents | **Documentation-completeness graded** (ambiguous-tier IN_REVIEW); AAN/AHS step-therapy documentation standard | iter-6 Batch G |
+| GC-060 | transplant_cases.py | Heart transplant tacrolimus initiation POD #8 per ISHLT | **Coverage** (transplant AUTO_APPROVE — initiation); probes that high target trough is appropriate for early post-op | iter-6 Batch H |
+| GC-061 | transplant_cases.py | 8yo liver transplant tacrolimus refill — pediatric + transplant intersection | **Cross-condition escalation** (transplant IN_REVIEW); two complexity drivers (pediatric + transplant) | iter-6 Batch H |
+| GC-062 | transplant_cases.py | Allogeneic BMT conditioning regimen for AML CR1 with adverse cytogenetics | **Coverage** (transplant IN_REVIEW — institutional protocol review by policy); ASTCT-recognized but BMT is always specialist-routed | iter-6 Batch H |
+| GC-063 | transplant_cases.py | Renal transplant Banff IIA rejection treated with IV methylprednisolone | **Coverage** (transplant AUTO_APPROVE — acute rejection); KDIGO first-line; time-sensitive | iter-6 Batch H |
+| GC-064 | neurology_cases.py | Ocrelizumab for highly active relapsing MS; JCV-negative; no prior DMT | **Coverage** (neurology AUTO_APPROVE — MS DMT); probes that current AAN guidance supports first-line high-efficacy (not platform DMT step-up) | iter-6 Batch I |
+| GC-065 | neurology_cases.py | Lecanemab for early AD with amyloid PET+ and APOE ε4 heterozygote | **Coverage** (neurology IN_REVIEW — REMS-like surveillance); ARIA monitoring + APOE risk discussion | iter-6 Batch I |
+| GC-066 | neurology_cases.py | VNS for refractory focal epilepsy after 3 AED failures + EMU eval (not surgical candidate) | **Coverage** (neurology IN_REVIEW — surgical-device specialist review); AAN VNS criteria met | iter-6 Batch I |
+| GC-067 | neurology_cases.py | IV alteplase for acute ischemic stroke within 75 min of onset, NIHSS 14 | **Urgent-care expedited workflow** (neurology AUTO_APPROVE — time-critical); AHA/ASA Class I; tests no-delay routing | iter-6 Batch I |
+| GC-068 | ob_cases.py | First-trimester dating ultrasound, uncertain LMP | **Coverage** (OB AUTO_APPROVE — routine prenatal); ACOG standard | iter-6 Batch J |
+| GC-069 | ob_cases.py | NIPT cell-free DNA in 38yo AMA primigravida | **Coverage** (OB AUTO_APPROVE — prenatal screening); ACOG/SMFM endorsement | iter-6 Batch J |
+| GC-070 | ob_cases.py | Brexanolone IV for postpartum depression after SSRI failure (REMS) | **REMS-required gate** (OB IN_REVIEW — Zulresso REMS); 60-hour infusion at certified setting | iter-6 Batch J |
+| GC-071 | ob_cases.py | Gestational diabetes insulin initiation after diet failure at 28 weeks | **Coverage** (OB AUTO_APPROVE — gestational complication); ACOG insulin preference in pregnancy | iter-6 Batch J |
+| GC-072 | ob_cases.py | Postpartum tubal ligation with Medicaid 30-day consent satisfied | **Coverage** (OB AUTO_APPROVE — sterilization); probes Medicaid-specific 42 CFR 441.250 consent rules | iter-6 Batch J |
+| GC-073 | expansion_cases.py | Vedolizumab at $99,500/year — cost just under $100K threshold; clinically inappropriate for PsA | **Cost-boundary** (parser does not fire cost trigger under threshold); IN_REVIEW for clinical inappropriateness (separate concern) | iter-6 Batch F |
+| GC-074 | expansion_cases.py | Abatacept at $102,000/year — cost just over $100K threshold; ACR criteria met | **Cost-boundary** (cost trigger fires at over-threshold); sibling of GC-010 ($288K) near boundary | iter-6 Batch F |
+| GC-075 | expansion_cases.py | Mixed-cost case: $45K requested infliximab + extraneous $250K spouse-therapy mention | **Cost-boundary parser disambiguation**; tests that parser extracts requested-drug cost, not maximum dollar amount in notes | iter-6 Batch F |
+| GC-076 | endocrinology_cases.py | Adjuvant RAI ablation after total thyroidectomy for intermediate-high-risk DTC | **Coverage** (endocrine AUTO_APPROVE — thyroid oncology); ATA risk stratification | iter-6 Batch K |
+| GC-077 | endocrinology_cases.py | Adrenal MRI ordered before biochemical confirmation of Cushing's | **Sequential-workup enforcement** (endocrine IN_REVIEW); Endo Society biochem-before-imaging hierarchy | iter-6 Batch K |
+| GC-078 | endocrinology_cases.py | Laparoscopic adrenalectomy for biochemically-confirmed 4.5cm pheochromocytoma post-alpha-blockade | **Coverage** (endocrine AUTO_APPROVE — surgical); Endo Society criteria | iter-6 Batch K |
+| GC-079 | hematology_cases.py | IV iron sucrose for severe IDA after PO iron intolerance + minimal response | **Coverage** (hematology AUTO_APPROVE — deficiency anemia); AGA/ASH criteria | iter-6 Batch L |
+| GC-080 | hematology_cases.py | AML 7+3 induction in fit adult with intermediate-risk cytogenetics | **Coverage** (hematology AUTO_APPROVE — leukemia induction); NCCN Category 1; time-sensitive | iter-6 Batch L |
+| GC-081 | hematology_cases.py | ITP rituximab after corticosteroid + IVIG failure | **Coverage** (hematology AUTO_APPROVE — biologic 2nd-line); ASH 2019 | iter-6 Batch L |
+| GC-082 | hematology_cases.py | Warfarin-associated ICH — 4-factor PCC reversal | **Urgent-care expedited workflow** (hematology AUTO_APPROVE — time-critical); AHA/ASA + NCS guideline; tests no-delay routing | iter-6 Batch L |
+| GC-083 | oncology_depth_cases.py | Multiple myeloma DRd induction, transplant-eligible NDMM | **Coverage** (oncology AUTO_APPROVE — MM); NCCN Cat 1 | iter-6 oncology depth |
+| GC-084 | oncology_depth_cases.py | Ovarian cancer PARP maintenance (olaparib) after platinum CR in BRCA1+ | **Coverage** (oncology AUTO_APPROVE — gyn-onc); NCCN Cat 1 / SOLO-1 | iter-6 oncology depth |
+| GC-085 | oncology_depth_cases.py | Locally advanced H&N SCC — cetuximab + radiation (cisplatin-ineligible from CKD) | **Coverage** (oncology AUTO_APPROVE — H&N); NCCN bioradiotherapy alternative | iter-6 oncology depth |
+| GC-086 | oncology_depth_cases.py | BRAF V600E metastatic melanoma — dabrafenib + trametinib (symptomatic) | **Coverage** (oncology AUTO_APPROVE — melanoma targeted); NCCN Cat 1 | iter-6 oncology depth |
+| GC-087 | oncology_depth_cases.py | mCRPC progressing on ADT — abiraterone + prednisone | **Coverage** (oncology AUTO_APPROVE — prostate); NCCN Cat 1 | iter-6 oncology depth |
+| GC-088 | oncology_depth_cases.py | Advanced HCC atezolizumab + bevacizumab, Child-Pugh A, EGD safety-cleared | **Coverage** (oncology AUTO_APPROVE — HCC); IMbrave150 / NCCN Cat 1; tests bevacizumab safety screen | iter-6 oncology depth |
+| GC-089 | depth_extension_cases.py | 15yo mild UC mesalamine induction per ESPGHAN | **Coverage** (adolescent AUTO_APPROVE — IBD); tests pediatric_complex does NOT fire on mild severity | iter-6 Batch M |
+| GC-090 | depth_extension_cases.py | 13yo severe MDD escitalopram initiation with passive death-wish ideation | **Coverage** (adolescent IN_REVIEW — psych); FDA black-box specialist gate | iter-6 Batch M |
+| GC-091 | depth_extension_cases.py | 16yo healthy female combined OC contraception in minor-consent state | **Coverage** (adolescent AUTO_APPROVE — contraception); CDC USMEC Cat 1; tests state minor-consent recognition | iter-6 Batch M |
+| GC-092 | depth_extension_cases.py | Knee MRI for suspected meniscal tear after PT × 6 weeks with mechanical symptoms | **Coverage** (imaging AUTO_APPROVE — orthopedic MRI); ACR Appropriateness | iter-6 Batch N |
+| GC-093 | depth_extension_cases.py | Shoulder MRI for chronic rotator cuff symptoms after PT with positive exam | **Coverage** (imaging AUTO_APPROVE — orthopedic MRI surgical planning); ACR | iter-6 Batch N |
+| GC-094 | depth_extension_cases.py | CTPA for high-Wells-probability PE workup with elevated D-dimer | **Urgent-care expedited workflow** (imaging AUTO_APPROVE — PE workup); time-sensitive; ACR + ATS/ESC | iter-6 Batch N |
+| GC-095 | depth_extension_cases.py | Adalimumab for HS Hurley II after clindamycin + rifampin failure | **Coverage** (derm AUTO_APPROVE — HS biologic); only FDA-approved HS biologic | iter-6 Batch O |
+| GC-096 | depth_extension_cases.py | Ruxolitinib topical for non-segmental vitiligo (newer FDA indication, 2022) | **Coverage** (derm IN_REVIEW — newer indication specialist review); FDA-approved | iter-6 Batch O |
+| GC-097 | depth_extension_cases.py | Isotretinoin for severe scarring nodular acne after oral antibiotic + topical failure; iPLEDGE registered | **Coverage** (derm AUTO_APPROVE — REMS-managed); AAD + iPLEDGE | iter-6 Batch O |
+| GC-098 | depth_extension_cases.py | Moderate UC vedolizumab first biologic after 5-ASA + steroid failure | **Coverage** (GI AUTO_APPROVE — UC biologic); ECCO + AGA; tests no class-hierarchy demand | iter-6 Batch P |
+| GC-099 | depth_extension_cases.py | EoE dupilumab after PPI + topical steroid failure (newer FDA indication, 2022) | **Coverage** (GI IN_REVIEW — newer indication specialist review); FDA-approved | iter-6 Batch P |
+| GC-100 | depth_extension_cases.py | Type II achalasia Heller myotomy + Dor fundoplication after pneumatic dilation failure | **Coverage** (GI AUTO_APPROVE — surgical; cap case at GC-100); ACG-endorsed; closes the iter-6 dataset-growth arc | iter-6 Batch P |
 
 ## How to use this document
 
@@ -80,4 +147,4 @@ When a new case lands, add a row with:
 
 ---
 
-*This document is part of the PACCA v2.3+ harness-engineering cycle documentation set. Last updated: 2026-05-25 at iter-6 open (33-case state).*
+*This document is part of the PACCA v2.4+ harness-engineering cycle documentation set. Last updated: 2026-05-25 at iter-6 close (100-case state — production-pilot milestone hit).*

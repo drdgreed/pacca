@@ -1,18 +1,58 @@
 # Evaluation Coverage Matrix
 
-> **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md) — this document grounds the coverage claims at the per-cell level.
-> **Status:** v1.1 at iter-6 open (33-case state — 8 expansion cases added per the iter-5 gap analysis). Re-baseline when the dataset crosses 50 / 100 / 300 / 500.
+> **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md), [`DATASET_GROWTH_ROADMAP.md`](./DATASET_GROWTH_ROADMAP.md), [`CASE_PROVENANCE.md`](./CASE_PROVENANCE.md).
+> **Status:** v1.2 at iter-6 close (100-case state — production-pilot milestone hit). Re-baseline when the dataset crosses 100 / 300 / 500.
 
 ## How to read this document
 
-Each section is a *dimension* (outcome class, escalation branch, specialty, age, etc.). Each cell shows the case IDs that cover that cell. Empty cells mark gaps explicitly. A reviewer asking "where do you test X?" finds the answer by case ID and can verify the case definition in [`tests/clinical/golden_cases.py`](../tests/clinical/golden_cases.py), [`tests/clinical/near_miss_cases.py`](../tests/clinical/near_miss_cases.py), [`tests/clinical/pediatric_cases.py`](../tests/clinical/pediatric_cases.py), or [`tests/clinical/expansion_cases.py`](../tests/clinical/expansion_cases.py).
+Each section is a *dimension* (outcome class, escalation branch, specialty, age, etc.). Each cell shows the case IDs that cover that cell. Empty cells mark gaps explicitly. A reviewer asking "where do you test X?" finds the answer by case ID and verifies the case definition in the relevant `tests/clinical/*_cases.py` file. The per-case authoritative source is [`CASE_PROVENANCE.md`](./CASE_PROVENANCE.md).
 
-The current dataset:
-- **GOLDEN_CASES:** 20 (GC-001 through GC-020)
-- **NEAR_MISS_CASES:** 2 (GC-021, GC-022)
-- **PEDIATRIC_CASES:** 3 (GC-023, GC-024, GC-025)
-- **EXPANSION_CASES:** 8 (GC-026 through GC-033) — iter-6 gap-closure suite
-- **Total live:** 33
+The current dataset (100 cases across 17 lists):
+
+| List | File | Count | IDs |
+|---|---|---|---|
+| GOLDEN_CASES | `golden_cases.py` | 20 | GC-001 to GC-020 |
+| NEAR_MISS_CASES | `near_miss_cases.py` | 2 | GC-021, GC-022 |
+| PEDIATRIC_CASES | `pediatric_cases.py` | 3 | GC-023 to GC-025 |
+| EXPANSION_CASES | `expansion_cases.py` | 11 | GC-026 to GC-033, GC-073 to GC-075 |
+| DENIAL_CASES | `denial_cases.py` | 3 | GC-034 to GC-036 |
+| CARDIOLOGY_CASES | `cardiology_cases.py` | 4 | GC-037 to GC-040 |
+| MENTAL_HEALTH_CASES | `mental_health_cases.py` | 5 | GC-041 to GC-045 |
+| GERIATRIC_CASES | `geriatric_cases.py` | 4 | GC-046 to GC-049 |
+| PULMONOLOGY_ADULT_CASES | `pulmonology_adult_cases.py` | 5 | GC-050 to GC-054 |
+| AMBIGUOUS_COMPLETENESS_CASES | `ambiguous_completeness_cases.py` | 5 | GC-055 to GC-059 |
+| TRANSPLANT_CASES | `transplant_cases.py` | 4 | GC-060 to GC-063 |
+| NEUROLOGY_CASES | `neurology_cases.py` | 4 | GC-064 to GC-067 |
+| OB_CASES | `ob_cases.py` | 5 | GC-068 to GC-072 |
+| ENDOCRINOLOGY_CASES | `endocrinology_cases.py` | 3 | GC-076 to GC-078 |
+| HEMATOLOGY_CASES | `hematology_cases.py` | 4 | GC-079 to GC-082 |
+| ONCOLOGY_DEPTH_CASES | `oncology_depth_cases.py` | 6 | GC-083 to GC-088 |
+| DEPTH_EXTENSION_CASES | `depth_extension_cases.py` | 12 | GC-089 to GC-100 |
+| **Total live** | — | **100** | — |
+
+### iter-6 close — milestone summary
+
+**Production-pilot milestone reached.** Per `DATASET_GROWTH_ROADMAP.md` § 2 "Validation gates at 100-case milestone":
+
+| Gate | Status |
+|---|---|
+| Case count = 100 | ✅ |
+| `test_no_case_id_collisions_across_lists` passes | ✅ |
+| `test_dataset_has_one_hundred_cases` passes | ✅ |
+| `test_per_file_case_counts` passes | ✅ |
+| Every Dimension-1 outcome class populated | ✅ (DENIED at 5 cases) |
+| All 7 escalation branches + NONE covered | ✅ |
+| 10 specialties at 5+ cases | ✅ (cardiology, MH, geriatric, pulm, transplant, neurology, OB, hematology, oncology, derm/GI via distributed depth) |
+| Companion docs updated | ✅ (this PR) |
+| SME Phase 1 review | Self-attested by author; CRB Phase 2 not yet operational (activates at 300) |
+| Iteration manifest | (Pending iter-6 manifest finalization — separate commit) |
+| Per-cell matrices below re-baselined | **PARTIAL** — high-level summary table updated; full per-cell matrix re-baseline deferred to the next iteration per the schedule below |
+
+**Deferred to next iteration:** the per-cell matrices in Dimensions 1–8 below reflect the 33-case state at iter-6 open. Full re-baseline at the 100-case state is a mechanical exercise (read CASE_PROVENANCE.md's failure-mode column + case file's expected_outcome/expected_branch fields, populate cells) and is scheduled for the next iteration. The high-level summary table at the end of this document IS updated for the 100-case state.
+
+---
+
+## (The Dimension-1 through Dimension-8 matrices below reflect the 33-case state — see "iter-6 close" note above)
 
 ## Dimension 1 — Outcome class × Expected branch
 
@@ -152,29 +192,28 @@ The current dataset:
 
 **Gap:** PACCA hasn't yet exercised middleware, skill, or sub-agent components. AHE paper expects all to be present at maturity. iter-6+ candidates.
 
-## Summary — per-dimension defensibility (iter-6 update)
+## Summary — per-dimension defensibility (iter-6 close, 100-case state)
 
 | Dimension | Defensible claim today | Gap to next claim level |
 |---|---|---|
-| Outcome class | "We test approve, in-review, deny, info-needed, and pre-flight outcomes" ← upgraded from iter-5 | DENIED has 2 cases — need 5+ for "we test denials at sufficient sample size" |
-| Escalation branch | "We cover all 7 branches plus the NONE branch (for denials)" | Need 3+ per branch for per-class regression detection |
-| Specialty | "We test oncology (med + radiation), cardiology, RA, IBD, asthma, derm, T2DM, hematology, neurology, transplant, reproductive endocrine, mental health, orthopedics" ← substantial upgrade | Need 5+ per specialty for within-specialty signal; pulmonology adult still absent |
-| Age bracket | "We test pediatric, adolescent (limited), adult, older adult, and ≥ 80 geriatric (1 case)" ← upgraded | Need 3+ geriatric for the 80+ stratum |
-| Documentation completeness | "We test complete (across all outcomes), ambiguous, and sparse + hallucination traps" | Need ambiguous DENY cases; graded sparseness |
-| Cost tier | "We test under-threshold + 2 over-threshold (1 IN_REVIEW, 1 DENIED)" ← upgraded | At-threshold (boundary) untested |
-| Demographics | "Cases mention age and gender in notes" | No structured fields; equity claims unsupported |
-| Comorbidity | "We have 3 multi-comorbidity cases plus partial coverage of geriatric polypharmacy" | Need graded coverage for parser robustness |
-| Failure mode | "Every documented mode has a named case; iter-6 added 4 new modes" ← upgraded | Per-mode statistical signal weak with 1-2 cases each |
-| AHE component | "System prompt, memory, escalation, evaluation, instrumentation tested" | Middleware, skill, sub-agent untested (intentionally — not yet built) |
+| Outcome class | "We test all 5 outcomes; DENIED at 5 cases meets minimum sample size" ← upgraded | DENIED at ambiguous + sparse completeness tiers still missing (1-2 each, 300-case roadmap) |
+| Escalation branch | "All 7 branches + NONE at ≥ 3 cases each" ← upgraded | (Sufficient for 100-milestone; 5+ per branch at 300) |
+| Specialty | "14+ specialties at 1+ case; 10 specialties at 5+ cases" ← substantial upgrade | Adult pulmonology, mental health, transplant, neurology, OB, hematology now covered at depth |
+| Age bracket | "Pediatric (8), adolescent (5), adult (60+), older adult (15+), 80+ (5)" ← upgraded | 80+ at 5 cases meets minimum |
+| Documentation completeness | "Complete (most), ambiguous tier (5 cases new), sparse + hallucination traps (2)" ← upgraded | Graded sparseness across more specialties (300-case roadmap) |
+| Cost tier | "Under-threshold + at-threshold-just-under + at-threshold-just-over + mixed-cost-parser-disambiguation + over-threshold IN_REVIEW + over-threshold DENIED" ← upgraded substantially | (Sufficient for 100-milestone) |
+| Demographics | "Cases mention age and gender in notes; structured fields still absent" | Schema change required for equity claims (300-case roadmap) |
+| Comorbidity | "Multi-comorbidity, geriatric polypharmacy, behavioral comorbidity all represented" ← upgraded | Graded coverage for parser robustness still iter-on-iter improvement |
+| Failure mode | "Every documented mode has 1–5 named cases; 8 new modes added at iter-6" ← upgraded | Per-mode 3+ cases each becomes attainable at 300 |
+| AHE component | "H1, H2, H4, H5 tested; PACCA-specific extensions tested" | H3 (sub-agent), H6 (skill), H7 (middleware) — intentionally not yet built |
 
 ## Re-baselining schedule
 
 This document is re-baselined whenever the dataset crosses a threshold:
-- **At 50 cases** (next milestone — 17 more cases needed): re-fill every cell; surface remaining gaps
-- **At 100 cases**: add demographic dimension rows; add per-specialty regression-signal rows
+- **At 100 cases** (current — full per-cell re-baseline DEFERRED to next iteration; high-level summary updated): add demographic dimension rows; add per-specialty regression-signal rows
 - **At 300 cases**: add prevalence-weighted distribution row; add demographic stratification rows
 - **At 500 cases**: add inter-rater reliability rows (Cohen's κ per case per reviewer)
 
 ---
 
-*This document is part of the PACCA v2.3+ harness-engineering cycle documentation set. Last updated: 2026-05-25 at iter-6 open (33-case state).*
+*This document is part of the PACCA v2.4+ harness-engineering cycle documentation set. Last updated: 2026-05-25 at iter-6 close (100-case state). Per-cell matrix re-baseline deferred to next iteration.*
