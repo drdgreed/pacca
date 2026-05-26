@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Float,
@@ -21,12 +22,18 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+# Cross-dialect JSON: SQLite + asyncpg both get a sane default, while
+# PostgreSQL deployments still get the indexable JSONB type.
+# Replaces the previous JSONB-only annotation, which crashed at
+# create_all on any SQLite-backed environment (local dev default).
+_JSON_VARIANT = JSON().with_variant(JSONB(), "postgresql")
+
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
 
     type_annotation_map = {
-        dict[str, Any]: JSONB,
+        dict[str, Any]: _JSON_VARIANT,
     }
 
 
@@ -50,7 +57,7 @@ class AuthorizationRequestModel(Base):
     # Clinical info
     primary_diagnosis_code: Mapped[str] = mapped_column(String(20), index=True)
     primary_diagnosis_description: Mapped[str] = mapped_column(Text)
-    secondary_diagnoses: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    secondary_diagnoses: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Treatment info
     treatment_code: Mapped[str] = mapped_column(String(20), index=True)
@@ -75,8 +82,8 @@ class AuthorizationRequestModel(Base):
     evidence_quality: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Evidence and narrative (stored as JSON)
-    evidence_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    narrative_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    evidence_data: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
+    narrative_data: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Timestamps
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
@@ -110,11 +117,11 @@ class AuthorizationDecisionModel(Base):
     confidence_score: Mapped[float] = mapped_column(Float)
 
     # Rationale (stored as JSON)
-    rationale_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    rationale_data: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Conditions
-    conditions: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    required_actions: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    conditions: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
+    required_actions: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Validity
     effective_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -127,7 +134,7 @@ class AuthorizationDecisionModel(Base):
     decided_by: Mapped[str] = mapped_column(String(100), default="system")
     is_autonomous: Mapped[bool] = mapped_column(Boolean, default=True)
     was_escalated: Mapped[bool] = mapped_column(Boolean, default=False)
-    escalation_reasons: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    escalation_reasons: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Token usage tracking
     total_tokens_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -173,7 +180,7 @@ class HumanReviewModel(Base):
 
     # Quality feedback
     ai_accuracy_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    feedback_tags: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    feedback_tags: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Timestamps
     reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
@@ -213,7 +220,7 @@ class AuditLogModel(Base):
     actor_type: Mapped[str] = mapped_column(String(30))  # agent, user, system
 
     # Data
-    details: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    details: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
     input_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     output_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -223,7 +230,7 @@ class AuditLogModel(Base):
 
     # Performance
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    token_usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    token_usage: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Relationships
     request: Mapped[AuthorizationRequestModel | None] = relationship(
@@ -250,9 +257,13 @@ class GuidelineModel(Base):
     evidence_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Scope
-    specialties: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    treatment_categories: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    applicable_diagnoses: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    specialties: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
+    treatment_categories: Mapped[dict[str, Any] | None] = mapped_column(
+        _JSON_VARIANT, nullable=True
+    )
+    applicable_diagnoses: Mapped[dict[str, Any] | None] = mapped_column(
+        _JSON_VARIANT, nullable=True
+    )
 
     # Content summary
     summary: Mapped[str] = mapped_column(Text)
@@ -265,11 +276,11 @@ class GuidelineModel(Base):
     # Metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
-    tags: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    tags: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Vector store reference
     vector_store_ids: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True
+        _JSON_VARIANT, nullable=True
     )  # IDs of chunks in vector store
 
     def __repr__(self) -> str:
