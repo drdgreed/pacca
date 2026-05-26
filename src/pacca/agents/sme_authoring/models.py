@@ -16,13 +16,11 @@ Design notes:
 
 from __future__ import annotations
 
+from datetime import datetime  # noqa: TC003 — runtime-required by Pydantic
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
-if TYPE_CHECKING:
-    from datetime import datetime
 
 
 class ValidationOutcome(StrEnum):
