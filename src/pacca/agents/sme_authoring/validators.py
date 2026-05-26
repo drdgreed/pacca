@@ -41,6 +41,7 @@ __all__ = [
     "ValidationReport",
     "ValidatorName",
     "run_all_validators",
+    "scan_for_phi",
     "validate_guideline_citation",
     "validate_judge_criteria_specificity",
     "validate_no_phi",
@@ -220,19 +221,20 @@ _GENERIC_JUDGE_PATTERNS = (
 # =============================================================================
 
 
-def validate_no_phi(case: CaseDraftResponse) -> ValidationReport:
+def scan_for_phi(text: str) -> list[str]:
     """
-    Scan clinical_notes (the highest-risk field) for PHI patterns.
+    Return a list of human-readable PHI marker names found in `text`.
+
+    Empty list = no PHI detected. This is the public PHI-detection
+    primitive — used both by `validate_no_phi` (against case
+    clinical_notes) and by `.githooks/pacca_guard.py` (against any
+    staged-file additions).
 
     Per CASE_AUTHORING_GUIDE.md § 4 — synthetic data only. Conservative
-    rules: any match → FAIL. SME must revise the notes to remove the PHI.
-
-    Returns:
-        ValidationReport with PASS or FAIL outcome.
+    pattern matching: false positives are preferable to false negatives
+    for PHI protection.
     """
-    text = case.clinical_notes
     hits: list[str] = []
-
     if _PHI_SSN.search(text):
         hits.append("SSN pattern (NNN-NN-NNNN)")
     if _PHI_MRN.search(text):
@@ -249,6 +251,20 @@ def validate_no_phi(case: CaseDraftResponse) -> ValidationReport:
         hits.append("specific date (M/D/YYYY format)")
     if _PHI_FULL_NAME.search(text):
         hits.append("titled full name (Mr/Mrs/Ms/Dr/Patient + First Last)")
+    return hits
+
+
+def validate_no_phi(case: CaseDraftResponse) -> ValidationReport:
+    """
+    Scan clinical_notes (the highest-risk field) for PHI patterns.
+
+    Per CASE_AUTHORING_GUIDE.md § 4 — synthetic data only. Conservative
+    rules: any match → FAIL. SME must revise the notes to remove the PHI.
+
+    Returns:
+        ValidationReport with PASS or FAIL outcome.
+    """
+    hits = scan_for_phi(case.clinical_notes)
 
     if hits:
         return ValidationReport(
