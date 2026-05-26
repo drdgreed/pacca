@@ -13,6 +13,7 @@ import { DirectorQueue } from './components/DirectorQueue';
 import { LoginScreen } from './components/LoginScreen';
 import { ProviderDashboard } from './components/ProviderDashboard';
 import { Dashboard as SMEDashboard } from './sme-authoring/pages/Dashboard';
+import { NewCaseWizard } from './sme-authoring/pages/NewCaseWizard';
 import { NotImplementedYet } from './sme-authoring/pages/NotImplementedYet';
 import { SMEAuthoringLayout } from './sme-authoring/SMEAuthoringLayout';
 
@@ -170,16 +171,7 @@ function App() {
           }
         >
           <Route index element={<SMEDashboard />} />
-          <Route
-            path="new"
-            element={
-              <NotImplementedYet
-                pageTitle="New case"
-                arrivingIn="PR-WUI-3"
-                body="The 6-step wizard for plain-English scenario → drafted, validated, attested, committed case lands in the next PR. The route is wired; the API endpoints exist."
-              />
-            }
-          />
+          <Route path="new" element={<NewCaseWizard />} />
           <Route
             path="sessions"
             element={
