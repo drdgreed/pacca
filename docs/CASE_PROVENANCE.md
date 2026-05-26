@@ -1,7 +1,7 @@
 # Case Provenance — Per-Case Rationale, Failure Mode, and Iteration of Origin
 
 > **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md) — this document provides the audit-trail "why does each case exist" answer for every case in the dataset.
-> **Status:** v1.0 at iter-5 close (25-case state). New rows added per case; iteration column tracks when the case landed.
+> **Status:** v1.1 at iter-6 open (33-case state — added 8 expansion cases per `EVALUATION_COVERAGE.md` gaps). New rows added per case; iteration column tracks when the case landed.
 
 ## Schema
 
@@ -42,6 +42,14 @@ A reviewer asking "why is this case here?" can answer from this table without re
 | GC-023 | pediatric_cases.py | 10yo with mild well-controlled asthma on low-dose ICS, well-controlled markers (PEF, eos, FeNO normal) | **Discriminator negative class** for iter-5 chg-3 complexity-score model — pediatric BUT mild should NOT escalate; risk case for iter-5 chg-4 asthma memory non-override on mild cases | iter-5 chg-2; risk case for iter-5 chg-3 + chg-4 |
 | GC-024 | pediatric_cases.py | 16yo with moderate Crohn's, immunomodulator failure, comorbid growth delay — clinical criteria for biologic met but multi-factor complexity warrants specialist review | **Discriminator ambiguous case** for iter-5 chg-3 complexity-score model — pushed over threshold by multiple weights | iter-5 chg-2; risk case for iter-5 chg-3 |
 | GC-025 | pediatric_cases.py | 9yo with severe refractory atopic dermatitis, multiple topical + systemic failures, atopic march comorbidities | **Discriminator positive class** for iter-5 chg-3 (different disease from GC-012, validates score model generalizes beyond asthma) | iter-5 chg-2; risk case for iter-5 chg-3 |
+| GC-026 | expansion_cases.py | Proton-beam radiation for low-risk prostate cancer (Gleason 6, PSA 5.2) with no contraindication to IMRT; patient preference cited as justification | **Coverage** (DENY class — closes the 0-DENY gap from `EVALUATION_COVERAGE.md`); also **step-therapy enforcement** parallel to GC-005 (preference is not a clinical justification) | iter-6 |
+| GC-027 | expansion_cases.py | Cardiac catheterization for atypical chest pain in a 44yo with zero cardiac risk factors and no prior non-invasive workup (stress test or coronary CTA) | **Coverage** (DENY class, 2nd) + **cardiology specialty** (1st); probes ACC/AHA workup-hierarchy enforcement | iter-6 |
+| GC-028 | expansion_cases.py | 82yo with ischemic cardiomyopathy, LVEF 28%, NYHA II on GDMT > 6 months, ICD implant meeting every CMS NCD 20.4 criterion | **Coverage** (cardiology auto-approve) + **age stratification ≥75 (1st geriatric case)**; probes that the agent does not escalate purely on age | iter-6 |
+| GC-029 | expansion_cases.py | Adult ADHD stimulant request in a patient with concurrent cannabis use and AUD-in-remission; no formal neuropsych testing | **Coverage** (psychiatry/behavioral specialty, 1st) + **controlled-substance specialist-review gate**; tests routing to BRANCH_2 for SUD + Schedule II combination | iter-6 |
+| GC-030 | expansion_cases.py | HbSS sickle cell with 5 painful crises in 12 months (3 hospitalized), hydroxyurea initiation per NHLBI/ASH | **Coverage** (hematology / rare-genetic auto-approve); probes that rare-condition pre-flight (branch_5) noting doesn't escalate when guideline criteria are clearly met | iter-6 |
+| GC-031 | expansion_cases.py | 14-month post-renal-transplant maintenance tacrolimus refill, stable graft function, target trough | **Coverage** (nephrology/transplant auto-approve, 1st); probes that procedure-class complexity (transplant immunosuppression) does not over-escalate routine refills | iter-6 |
+| GC-032 | expansion_cases.py | Chronic migraine (18 HA-days/month, MIDAS 28) with documented failure of 2 preventives (topiramate + propranolol); CGRP per AAN/AHS | **Coverage** (neurology auto-approve, 1st); probes that the agent does NOT demand onabotulinumtoxinA step-up before CGRP (common mis-application) | iter-6 |
+| GC-033 | expansion_cases.py | 29yo with stage II breast cancer, pre-chemo oocyte cryopreservation per ASCO/ASRM (medically-indicated fertility preservation) | **Coverage** (reproductive-endocrine / OB-overlap auto-approve, 1st); probes that the agent distinguishes medically-indicated fertility preservation from elective fertility services | iter-6 |
 
 ## How to use this document
 
@@ -72,4 +80,4 @@ When a new case lands, add a row with:
 
 ---
 
-*This document is part of the PACCA v2.3 harness-engineering cycle documentation set. Last updated: 2026-05-25 at iter-5 close.*
+*This document is part of the PACCA v2.3+ harness-engineering cycle documentation set. Last updated: 2026-05-25 at iter-6 open (33-case state).*
