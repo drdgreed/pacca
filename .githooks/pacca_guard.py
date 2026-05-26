@@ -83,6 +83,11 @@ _SKIP_PREFIXES = (
     ".githooks/",
     "src/pacca/agents/sme_authoring/validators.py",
     ".pre-commit-config.yaml",
+    # Static frontend templates with vendor-CDN URLs. The Google Fonts
+    # variable-axis syntax (e.g., `wght@8..60`) matches the email regex
+    # as a false positive. This file is a build-time HTML shell — no
+    # clinical content ever lives here by design.
+    "frontend/index.html",
 )
 
 

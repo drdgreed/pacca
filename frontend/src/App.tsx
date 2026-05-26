@@ -1,64 +1,121 @@
-import React, { useState, useEffect } from 'react';
-import { ProviderDashboard } from './components/ProviderDashboard';
-// We will build these two components next!
-import { LoginScreen } from './components/LoginScreen'; 
-import { DirectorQueue } from './components/DirectorQueue'; 
+import { useState } from 'react';
+import {
+  BrowserRouter,
+  Navigate,
+  NavLink,
+  Outlet,
+  Route,
+  Routes,
+  useNavigate,
+} from 'react-router-dom';
 import { AdminDashboard } from './components/AdminDashboard';
+import { DirectorQueue } from './components/DirectorQueue';
+import { LoginScreen } from './components/LoginScreen';
+import { ProviderDashboard } from './components/ProviderDashboard';
+import { Dashboard as SMEDashboard } from './sme-authoring/pages/Dashboard';
+import { NotImplementedYet } from './sme-authoring/pages/NotImplementedYet';
+import { SMEAuthoringLayout } from './sme-authoring/SMEAuthoringLayout';
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentView, setCurrentView] = useState<'provider' | 'director' | 'admin'>('provider');
+/**
+ * App — top-level shell.
+ *
+ * Architecture:
+ *   - React Router (BrowserRouter) governs all navigation.
+ *   - The legacy Provider / Director / Admin tabs live under <DashboardShell/>
+ *     which preserves the existing Inter + Tailwind indigo aesthetic.
+ *   - The new SME-authoring surface lives under /sme-author/* and renders
+ *     <SMEAuthoringLayout/>, which scopes the Editorial-Clinical theme.
+ *
+ * Auth: same JWT-in-localStorage pattern as before. <RequireAuth/> wraps
+ * any authenticated subtree and redirects to /login when the token is
+ * absent or invalid.
+ */
 
-  // Check if we already have a token when the app loads
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setIsAuthenticated(true);
-    }
-  }, []);
+function RequireAuth({ children }: { children: JSX.Element }) {
+  // Read localStorage synchronously on first render — avoids the flash
+  // of "no auth" before useEffect settles. localStorage is fast enough
+  // that this doesn't block paint.
+  const [hasToken] = useState<boolean>(() =>
+    Boolean(localStorage.getItem('token')),
+  );
+
+  if (!hasToken) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+/**
+ * The legacy Provider / Director / Admin surface — same indigo Tailwind
+ * dashboard as before, but the tab buttons are now React Router NavLinks
+ * so deep-linking works.
+ */
+function DashboardShell() {
+  const navigate = useNavigate();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    setIsAuthenticated(false);
+    navigate('/login');
   };
 
-  // If not logged in, only show the login screen
-  if (!isAuthenticated) {
-    return <LoginScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
-  }
-
-  // If logged in, show the full app with Navigation
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Navigation Bar */}
       <nav className="bg-indigo-700 text-white shadow-md">
         <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-6">
             <h1 className="text-2xl font-bold tracking-tight">PACCA</h1>
             <div className="space-x-1">
-              <button 
-                onClick={() => setCurrentView('provider')}
-                className={`px-4 py-2 rounded-md transition-colors ${currentView === 'provider' ? 'bg-indigo-800 font-semibold' : 'hover:bg-indigo-600'}`}
+              <NavLink
+                to="/provider"
+                className={({ isActive }) =>
+                  `px-4 py-2 rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-indigo-800 font-semibold'
+                      : 'hover:bg-indigo-600'
+                  }`
+                }
               >
                 Submit Case
-              </button>
-              <button 
-                onClick={() => setCurrentView('director')}
-                className={`px-4 py-2 rounded-md transition-colors ${currentView === 'director' ? 'bg-indigo-800 font-semibold' : 'hover:bg-indigo-600'}`}
+              </NavLink>
+              <NavLink
+                to="/director"
+                className={({ isActive }) =>
+                  `px-4 py-2 rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-indigo-800 font-semibold'
+                      : 'hover:bg-indigo-600'
+                  }`
+                }
               >
                 Director Queue
-              </button>
+              </NavLink>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) =>
+                  `px-4 py-2 rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-indigo-800 font-semibold'
+                      : 'hover:bg-indigo-600'
+                  }`
+                }
+              >
+                Admin Panel
+              </NavLink>
+              <NavLink
+                to="/sme-author"
+                className={({ isActive }) =>
+                  `px-4 py-2 rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-indigo-800 font-semibold'
+                      : 'hover:bg-indigo-600'
+                  }`
+                }
+              >
+                SME Authoring
+              </NavLink>
             </div>
           </div>
-          
-<button 
-  onClick={() => setCurrentView('admin')}
-  className={`px-4 py-2 rounded-md transition-colors ${currentView === 'admin' ? 'bg-indigo-800 font-semibold' : 'hover:bg-indigo-600'}`}
->
-  Admin Panel
-</button>
-
-          <button 
+          <button
             onClick={handleLogout}
             className="text-sm bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded border border-indigo-500 transition-colors"
           >
@@ -67,17 +124,103 @@ function App() {
         </div>
       </nav>
 
-<main className="py-8">
-  {currentView === 'provider' && <ProviderDashboard />}
-  {currentView === 'director' && <DirectorQueue />}
-  {currentView === 'admin' && <AdminDashboard />}
-</main>
-
-      {/* Main Content Area */}
       <main className="py-8">
-        {currentView === 'provider' ? <ProviderDashboard /> : <DirectorQueue />}
+        <Outlet />
       </main>
     </div>
+  );
+}
+
+function LoginRoute() {
+  const navigate = useNavigate();
+  return <LoginScreen onLoginSuccess={() => navigate('/provider')} />;
+}
+
+function App() {
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+  };
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginRoute />} />
+
+        {/* Legacy Tailwind/indigo surfaces */}
+        <Route
+          element={
+            <RequireAuth>
+              <DashboardShell />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Navigate to="/provider" replace />} />
+          <Route path="/provider" element={<ProviderDashboard />} />
+          <Route path="/director" element={<DirectorQueue />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Route>
+
+        {/* NEW Editorial-Clinical SME-authoring surface */}
+        <Route
+          path="/sme-author"
+          element={
+            <RequireAuth>
+              <SMEAuthoringLayout onLogout={handleLogout} />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<SMEDashboard />} />
+          <Route
+            path="new"
+            element={
+              <NotImplementedYet
+                pageTitle="New case"
+                arrivingIn="PR-WUI-3"
+                body="The 6-step wizard for plain-English scenario → drafted, validated, attested, committed case lands in the next PR. The route is wired; the API endpoints exist."
+              />
+            }
+          />
+          <Route
+            path="sessions"
+            element={
+              <NotImplementedYet pageTitle="Sessions" arrivingIn="PR-WUI-4" />
+            }
+          />
+          <Route
+            path="sessions/:sessionId"
+            element={
+              <NotImplementedYet
+                pageTitle="Session detail"
+                arrivingIn="PR-WUI-4"
+              />
+            }
+          />
+          <Route
+            path="batches"
+            element={
+              <NotImplementedYet pageTitle="Batches" arrivingIn="PR-WUI-4" />
+            }
+          />
+          <Route
+            path="batches/:batchId"
+            element={
+              <NotImplementedYet
+                pageTitle="Batch detail"
+                arrivingIn="PR-WUI-4"
+              />
+            }
+          />
+          <Route
+            path="gaps"
+            element={
+              <NotImplementedYet pageTitle="Priority gaps" arrivingIn="PR-WUI-4" />
+            }
+          />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
