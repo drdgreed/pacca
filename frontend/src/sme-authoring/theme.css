@@ -186,6 +186,41 @@
 }
 
 /* -----------------------------------------------------------------------------
+ * Accessibility — skip-to-content link
+ * Visible only when focused (keyboard tab from the top of the page).
+ * Critical for screen-reader / keyboard-only users so they don't have
+ * to tab through the entire nav on every page navigation.
+ * --------------------------------------------------------------------------- */
+
+.sme-authoring .sme-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  z-index: 1000;
+  padding: var(--sme-space-sm) var(--sme-space-md);
+  background-color: var(--sme-deep-ink);
+  color: var(--sme-paper);
+  font-family: var(--sme-font-body);
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  font-size: 0.9375rem;
+  text-decoration: none;
+  transition: top var(--sme-transition);
+}
+
+.sme-authoring .sme-skip-link:focus {
+  top: 0;
+  outline: 2px solid var(--sme-deep-ink);
+  outline-offset: 2px;
+}
+
+/* Focused <main> shows no outline when programmatically focused via skip-link
+ * (tabIndex=-1 means it's not in the natural tab order). */
+.sme-authoring main:focus {
+  outline: none;
+}
+
+/* -----------------------------------------------------------------------------
  * Navigation
  * --------------------------------------------------------------------------- */
 
