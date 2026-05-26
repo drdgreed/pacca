@@ -48,6 +48,9 @@ from .auth import (
 # All runtime database operations use the async session below
 from .database import Base
 from .database import engine as sync_engine
+
+# Middleware
+from .middleware import SecurityHeadersMiddleware
 from .models import User as SyncUser  # SQLAlchemy model for the users table
 
 # Route modules
@@ -127,13 +130,39 @@ app = FastAPI(
 )
 
 # ── CORS middleware ───────────────────────────────────────────────────────────
-# In production, replace allow_origins=["*"] with explicit frontend origins.
+# Origins come from settings (env var CORS_ORIGINS, comma-separated).
+# Development default (settings.py) is localhost:3000 + localhost:5173.
+# Production deployments MUST set CORS_ORIGINS explicitly — never use "*"
+# with allow_credentials=True (browsers reject the combination).
+#
+# Wildcard fallback is only used when app_env=development AND the operator
+# has explicitly opted in via CORS_ORIGINS="*"; otherwise, an empty/missing
+# list takes the safe default from settings.py.
+_cors_settings = get_settings()
+_cors_origins = _cors_settings.cors_origins
+if _cors_origins == ["*"] and _cors_settings.app_env != "development":
+    # Explicit safety check — wildcards in non-development environments
+    # are a misconfiguration we refuse to honor silently.
+    raise RuntimeError(
+        "CORS_ORIGINS=['*'] is forbidden in non-development environments. "
+        "Set CORS_ORIGINS to an explicit comma-separated list of allowed origins."
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+)
+
+# ── Security headers middleware ──────────────────────────────────────────────
+# CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy,
+# Permissions-Policy, and (in production) HSTS. See middleware/security_headers.py
+# for the per-environment policy rationale.
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    app_env=_cors_settings.app_env,
 )
 
 # ── Route registration ────────────────────────────────────────────────────────

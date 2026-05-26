@@ -427,4 +427,81 @@ The `next_id` allocator will skip the released ID on its next call.
 
 ---
 
-*Last updated: 2026-05-25 (iter-7 close — SMECaseAuthoringAgent v1.0).*
+---
+
+## Section 11 — The Web UI
+
+> **For clinicians who prefer a browser to a terminal.** Same agent, same validators, same audit trail — different surface.
+
+If your team has deployed the Web UI (PR #13–#17, v1.1+), point your browser at the URL your IT person sent you (something like `https://sme.example.com/sme-author`) and sign in with the username + password they gave you.
+
+### What's different from the CLI
+
+| | CLI (`pacca sme-author new`) | Web UI |
+|---|---|---|
+| **Where you work** | Your terminal | Any laptop with a browser |
+| **What you type** | Same plain English | Same plain English |
+| **What it does** | Same agent, same validators | Same agent, same validators |
+| **What you get** | Same PR description, same case file | Same PR description, same case file |
+| **Where state lives** | `~/.pacca/sme_authoring_sessions/` on your machine | Server-side; visible from any browser you sign into |
+
+You don't have to choose. Both surfaces stay supported. Some clinicians prefer the terminal for batch work; others prefer the browser for a single case. They share the same backend, so a case authored in either surface lands in the same audit trail.
+
+### Tour — what each page does
+
+When you sign in, you land on the **Dashboard**. From the top nav:
+
+- **Dashboard** — your "where am I" home. Total cases, recent sessions, top-priority gaps.
+- **New case** — the 6-step wizard. The main work surface.
+- **Sessions** — every session you (or anyone on the team) has started. Filter by mode; click any row to see the detail.
+- **Batches** — the planned batches from the roadmap, with progress bars.
+- **Gaps** — the prioritized coverage gaps the analyzer has identified.
+- **Status** — full dataset snapshot with milestone progress (production-pilot at 100, general-payer at 300, SaMD-grade at 500).
+
+### The 6-step wizard — what to expect
+
+Open **New case**. The wizard walks you through six steps, each on its own page.
+
+1. **Scenario.** Type 1–3 sentences in plain English. Same prompt as the CLI's first question. Optional hints (specialty + intended outcome) bias the agent's draft but are NOT required.
+   - **A client-side PHI scan runs as you type.** If you accidentally paste real patient data (or anything that looks like an SSN, MRN, DOB, full name, phone number, etc.), the page surfaces a warning and blocks the Continue button until you either remove the pattern or check "I confirm this is a false positive (synthetic data only)."
+   - The default is **Sandbox mode**. Drafts go to `sandbox/cases/` and never touch production. To commit to `tests/clinical/`, switch to **Production mode** on this same page.
+
+2. **Drafting.** The agent calls the LLM. You see the draft appear **token by token, field by field**, with a blinking cursor on whichever field is currently being written. If the streaming connection drops, the page silently falls back to a buffered draft (you'll see "WebSocket unavailable — using buffered REST drafting…").
+
+3. **Review.** Every field of the agent's draft, editable inline. Change anything that's clinically off. If you edit, the next step (Validation) re-runs automatically — you don't have to remember.
+
+4. **Validation.** The same 6 deterministic validators that run in the CLI: PHI scan, guideline citation, schema completeness, outcome ↔ branch consistency, reasoning specificity, judge criteria specificity. Each shows pass / warn / fail with the reason. Any FAIL blocks the next step until you step back and fix it.
+
+5. **Attestation.** Type your attestation — either the generic phrase or a credentialed statement (see Section 5). The page tells you live which format it recognized.
+
+6. **Commit.** A summary of everything (mode, target file, allocated case ID, validation counts). If you chose Production mode, the page demands an explicit "I confirm this case should be written to production now" checkbox before the Commit button enables. After commit, you see the PR title + body with **copy-to-clipboard** buttons — paste these directly into `gh pr create` or the GitHub web UI.
+
+You can step backward at any time — the wizard preserves your in-progress state. Click any visited step in the indicator at the top to jump back.
+
+### What the Web UI does NOT do (yet)
+
+- **Resume mid-wizard after a browser refresh.** In v1.1, refreshing the page restarts the wizard. The session record IS preserved on the server (you can find it in the Sessions list), but the wizard itself doesn't re-hydrate. v1.2 will fix this.
+- **Author directly from a gap.** Gaps list shows priority + counts; the "Author from this gap" link takes you to the wizard but doesn't pre-fill the failure-mode hint. v1.2 will wire this.
+- **Multi-clinician simultaneous editing.** Each session is single-author. Concurrent sessions don't conflict on case IDs (the server reserves IDs as it issues them) but two clinicians can't co-edit one draft.
+
+### HIPAA awareness for browser use
+
+The Web UI was designed with the synthetic-only rule in mind, but browsers add a few risks the terminal doesn't:
+
+- **Don't open the surface on a shared / public computer.** Sign out when you step away. Logout actively clears all local storage in the browser tab.
+- **Don't screenshot the wizard for non-PACCA people.** Even though the cases are synthetic, the synthetic clinical notes can look very real.
+- **Check the URL bar.** The Dashboard URL is `…/sme-author`. The wizard is `…/sme-author/new`. Sessions are `…/sme-author/sessions/<short-id>` — those short IDs are safe to share with PACCA teammates.
+- **If you paste something that looks PHI-shaped** the page will warn you before any data leaves the browser. If you confirm and continue anyway, the backend's canonical PHI scan runs again before the case is written. Three layers of defense; trust the first.
+
+### When to use which
+
+- **Authoring a single case:** Web UI is faster. Less switching between terminal panes.
+- **Authoring a batch of 10+ cases:** CLI is faster. You can script the scenario inputs from a CSV.
+- **Triaging existing sessions:** Web UI. The Sessions page is far easier than `pacca sme-author list-sessions`.
+- **Reviewing a batch's progress:** Web UI. The Batches page shows everything at a glance.
+- **Working offline / on a plane:** CLI. The Web UI needs a network connection to the backend.
+- **Demoing the tool to a non-engineer:** Web UI. Always.
+
+---
+
+*Last updated: 2026-05-26 (PR #17 close — SME Web UI v1.1).*

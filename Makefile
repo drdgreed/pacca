@@ -19,7 +19,8 @@
 # =============================================================================
 
 .PHONY: install test test-cov test-all test-clinical lint typecheck clean help \
-        sme-author sme-author-test sme-author-status sme-author-help
+        sme-author sme-author-test sme-author-status sme-author-help \
+        sme-author-web sme-author-web-build sme-author-web-e2e
 
 # ── Installation ──────────────────────────────────────────────────────────────
 
@@ -87,11 +88,16 @@ help:
 	@echo "  make typecheck          Mypy type checker"
 	@echo "  make clean              Remove build artifacts"
 	@echo ""
-	@echo "SME Case Authoring Agent:"
+	@echo "SME Case Authoring Agent (CLI):"
 	@echo "  make sme-author         Launch the interactive new-case workflow"
 	@echo "  make sme-author-status  Print dataset state + milestone gaps"
 	@echo "  make sme-author-test    Run unit tests for the SME-authoring module"
 	@echo "  make sme-author-help    Print the SME-author CLI help"
+	@echo ""
+	@echo "SME Case Authoring (Web UI):"
+	@echo "  make sme-author-web        Start backend (uvicorn) + frontend (vite) dev servers"
+	@echo "  make sme-author-web-build  Build the production frontend bundle into frontend/dist"
+	@echo "  make sme-author-web-e2e    Run Playwright smoke tests (installs Chromium if needed)"
 
 # ── SME Case Authoring Agent ──────────────────────────────────────────────────
 # Convenience targets for clinicians + engineers using the SME authoring tool.
@@ -114,3 +120,47 @@ sme-author-test:
 
 sme-author-help:
 	pacca sme-author --help
+
+# ── SME Authoring Web UI ──────────────────────────────────────────────────────
+# Starts the backend FastAPI server + the frontend Vite dev server in the
+# same shell. Browse http://localhost:3000/sme-author to open the surface.
+#
+# Both servers shut down together when you Ctrl-C — the trap handler kills
+# the background uvicorn process when the foreground vite exits.
+
+sme-author-web:
+	@if [ -z "$$ANTHROPIC_API_KEY" ]; then \
+		echo "ERROR: ANTHROPIC_API_KEY is not set. Export it before running."; \
+		echo "  export ANTHROPIC_API_KEY=sk-ant-..."; \
+		exit 1; \
+	fi
+	@if [ ! -d "frontend/node_modules" ]; then \
+		echo "Installing frontend dependencies..."; \
+		cd frontend && npm install; \
+	fi
+	@echo "Starting backend on :8000 and frontend on :3000..."
+	@echo "Browse: http://localhost:3000/sme-author"
+	@trap 'kill 0' EXIT INT TERM; \
+		uvicorn pacca.api.main:app --reload --port 8000 & \
+		cd frontend && npm run dev
+
+sme-author-web-build:
+	@echo "Building production frontend bundle..."
+	@if [ ! -d "frontend/node_modules" ]; then \
+		echo "Installing frontend dependencies..."; \
+		cd frontend && npm install; \
+	fi
+	cd frontend && npm run build
+	@echo "Bundle ready in frontend/dist/"
+
+sme-author-web-e2e:
+	@echo "Running Playwright smoke tests (requires browsers installed)..."
+	@if [ ! -d "frontend/node_modules/@playwright" ]; then \
+		echo "Installing frontend dependencies..."; \
+		cd frontend && npm install; \
+	fi
+	@if [ ! -d "$$HOME/Library/Caches/ms-playwright" ] && [ ! -d "$$HOME/.cache/ms-playwright" ]; then \
+		echo "Browsers not installed. Running: cd frontend && npx playwright install --with-deps chromium"; \
+		cd frontend && npx playwright install --with-deps chromium; \
+	fi
+	cd frontend && npm run test:e2e

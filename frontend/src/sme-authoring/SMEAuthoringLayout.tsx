@@ -20,6 +20,7 @@
 
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useStatus } from './hooks/useStatus';
+import { safeLogout } from './lib/safeLogout';
 import './theme.css';
 
 interface SMEAuthoringLayoutProps {
@@ -36,6 +37,11 @@ export function SMEAuthoringLayout({ onLogout }: SMEAuthoringLayoutProps) {
   const navigate = useNavigate();
 
   const handleLogout = () => {
+    // safeLogout clears the JWT AND scrubs any unexpected localStorage
+    // entries (with a dev-mode warning if any contained PHI patterns).
+    // We call it regardless of whether the parent passes onLogout — the
+    // parent's hook may not run a defensive scan.
+    safeLogout();
     if (onLogout) onLogout();
     navigate('/');
   };
@@ -48,7 +54,14 @@ export function SMEAuthoringLayout({ onLogout }: SMEAuthoringLayoutProps) {
 
   return (
     <div className="sme-authoring">
-      <nav className="sme-nav">
+      {/* Skip-to-content link — visible only when focused via keyboard.
+          A11y essential for screen-reader + keyboard-only users so they
+          don't have to tab through the entire nav on every page. */}
+      <a href="#sme-main" className="sme-skip-link">
+        Skip to main content
+      </a>
+
+      <nav className="sme-nav" aria-label="Primary navigation">
         <NavLink to="/sme-author" className="sme-nav-brand" end>
           PACCA
           <span className="sme-nav-brand-mark">case authoring</span>
@@ -95,6 +108,14 @@ export function SMEAuthoringLayout({ onLogout }: SMEAuthoringLayoutProps) {
           >
             Gaps
           </NavLink>
+          <NavLink
+            to="/sme-author/status"
+            className={({ isActive }) =>
+              `sme-nav-link${isActive ? ' is-active' : ''}`
+            }
+          >
+            Status
+          </NavLink>
         </div>
         <div
           style={{
@@ -127,7 +148,7 @@ export function SMEAuthoringLayout({ onLogout }: SMEAuthoringLayoutProps) {
         </div>
       </nav>
 
-      <main>
+      <main id="sme-main" tabIndex={-1}>
         <Outlet />
       </main>
 
