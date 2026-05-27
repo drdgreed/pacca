@@ -1,12 +1,11 @@
 /**
- * SME Case Authoring Web UI — smoke test.
+ * PACCA frontend smoke test.
  *
- * Verifies that the editorial-clinical surface loads, the nav renders,
- * and the dashboard route resolves without runtime errors.
+ * Verifies the Editorial-Clinical aesthetic loads everywhere (per
+ * PR-UI-1 onward — the theme is global, not scoped). Checks SME-author
+ * routes resolve, the editorial nav renders, and skip-link a11y works.
  *
- * This test uses route mocking for the backend — it doesn't require the
- * FastAPI server to be running. Wider integration coverage (real backend
- * + LLM mock + full wizard round-trip) is v1.2 work.
+ * Uses route mocking for the backend — no FastAPI server needed.
  *
  * To run:
  *   cd frontend
@@ -26,7 +25,7 @@ test.beforeEach(async ({ page }) => {
     window.localStorage.setItem('token', token);
   }, SYNTHETIC_TOKEN);
 
-  // Mock the status endpoint that the dashboard calls on load
+  // Mock the SME-authoring endpoints that the dashboard calls on load
   await page.route('**/api/v1/sme-authoring/status', async (route) => {
     await route.fulfill({
       status: 200,
@@ -66,22 +65,22 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test.describe('SME Web UI smoke', () => {
-  test('dashboard renders with editorial aesthetic', async ({ page }) => {
+test.describe('PACCA frontend smoke', () => {
+  test('SME dashboard renders with editorial aesthetic', async ({ page }) => {
     await page.goto('/sme-author');
 
-    // The PageHeader's title should be visible.
     await expect(
       page.getByRole('heading', { name: 'SME Case Authoring' }),
     ).toBeVisible();
 
-    // The total-case count should render the mocked 100.
+    // Total-case count should render the mocked 100.
     await expect(page.getByText('100', { exact: true })).toBeVisible();
 
-    // Editorial-Clinical aesthetic spot-check: the body should NOT use
-    // Inter (the existing surfaces' font). The .sme-authoring class
-    // should be present on the wrapper.
-    await expect(page.locator('.sme-authoring')).toBeVisible();
+    // Editorial-Clinical aesthetic spot-check: body should use Source Serif 4.
+    const bodyFont = await page.evaluate(() =>
+      getComputedStyle(document.body).fontFamily,
+    );
+    expect(bodyFont).toContain('Source Serif');
 
     // No console errors during render
     const errors: string[] = [];
@@ -90,7 +89,19 @@ test.describe('SME Web UI smoke', () => {
     expect(errors).toEqual([]);
   });
 
-  test('nav links resolve to their routes', async ({ page }) => {
+  test('primary nav links surface all four PACCA tabs', async ({ page }) => {
+    await page.goto('/sme-author');
+
+    // The new AppLayout's EditorialNav surfaces all four surfaces.
+    await expect(page.getByRole('link', { name: 'Submit case' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Director queue' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'SME authoring' }).first(),
+    ).toBeVisible();
+  });
+
+  test('SME secondary nav links resolve to their routes', async ({ page }) => {
     await page.goto('/sme-author');
 
     await page.getByRole('link', { name: 'New case' }).first().click();
@@ -115,10 +126,13 @@ test.describe('SME Web UI smoke', () => {
     expect(focused?.text).toContain('Skip to main content');
   });
 
-  test('aesthetic isolation: provider route does NOT have sme-authoring class', async ({
+  test('editorial theme applies everywhere: provider route also uses Source Serif', async ({
     page,
   }) => {
-    // Mock the provider endpoints
+    // Pre-PR-UI-1: this test asserted .sme-authoring class was ABSENT on
+    // /provider (aesthetic isolation). After PR-UI-1 the theme is global,
+    // so the inverse assertion now holds — every authenticated route
+    // shares the same body font + editorial nav.
     await page.route('**/api/v1/authorizations*', async (route) => {
       await route.fulfill({
         status: 200,
@@ -128,8 +142,26 @@ test.describe('SME Web UI smoke', () => {
     });
 
     await page.goto('/provider');
-    // The provider page is Inter + indigo; it must NOT carry the
-    // .sme-authoring scope class.
-    await expect(page.locator('.sme-authoring')).toHaveCount(0);
+
+    const bodyFont = await page.evaluate(() =>
+      getComputedStyle(document.body).fontFamily,
+    );
+    expect(bodyFont).toContain('Source Serif');
+
+    // The primary EditorialNav should be present on /provider too.
+    await expect(
+      page.getByRole('navigation', { name: 'Primary navigation' }),
+    ).toBeVisible();
+  });
+
+  test('login screen renders in editorial aesthetic', async ({ page }) => {
+    // Clear the seeded token so we land on /login
+    await page.addInitScript(() => window.localStorage.removeItem('token'));
+    await page.goto('/login');
+
+    await expect(page.getByRole('heading', { name: 'PACCA' })).toBeVisible();
+    await expect(page.getByLabel('Username')).toBeVisible();
+    await expect(page.getByLabel('Password')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
   });
 });

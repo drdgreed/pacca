@@ -1,24 +1,31 @@
 /* =============================================================================
- * SME Case Authoring — Editorial-Clinical theme
+ * PACCA — Editorial-Clinical theme (GLOBAL)
  *
- * Locked-in aesthetic per the approved Web UI plan
- * (/Users/davidreed/.claude/plans/mutable-tinkering-candle.md
- *  § "Aesthetic specification — the Editorial-Clinical commitment").
+ * Locked-in aesthetic per the approved Web UI plan and the UI-convergence
+ * plan (/Users/davidreed/.claude/plans/mutable-tinkering-candle.md).
  *
  * Design intent: signal "serious clinical authority + audit-grade rigor".
  * Medical-journal typography meets engineering instrument panel.
  *
- * ISOLATION: every rule is scoped to `.sme-authoring` so the existing
- * Provider/Director/Admin surfaces (Inter + Tailwind indigo dashboard)
- * are unaffected. The frontend's index.css continues to apply globally;
- * this file ONLY affects elements inside the SME-authoring layout.
+ * SCOPE: applied app-wide. Tokens live in :root; base styles on body +
+ * heading tags; utility classes are unscoped. Previously was scoped to
+ * .sme-authoring; PR-UI-1 promoted it to global so Provider/Director/
+ * Admin surfaces share the same visual identity as the SME Authoring
+ * surface.
+ *
+ * Tailwind interoperation: utility classes (flex, grid, gap-*, p-*, etc.)
+ * still apply on top of these rules. Color + typography utilities from
+ * Tailwind (bg-indigo-*, text-white, font-sans) should NOT be used in
+ * application code — use the CSS variables and .sme-* classes here
+ * instead. Per the migration plan, those Tailwind references are being
+ * removed surface-by-surface.
  * ============================================================================= */
 
 /* -----------------------------------------------------------------------------
  * Design tokens
  * --------------------------------------------------------------------------- */
 
-.sme-authoring {
+:root {
   /* Color palette — warm cream, ink, refined accent colors */
   --sme-paper: #faf8f3;
   --sme-paper-deep: #f3efe6;
@@ -59,10 +66,10 @@
 }
 
 /* -----------------------------------------------------------------------------
- * Base surface
+ * Base surface — applied to body so the whole app inherits
  * --------------------------------------------------------------------------- */
 
-.sme-authoring {
+body {
   background-color: var(--sme-paper);
   background-image: var(--sme-paper-grain-overlay);
   color: var(--sme-ink);
@@ -73,15 +80,16 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
+  margin: 0;
 }
 
 /* -----------------------------------------------------------------------------
  * Typography hierarchy
  * --------------------------------------------------------------------------- */
 
-.sme-authoring h1,
-.sme-authoring h2,
-.sme-authoring h3 {
+h1,
+h2,
+h3 {
   font-family: var(--sme-font-display);
   color: var(--sme-deep-ink);
   font-weight: 600;
@@ -90,26 +98,26 @@
   margin: 0;
 }
 
-.sme-authoring h1 {
+h1 {
   font-size: 2.5rem;
   font-weight: 700;
 }
 
-.sme-authoring h2 {
+h2 {
   font-size: 1.875rem;
 }
 
-.sme-authoring h3 {
+h3 {
   font-size: 1.375rem;
 }
 
-.sme-authoring p {
+p {
   margin: 0 0 var(--sme-space-md);
   max-width: var(--sme-col-text);
 }
 
 /* Small-caps section labels — editorial micro-typography */
-.sme-authoring .sme-label {
+.sme-label {
   font-family: var(--sme-font-body);
   font-variant: small-caps;
   font-weight: 600;
@@ -119,19 +127,19 @@
 }
 
 /* Monospace primitives — case IDs, code, technical data */
-.sme-authoring .sme-mono {
+.sme-mono {
   font-family: var(--sme-font-mono);
   font-feature-settings: 'zero', 'ss01'; /* slashed zero where supported */
   font-size: 0.9375em;
 }
 
-.sme-authoring code,
-.sme-authoring pre {
+code,
+pre {
   font-family: var(--sme-font-mono);
 }
 
 /* Drop cap for editorial paragraphs */
-.sme-authoring .sme-drop-cap::first-letter {
+.sme-drop-cap::first-letter {
   font-family: var(--sme-font-display);
   font-size: 4rem;
   line-height: 0.85;
@@ -145,14 +153,14 @@
  * Hairline rules
  * --------------------------------------------------------------------------- */
 
-.sme-authoring hr,
-.sme-authoring .sme-rule {
+hr,
+.sme-rule {
   border: 0;
   border-top: 1px solid var(--sme-rule);
   margin: var(--sme-space-lg) 0;
 }
 
-.sme-authoring .sme-rule-soft {
+.sme-rule-soft {
   border: 0;
   border-top: 1px solid var(--sme-rule-soft);
   margin: var(--sme-space-md) 0;
@@ -162,23 +170,23 @@
  * Layout primitives
  * --------------------------------------------------------------------------- */
 
-.sme-authoring .sme-page {
+.sme-page {
   max-width: var(--sme-col-wide);
   margin: 0 auto;
   padding: var(--sme-space-xl) var(--sme-space-lg);
 }
 
-.sme-authoring .sme-page-text {
+.sme-page-text {
   max-width: var(--sme-col-text);
 }
 
-.sme-authoring .sme-card {
+.sme-card {
   background-color: var(--sme-paper-deep);
   padding: var(--sme-space-lg);
   border: 1px solid var(--sme-rule-soft);
 }
 
-.sme-authoring .sme-card-emphasis {
+.sme-card-emphasis {
   background-color: var(--sme-paper);
   padding: var(--sme-space-lg);
   border-top: 2px solid var(--sme-deep-ink);
@@ -192,7 +200,7 @@
  * to tab through the entire nav on every page navigation.
  * --------------------------------------------------------------------------- */
 
-.sme-authoring .sme-skip-link {
+.sme-skip-link {
   position: absolute;
   top: -100px;
   left: 0;
@@ -208,7 +216,7 @@
   transition: top var(--sme-transition);
 }
 
-.sme-authoring .sme-skip-link:focus {
+.sme-skip-link:focus {
   top: 0;
   outline: 2px solid var(--sme-deep-ink);
   outline-offset: 2px;
@@ -216,7 +224,7 @@
 
 /* Focused <main> shows no outline when programmatically focused via skip-link
  * (tabIndex=-1 means it's not in the natural tab order). */
-.sme-authoring main:focus {
+main:focus {
   outline: none;
 }
 
@@ -224,7 +232,7 @@
  * Navigation
  * --------------------------------------------------------------------------- */
 
-.sme-authoring .sme-nav {
+.sme-nav {
   background-color: var(--sme-paper);
   border-bottom: 1px solid var(--sme-rule);
   padding: var(--sme-space-md) var(--sme-space-lg);
@@ -237,7 +245,7 @@
   backdrop-filter: blur(8px);
 }
 
-.sme-authoring .sme-nav-brand {
+.sme-nav-brand {
   font-family: var(--sme-font-display);
   font-weight: 700;
   font-size: 1.125rem;
@@ -246,7 +254,7 @@
   text-decoration: none;
 }
 
-.sme-authoring .sme-nav-brand-mark {
+.sme-nav-brand-mark {
   font-family: var(--sme-font-mono);
   font-size: 0.75rem;
   font-variant: small-caps;
@@ -256,13 +264,13 @@
   font-weight: 400;
 }
 
-.sme-authoring .sme-nav-links {
+.sme-nav-links {
   display: flex;
   gap: var(--sme-space-lg);
   flex: 1;
 }
 
-.sme-authoring .sme-nav-link {
+.sme-nav-link {
   font-family: var(--sme-font-body);
   font-variant: small-caps;
   letter-spacing: 0.06em;
@@ -274,26 +282,41 @@
   transition: color var(--sme-transition), border-color var(--sme-transition);
 }
 
-.sme-authoring .sme-nav-link:hover {
+.sme-nav-link:hover {
   color: var(--sme-ink);
 }
 
-.sme-authoring .sme-nav-link.is-active {
+.sme-nav-link.is-active {
   color: var(--sme-deep-ink);
   border-bottom-color: var(--sme-deep-ink);
 }
 
-.sme-authoring .sme-nav-meta {
+.sme-nav-meta {
   font-family: var(--sme-font-mono);
   font-size: 0.75rem;
   color: var(--sme-muted);
+}
+
+/* Sub-nav rendered beneath the primary nav (used by SME-authoring sub-shell
+ * for Sessions / Batches / Gaps / Status). Visually quieter than the primary
+ * nav so the two layers don't compete. */
+.sme-subnav {
+  background-color: var(--sme-paper-deep);
+  border-bottom: 1px solid var(--sme-rule-soft);
+  padding: var(--sme-space-sm) var(--sme-space-lg);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sme-space-lg);
+  position: sticky;
+  top: 56px; /* below the primary nav */
+  z-index: 99;
 }
 
 /* -----------------------------------------------------------------------------
  * Buttons
  * --------------------------------------------------------------------------- */
 
-.sme-authoring .sme-button {
+.sme-button {
   display: inline-block;
   font-family: var(--sme-font-body);
   font-variant: small-caps;
@@ -309,50 +332,82 @@
   transition: background-color var(--sme-transition);
 }
 
-.sme-authoring .sme-button:hover {
+.sme-button:hover {
   background-color: var(--sme-ink);
 }
 
-.sme-authoring .sme-button-secondary {
+.sme-button-secondary {
   background-color: transparent;
   color: var(--sme-deep-ink);
 }
 
-.sme-authoring .sme-button-secondary:hover {
+.sme-button-secondary:hover {
   background-color: var(--sme-paper-deep);
 }
 
-.sme-authoring .sme-button-approve {
+.sme-button-approve {
   background-color: var(--sme-approve);
   border-color: var(--sme-approve);
 }
 
-.sme-authoring .sme-button-deny {
+.sme-button-deny {
   background-color: var(--sme-deny);
   border-color: var(--sme-deny);
+}
+
+/* -----------------------------------------------------------------------------
+ * Form inputs (text, textarea, select)
+ * Editorial-Clinical input: cream paper bg, 2px ink top border, 1px soft
+ * elsewhere. Matches the SME wizard's scenario textarea.
+ * --------------------------------------------------------------------------- */
+
+.sme-input {
+  width: 100%;
+  font-family: var(--sme-font-body);
+  font-size: 0.9375rem;
+  padding: 0.625rem 0.75rem;
+  background-color: var(--sme-paper);
+  border: 1px solid var(--sme-rule-soft);
+  border-top: 2px solid var(--sme-rule);
+  color: var(--sme-ink);
+  line-height: 1.5;
+  box-sizing: border-box;
+  transition: border-color var(--sme-transition);
+}
+
+.sme-input:focus {
+  outline: none;
+  border-color: var(--sme-deep-ink);
+  border-top-color: var(--sme-deep-ink);
+}
+
+textarea.sme-input {
+  resize: vertical;
+  font-family: var(--sme-font-body);
+  font-size: 1rem;
 }
 
 /* -----------------------------------------------------------------------------
  * Status accents — used as ink color on text, NOT as filled badges
  * --------------------------------------------------------------------------- */
 
-.sme-authoring .sme-status-approve { color: var(--sme-approve); }
-.sme-authoring .sme-status-review  { color: var(--sme-review); }
-.sme-authoring .sme-status-deny    { color: var(--sme-deny); }
-.sme-authoring .sme-status-info    { color: var(--sme-info); }
+.sme-status-approve { color: var(--sme-approve); }
+.sme-status-review  { color: var(--sme-review); }
+.sme-status-deny    { color: var(--sme-deny); }
+.sme-status-info    { color: var(--sme-info); }
 
 /* -----------------------------------------------------------------------------
- * Tables — for the per-list count display
+ * Tables — for data-density list views
  * --------------------------------------------------------------------------- */
 
-.sme-authoring table.sme-table {
+table.sme-table {
   width: 100%;
   border-collapse: collapse;
   font-feature-settings: 'tnum'; /* tabular numerals */
   margin: var(--sme-space-md) 0;
 }
 
-.sme-authoring table.sme-table th {
+table.sme-table th {
   text-align: left;
   font-variant: small-caps;
   font-weight: 600;
@@ -363,17 +418,17 @@
   border-bottom: 2px solid var(--sme-rule);
 }
 
-.sme-authoring table.sme-table td {
+table.sme-table td {
   padding: var(--sme-space-sm) var(--sme-space-md);
   border-bottom: 1px solid var(--sme-rule-soft);
   vertical-align: baseline;
 }
 
-.sme-authoring table.sme-table tr:hover td {
+table.sme-table tr:hover td {
   background-color: var(--sme-paper-deep);
 }
 
-.sme-authoring table.sme-table .sme-table-mono {
+table.sme-table .sme-table-mono {
   font-family: var(--sme-font-mono);
   font-size: 0.875rem;
 }
@@ -382,7 +437,7 @@
  * Footer
  * --------------------------------------------------------------------------- */
 
-.sme-authoring .sme-footer {
+.sme-footer {
   font-family: var(--sme-font-mono);
   font-size: 0.75rem;
   color: var(--sme-muted);
@@ -396,19 +451,19 @@
  * Motion — restrained page transitions
  * --------------------------------------------------------------------------- */
 
-.sme-authoring .sme-page-enter {
+.sme-page-enter {
   opacity: 0;
   transform: translateY(4px);
 }
 
-.sme-authoring .sme-page-enter-active {
+.sme-page-enter-active {
   opacity: 1;
   transform: translateY(0);
   transition: opacity var(--sme-transition), transform var(--sme-transition);
 }
 
-/* Typewriter cursor for live drafting (used by Step2Drafting in PR-WUI-3) */
-.sme-authoring .sme-cursor::after {
+/* Typewriter cursor for live drafting (used by Step2Drafting). */
+.sme-cursor::after {
   content: '▌';
   color: var(--sme-deep-ink);
   animation: sme-cursor-blink 1s steps(1) infinite;
@@ -423,14 +478,14 @@
  * Empty / loading states
  * --------------------------------------------------------------------------- */
 
-.sme-authoring .sme-empty {
+.sme-empty {
   text-align: center;
   padding: var(--sme-space-xl) var(--sme-space-lg);
   color: var(--sme-muted);
   font-style: italic;
 }
 
-.sme-authoring .sme-loading {
+.sme-loading {
   font-family: var(--sme-font-mono);
   color: var(--sme-muted);
   font-size: 0.875rem;
@@ -441,22 +496,26 @@
  * --------------------------------------------------------------------------- */
 
 @media (max-width: 768px) {
-  .sme-authoring {
+  body {
     font-size: 16px;
   }
-  .sme-authoring .sme-page {
+  .sme-page {
     padding: var(--sme-space-lg) var(--sme-space-md);
   }
-  .sme-authoring h1 {
+  h1 {
     font-size: 2rem;
   }
-  .sme-authoring .sme-nav {
+  .sme-nav {
     flex-wrap: wrap;
     gap: var(--sme-space-md);
   }
-  .sme-authoring .sme-nav-links {
+  .sme-nav-links {
     gap: var(--sme-space-md);
     order: 3;
     flex-basis: 100%;
+  }
+  .sme-subnav {
+    top: 0;
+    position: relative;
   }
 }
