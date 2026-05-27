@@ -176,7 +176,7 @@ sequenceDiagram
         API->>V: embed case and rationale into precedents
         API->>A: log human_override actor=director_id
     else Director confirms agent
-        D->>API: no-op; AI decision stands
+        D->>API: no-op, AI decision stands
         API->>A: log director_confirmed actor=director_id
     end
     Note over V: Future semantically-similar cases retrieve this precedent alongside guidelines
@@ -199,14 +199,14 @@ sequenceDiagram
     API->>Ag: allocate next GC-NNN and draft via LLM
     Ag-->>W: typewriter stream over WebSocket
     S->>W: Edit fields if needed
-    W->>API: POST /sessions/{id}/validate
+    W->>API: POST /sessions/id/validate
     API->>V: run 6 deterministic checks
     V-->>API: pass or warn or fail per validator
     alt any FAIL
-        API-->>W: blocked; SME revises
+        API-->>W: blocked, SME revises
     else all PASS
         S->>W: Type attestation
-        W->>API: POST /sessions/{id}/commit
+        W->>API: POST /sessions/id/commit
         API->>FS: emit GoldenCase Python via AST
         API->>T: pytest TestGoldenDatasetIntegrity
         alt integrity FAIL
