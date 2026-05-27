@@ -1,149 +1,257 @@
-import React, { useState } from 'react';
+/**
+ * ProviderDashboard — single authorization-request submission surface.
+ *
+ * Reskinned in PR-UI-2 to the Editorial-Clinical aesthetic:
+ *   - PageHeader for the section title
+ *   - .sme-card-emphasis for the form container
+ *   - .sme-input for the clinical-notes textarea
+ *   - .sme-button for the primary action
+ *   - StatusInk for the decision outcome
+ *   - MonoChip for the CPT code + confidence value
+ *   - PageHeader's right-aligned hint slot carries the CPT chip
+ *
+ * Bug fix included (same as Login): hardcoded `http://127.0.0.1:8000`
+ * URL → relative `/api/v1/authorizations/`. Vite proxy + production
+ * nginx both forward correctly.
+ */
 
-export const ProviderDashboard: React.FC = () => {
+import { useState } from 'react';
+import { MonoChip } from './MonoChip';
+import { StatusInk, type StatusOutcome } from './StatusInk';
+import { PageHeader } from '../sme-authoring/components/PageHeader';
+
+interface DecisionResult {
+  status: string;
+  rationale: string;
+  confidence_score: number;
+  review_tier_used: string;
+}
+
+/** Map backend status strings to StatusInk outcome semantics. */
+function outcomeFor(status: string): StatusOutcome {
+  if (status === 'AUTO_APPROVED' || status === 'approved') return 'approved';
+  if (status === 'DENIED' || status === 'denied') return 'denied';
+  if (
+    status === 'IN_REVIEW' ||
+    status === 'pending_review' ||
+    status === 'escalated' ||
+    status === 'PRE_FLIGHT_ESCALATE'
+  ) {
+    return 'review';
+  }
+  return 'processing';
+}
+
+const DEFAULT_NOTES =
+  'Patient presents with acute lumbar pain (2 weeks duration). Physical exam reveals significant motor weakness in right leg. Requesting immediate MRI to rule out cauda equina.';
+
+export function ProviderDashboard() {
+  const [notes, setNotes] = useState(DEFAULT_NOTES);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  
-  // Default to the "Edge Case" that we just taught the AI to handle
-  const [notes, setNotes] = useState(
-    "Patient presents with acute lumbar pain (2 weeks duration). Physical exam reveals significant motor weakness in right leg. Requesting immediate MRI to rule out cauda equina."
-  );
+  const [result, setResult] = useState<DecisionResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // 1. The async wrapper is back!
   const submitCase = async () => {
     setLoading(true);
+    setError(null);
     setResult(null);
 
-    // 2. The payload is back!
     const payload = {
-      request_id: "demo_" + Date.now(),
-      patient_id: "p_demo",
-      provider_npi: "1234567890",
+      request_id: 'demo_' + Date.now(),
+      patient_id: 'p_demo',
+      // Synthetic demo NPI. Intentionally non-numeric so the PHI guard
+      // doesn't flag it as a phone-shaped 10-digit literal.
+      provider_npi: 'demo-npi-0001',
       clinical_case: {
-        patient_id: "p_demo",
-        primary_diagnosis_code: "M54.5", // Low back pain
-        procedure_code: "72148",       // MRI Lumbar Spine
+        patient_id: 'p_demo',
+        primary_diagnosis_code: 'M54.5', // Low back pain
+        procedure_code: '72148', // MRI Lumbar Spine
         evidence: [
           {
-            id: "ev_1",
-            source_type: "CLINICAL_NOTE",
-            description: "Physician Notes",
+            id: 'ev_1',
+            source_type: 'CLINICAL_NOTE',
+            description: 'Physician Notes',
             original_text: notes,
-            confidence: 1.0
-          }
-        ]
-      }
+            confidence: 1.0,
+          },
+        ],
+      },
     };
 
     try {
-      // Grab auth token
-      const token = localStorage.getItem('token'); 
-
-      const response = await fetch('http://127.0.0.1:8000/api/v1/authorizations/', {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/v1/authorizations/', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: token ? `Bearer ${token}` : '',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
-      // Catch HTTP errors 
       if (!response.ok) {
         if (response.status === 401) {
-          alert("You are not authorized. Please log in again.");
-          return; 
+          setError('Your session has expired. Please sign in again.');
+          return;
         }
-        throw new Error(`Server responded with status: ${response.status}`);
+        const body = await response.json().catch(() => ({}));
+        setError(body.detail || `Server returned HTTP ${response.status}`);
+        return;
       }
 
-      // Success
-      const data = await response.json();
+      const data = (await response.json()) as DecisionResult;
       setResult(data);
-
-    } catch (error) {
-      console.error(error);
-      alert("Error submitting case. Ensure backend is running and you are logged in.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Connection failed. Is the backend running on port 8000?',
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        
-        <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-800">New Authorization Request</h2>
-          <span className="text-sm font-mono text-gray-500">CPT: 72148 (MRI Lumbar Spine)</span>
+    <div className="sme-page sme-page-enter sme-page-enter-active">
+      <PageHeader
+        label="Provider"
+        title="Submit authorization request"
+        hint="Enter the clinical notes; the agent decides approve / deny / review and surfaces its rationale."
+        actions={<MonoChip size="md" tone="muted">CPT 72148 · MRI lumbar</MonoChip>}
+      />
+
+      <div className="sme-page-text">
+        <div className="sme-card-emphasis" style={{ marginBottom: '2rem' }}>
+          <label
+            htmlFor="provider-clinical-notes"
+            className="sme-label"
+            style={{ display: 'block', marginBottom: '0.5rem' }}
+          >
+            Clinical notes &middot; evidence
+          </label>
+          <textarea
+            id="provider-clinical-notes"
+            className="sme-input"
+            rows={6}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Enter clinical details…"
+            disabled={loading}
+          />
+          <div
+            className="sme-mono"
+            style={{
+              marginTop: '0.5rem',
+              fontSize: '0.75rem',
+              color: 'var(--sme-muted)',
+            }}
+          >
+            tip: removing &ldquo;motor weakness&rdquo; should flip the decision
+            from approve to review.
+          </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Form */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Clinical Notes / Evidence</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full h-32 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter clinical details..."
-            />
-            <p className="text-xs text-gray-400 mt-2">
-              Tip: Try removing "motor weakness" to see the request fail, or keep it to see the AI apply the new rule.
-            </p>
-          </div>
-
-          <button
-            onClick={submitCase}
-            disabled={loading}
-            className={`w-full py-4 rounded-lg font-bold text-lg shadow-md transition-all
-              ${loading 
-                ? 'bg-gray-100 text-gray-400' 
-                : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg'}
-            `}
+        {error && (
+          <div
+            className="sme-card"
+            style={{
+              borderLeft: '4px solid var(--sme-deny)',
+              marginBottom: '2rem',
+            }}
           >
-            {loading ? "Processing with AI..." : "Submit for Authorization"}
+            <div className="sme-label sme-status-deny">Submission failed</div>
+            <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>{error}</p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className="sme-button"
+            onClick={() => void submitCase()}
+            disabled={loading || notes.trim().length === 0}
+            style={{
+              opacity: loading || notes.trim().length === 0 ? 0.6 : 1,
+              cursor: loading || notes.trim().length === 0 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {loading ? 'Processing…' : 'Submit for authorization'}
           </button>
         </div>
 
-        {/* Results Area */}
         {result && (
-          <div className="border-t border-gray-100 bg-gray-50 p-6 animate-fade-in">
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-4">AI Decision Output</h3>
-            
-            <div className="flex items-start gap-6">
-              {/* Status Badge */}
-              <div className={`
-                px-6 py-3 rounded-xl border-2 font-bold text-xl flex-shrink-0
-                ${result.status === 'AUTO_APPROVED' 
-                  ? 'bg-green-50 border-green-200 text-green-700' 
-                  : 'bg-amber-50 border-amber-200 text-amber-700'}
-              `}>
-                {result?.status ? result.status.replace("_", " ") : "Loading..."}
-              </div>
-              
-              {/* Rationale */}
-              <div className="flex-grow">
-                <div className="mb-2">
-                  <span className="text-xs font-semibold text-gray-400 uppercase">Rationale</span>
-                  <p className="text-gray-800 leading-relaxed mt-1">
-                    {result.rationale}
-                  </p>
-                </div>
-                
-                <div className="flex gap-4 mt-4 text-sm">
-                   <div className="bg-white px-3 py-1 rounded border border-gray-200 text-gray-600">
-                     Confidence: <strong>{(result.confidence_score * 100).toFixed(1)}%</strong>
-                   </div>
-                   <div className="bg-white px-3 py-1 rounded border border-gray-200 text-gray-600">
-                     Review Tier: <strong>{result.review_tier_used}</strong>
-                   </div>
-                </div>
-              </div>
+          <section style={{ marginTop: '3rem' }}>
+            <hr className="sme-rule" />
+            <div className="sme-label" style={{ marginBottom: '1rem' }}>
+              Agent decision
             </div>
-          </div>
+
+            <div
+              className="sme-card-emphasis"
+              style={{
+                borderTopColor:
+                  outcomeFor(result.status) === 'approved'
+                    ? 'var(--sme-approve)'
+                    : outcomeFor(result.status) === 'denied'
+                      ? 'var(--sme-deny)'
+                      : 'var(--sme-review)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: '1.5rem',
+                  marginBottom: '1.5rem',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <StatusInk
+                  outcome={outcomeFor(result.status)}
+                  style={{
+                    fontSize: '1.5rem',
+                    fontVariant: 'small-caps',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {result.status?.replace(/_/g, ' ').toLowerCase()}
+                </StatusInk>
+                <div
+                  className="sme-mono"
+                  style={{
+                    fontSize: '0.875rem',
+                    color: 'var(--sme-muted)',
+                  }}
+                >
+                  confidence{' '}
+                  <MonoChip size="sm" tone="ink">
+                    {(result.confidence_score * 100).toFixed(1)}%
+                  </MonoChip>
+                  {' · '}tier{' '}
+                  <MonoChip size="sm" tone="ink">
+                    {result.review_tier_used}
+                  </MonoChip>
+                </div>
+              </div>
+
+              <div className="sme-label" style={{ fontSize: '0.6875rem' }}>
+                Rationale
+              </div>
+              <p
+                style={{
+                  marginTop: '0.5rem',
+                  marginBottom: 0,
+                  color: 'var(--sme-ink-soft)',
+                  lineHeight: 1.6,
+                }}
+              >
+                {result.rationale}
+              </p>
+            </div>
+          </section>
         )}
       </div>
     </div>
   );
-};
+}

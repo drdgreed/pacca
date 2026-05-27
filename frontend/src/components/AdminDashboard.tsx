@@ -1,116 +1,232 @@
-import React, { useState } from 'react';
+/**
+ * AdminDashboard — provider/reviewer account provisioning.
+ *
+ * Reskinned in PR-UI-4 to the Editorial-Clinical aesthetic. Drops
+ * the emerald brand color (the previous file's only departure from
+ * the indigo palette) — the entire app now consolidates to one
+ * Editorial-Clinical palette.
+ *
+ * PHI scrub: the previous file had a titled-full-name placeholder
+ * which matched the PHI full-name regex. Replaced with neutral
+ * placeholders that don't match any PHI pattern. See git history
+ * for the pre-scrub content.
+ *
+ * Bug fix: hardcoded `http://127.0.0.1:8000` URL replaced with
+ * relative `/api/v1/...` (works through Vite proxy + nginx).
+ */
+
+import { useState, type FormEvent } from 'react';
+import { StatusInk, type StatusOutcome } from './StatusInk';
+import { PageHeader } from '../sme-authoring/components/PageHeader';
+
+interface ProvisionStatus {
+  outcome: StatusOutcome;
+  message: string;
+}
 
 export function AdminDashboard() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [status, setStatus] = useState<ProvisionStatus | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleRegisterUser = async (e: React.FormEvent) => {
+  const handleRegisterUser = async (e: FormEvent) => {
     e.preventDefault();
     setStatus(null);
+    setSubmitting(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/register/', {
+      const response = await fetch('/api/v1/register/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Assuming your register endpoint might eventually require an Admin JWT
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
         },
         body: JSON.stringify({
-          username: username,
-          password: password,
-          email: email,
-          full_name: fullName
-        })
+          username,
+          password,
+          email,
+          full_name: fullName,
+        }),
       });
 
       if (response.ok) {
-        setStatus({ type: 'success', message: `✅ User ${username} successfully provisioned!` });
-        // Clear the form
+        setStatus({
+          outcome: 'approved',
+          message: `Account provisioned for ${username}.`,
+        });
         setUsername('');
         setPassword('');
         setFullName('');
         setEmail('');
       } else {
-        const errorData = await response.json();
-        setStatus({ type: 'error', message: `❌ Error: ${errorData.detail || 'Failed to create user'}` });
+        const body = await response.json().catch(() => ({}));
+        setStatus({
+          outcome: 'denied',
+          message: body.detail || `Failed to create user (HTTP ${response.status}).`,
+        });
       }
-    } catch (error) {
-      setStatus({ type: 'error', message: '❌ Connection error. Is the backend running?' });
+    } catch {
+      setStatus({
+        outcome: 'denied',
+        message: 'Connection error. Is the backend running on port 8000?',
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const canSubmit =
+    !submitting &&
+    username.trim().length > 0 &&
+    password.trim().length > 0 &&
+    fullName.trim().length > 0 &&
+    email.trim().length > 0;
+
   return (
-    <div className="max-w-4xl mx-auto px-4">
-      <div className="mb-8 border-b pb-4">
-        <h2 className="text-3xl font-bold text-gray-800">System Administration</h2>
-        <p className="text-gray-600 mt-2">Provision new provider and reviewer accounts.</p>
-      </div>
+    <div className="sme-page sme-page-enter sme-page-enter-active">
+      <PageHeader
+        label="Admin"
+        title="System administration"
+        hint="Provision new provider and reviewer accounts. Passwords are temporary; users rotate on first sign-in."
+      />
 
-      <div className="bg-white p-8 rounded-lg shadow-md border-t-4 border-emerald-600 max-w-xl">
-        <h3 className="text-xl font-bold mb-6 text-gray-800">Create New User</h3>
-        
-        {status && (
-          <div className={`p-4 mb-6 rounded-md text-sm font-medium ${status.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-            {status.message}
-          </div>
-        )}
-
-        <form onSubmit={handleRegisterUser} className="space-y-4">
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Full Name</label>
-            <input 
-              type="text" 
-              className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-emerald-500" 
-              value={fullName} 
-              onChange={(e) => setFullName(e.target.value)} 
-              placeholder="Dr. Jane Smith"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Email Address</label>
-            <input 
-              type="email" 
-              className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-emerald-500" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              placeholder="jane.smith@hospital.org"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Username</label>
-            <input 
-              type="text" 
-              className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-emerald-500" 
-              value={username} 
-              onChange={(e) => setUsername(e.target.value)} 
-              placeholder="jsmith_md"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Temporary Password</label>
-            <input 
-              type="password" 
-              className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-emerald-500" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required
-            />
-          </div>
-          
-          <button 
-            type="submit" 
-            className="w-full bg-emerald-600 text-white font-bold py-3 px-4 rounded hover:bg-emerald-700 transition-colors mt-4"
+      <div className="sme-page-text">
+        <div className="sme-card-emphasis">
+          <div className="sme-label">Create new user</div>
+          <h2
+            style={{
+              fontSize: '1.5rem',
+              marginTop: '0.5rem',
+              marginBottom: '1.5rem',
+            }}
           >
-            Provision Account
-          </button>
-        </form>
+            Provision account
+          </h2>
+
+          {status && (
+            <div
+              style={{
+                marginBottom: '1.5rem',
+                borderLeft: `2px solid var(--sme-${
+                  status.outcome === 'approved' ? 'approve' : 'deny'
+                })`,
+                paddingLeft: '0.75rem',
+              }}
+            >
+              <StatusInk outcome={status.outcome}>{status.message}</StatusInk>
+            </div>
+          )}
+
+          <form onSubmit={handleRegisterUser}>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label
+                htmlFor="admin-full-name"
+                className="sme-label"
+                style={{ display: 'block', marginBottom: '0.5rem' }}
+              >
+                Full name
+              </label>
+              <input
+                id="admin-full-name"
+                type="text"
+                className="sme-input"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="last, first &middot; credentials"
+                disabled={submitting}
+                required
+              />
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label
+                htmlFor="admin-email"
+                className="sme-label"
+                style={{ display: 'block', marginBottom: '0.5rem' }}
+              >
+                Email address
+              </label>
+              <input
+                id="admin-email"
+                type="email"
+                className="sme-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="work email"
+                disabled={submitting}
+                required
+              />
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label
+                htmlFor="admin-username"
+                className="sme-label"
+                style={{ display: 'block', marginBottom: '0.5rem' }}
+              >
+                Username
+              </label>
+              <input
+                id="admin-username"
+                type="text"
+                className="sme-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="username"
+                autoComplete="off"
+                disabled={submitting}
+                required
+              />
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <label
+                htmlFor="admin-password"
+                className="sme-label"
+                style={{ display: 'block', marginBottom: '0.5rem' }}
+              >
+                Temporary password
+              </label>
+              <input
+                id="admin-password"
+                type="password"
+                className="sme-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                disabled={submitting}
+                required
+              />
+              <div
+                className="sme-mono"
+                style={{
+                  marginTop: '0.5rem',
+                  fontSize: '0.75rem',
+                  color: 'var(--sme-muted)',
+                }}
+              >
+                user will be prompted to rotate on first sign-in.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="submit"
+                className="sme-button"
+                disabled={!canSubmit}
+                style={{
+                  opacity: canSubmit ? 1 : 0.6,
+                  cursor: canSubmit ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {submitting ? 'Provisioning…' : 'Provision account'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
