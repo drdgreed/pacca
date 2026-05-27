@@ -37,8 +37,35 @@ _SAMPLE_COVERAGE_AT_300 = _SAMPLE_COVERAGE.replace("(100 cases)", "(300 cases)")
 
 
 class TestReadCoverage:
-    def test_missing_file_marked_not_ok(self, tmp_path: Path) -> None:
+    def test_missing_file_falls_back_to_on_disk_cases(self, tmp_path: Path) -> None:
+        """
+        When EVALUATION_COVERAGE.md is missing, read_coverage falls back to
+        counting GoldenCase( occurrences in tests/clinical/*_cases.py — the
+        case files are the authoritative source of truth, so the snapshot
+        is marked parsed_ok=True whenever the fallback finds cases.
+
+        The "not found" state only surfaces when BOTH sources are empty —
+        see test_missing_file_and_no_cases_marked_not_ok below.
+        """
         snap = read_coverage(tmp_path / "missing.md")
+        # Real on-disk case files supply the count via the fallback path.
+        assert snap.parsed_ok is True
+        assert snap.total_cases > 0
+        # When the fallback succeeds, parse_error is cleared.
+        assert snap.parse_error == ""
+
+    def test_missing_file_and_no_cases_marked_not_ok(self, tmp_path: Path) -> None:
+        """
+        When BOTH the coverage doc AND the on-disk case files are missing,
+        the analyzer has no data source and surfaces a "not found" state.
+        """
+        from unittest.mock import patch
+
+        with patch(
+            "pacca.agents.sme_authoring.gap_analyzer._count_case_files_on_disk",
+            return_value=[],
+        ):
+            snap = read_coverage(tmp_path / "missing.md")
         assert snap.parsed_ok is False
         assert "not found" in snap.parse_error
 
@@ -69,8 +96,31 @@ class TestReadCoverage:
 
 
 class TestComputeGaps:
-    def test_missing_file_returns_error_gap(self, tmp_path: Path) -> None:
+    def test_missing_file_with_on_disk_cases_returns_real_gaps(self, tmp_path: Path) -> None:
+        """
+        When the coverage doc is missing but on-disk cases exist, the
+        fallback populates the snapshot and compute_gaps returns the
+        normal milestone + specialty gap list (not the error gap).
+        """
         gaps = compute_gaps(tmp_path / "missing.md")
+        categories = {g.category for g in gaps}
+        assert "error" not in categories
+        # The repo's on-disk count is well below the 500-case milestone, so
+        # at least one milestone gap is guaranteed to appear.
+        assert "milestone" in categories
+
+    def test_missing_file_and_no_cases_returns_error_gap(self, tmp_path: Path) -> None:
+        """
+        When BOTH the coverage doc AND the on-disk case files are missing,
+        compute_gaps returns a single 'error' gap with diagnostic guidance.
+        """
+        from unittest.mock import patch
+
+        with patch(
+            "pacca.agents.sme_authoring.gap_analyzer._count_case_files_on_disk",
+            return_value=[],
+        ):
+            gaps = compute_gaps(tmp_path / "missing.md")
         assert len(gaps) == 1
         assert gaps[0].category == "error"
 
@@ -135,4 +185,4 @@ class TestComputeGaps:
             description="z",
         )
         with pytest.raises(FrozenInstanceError):
-            g.priority = 99  # type: ignore[misc]
+            g.priority = 99
