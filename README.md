@@ -30,9 +30,11 @@ What would close the gap to actual HIPAA compliance is documented in [`docs/PACC
 
 PACCA is a **secure, multi-agent AI workflow** that automates healthcare prior authorization reviews. It solves one of healthcare's most expensive bottlenecks ($50–100B annually in U.S. administrative overhead) by combining the reasoning capabilities of Large Language Models with strict deterministic grading rubrics, dual-collection vector retrieval, and a HIPAA-conscious audit infrastructure.
 
-Unlike basic "LLM-wrapper" approaches, PACCA grounds every decision in factual medical guidelines via Retrieval-Augmented Generation, escalates to specialist tiers using a 7-branch deterministic decision tree, and — beginning with v2.3 — applies **observability-driven harness engineering** to iterate the system itself.
+Unlike basic "LLM-wrapper" approaches, PACCA grounds every decision in factual medical guidelines via Retrieval-Augmented Generation, escalates to specialist tiers using a 7-branch deterministic decision tree, and applies **observability-driven harness engineering** to iterate the system itself.
 
-**v2.3 introduces a methodology, not just features.** Every behavioral change to PACCA's agent harness ships as a one-file diff with a falsifiable predicted-impact contract that the next evaluation round verifies. The methodology is adapted from Lin et al., *Agentic Harness Engineering* (arXiv:2604.25850, 2026). The repository's `docs/` folder makes the discipline auditable from outside.
+**Current state.** PRD `v2.4` is the active spec (introduces §16 Clinical Validation Strategy). The `DecisionSupportAgent` prompt registry is at `v2.5` after iter-5's institutional-memory bump. Harness `iter-6` is the open iteration.
+
+**A methodology, not just features.** The harness discipline — introduced in `v2.3` and active through every iteration since — requires every behavioral change to PACCA's agent harness to ship as a one-file diff with a falsifiable predicted-impact contract that the next evaluation round verifies. The methodology is adapted from Lin et al., *Agentic Harness Engineering* (arXiv:2604.25850, 2026). The repository's `docs/` folder makes the discipline auditable from outside.
 
 > **Governance context.** PACCA is a Class 2/3 enterprise agent operating inside a [**CRISP-AG**](https://drdavidreed.com/portfolio)-style governance envelope. CRISP-AG is an artifact-centered framework for enterprise agentic AI governance that sits *beneath* ISO/IEC 42001 and NIST AI RMF — the standards establish what governance must achieve; CRISP-AG specifies what the producible artifacts look like. The harness-engineering discipline documented in this repo is a concrete instance of CRISP-AG's **Orchestration Contract** artifact; the seven-branch escalation tree and Medical Director gate instantiate the **Delegation Authority Scoping** artifact applied to a healthcare domain. See [drdavidreed.com/portfolio](https://drdavidreed.com/portfolio) for the full white paper.
 
@@ -164,42 +166,42 @@ sequenceDiagram
 sequenceDiagram
     participant D as Director
     participant API as FastAPI
-    participant V as ChromaDB Precedents
-    participant A as Audit Log
+    participant V as Precedents
+    participant A as AuditLog
 
-    D->>API: GET /director-queue (sees IN_REVIEW cases)
-    D->>D: Reviews case + agent rationale
+    D->>API: GET /director-queue
+    D->>D: Reviews case and agent rationale
     alt Director overrides AI
-        D->>API: POST /authorizations/feedback (decision + reason)
-        API->>V: embed(case + rationale) → case_precedents
-        API->>A: log("human_override", actor=director_id)
+        D->>API: POST /authorizations/feedback
+        API->>V: embed case and rationale into precedents
+        API->>A: log human_override actor=director_id
     else Director confirms agent
-        D->>API: (no-op; AI decision stands)
-        API->>A: log("director_confirmed", actor=director_id)
+        D->>API: no-op; AI decision stands
+        API->>A: log director_confirmed actor=director_id
     end
-    Note over V: Future semantically-similar cases<br/>retrieve this precedent alongside guidelines
+    Note over V: Future semantically-similar cases retrieve this precedent alongside guidelines
 ```
 
 ### Workflow C: SME authors a new clinical test case
 
 ```mermaid
 sequenceDiagram
-    participant S as SME (clinician)
-    participant W as Web UI (/sme-author/new)
+    participant S as SME
+    participant W as WebUI
     participant API as FastAPI
-    participant Ag as SME Authoring Agent
-    participant V as Validators (6)
-    participant FS as Case Files
-    participant T as Integrity Tests
+    participant Ag as AuthoringAgent
+    participant V as Validators
+    participant FS as CaseFiles
+    participant T as IntegrityTests
 
-    S->>W: Plain English scenario + mode (sandbox/prod)
-    W->>API: POST /sessions (scenario)
-    API->>Ag: allocate next GC-NNN; draft via LLM
+    S->>W: Plain-English scenario plus mode sandbox or prod
+    W->>API: POST /sessions
+    API->>Ag: allocate next GC-NNN and draft via LLM
     Ag-->>W: typewriter stream over WebSocket
     S->>W: Edit fields if needed
     W->>API: POST /sessions/{id}/validate
     API->>V: run 6 deterministic checks
-    V-->>API: pass/warn/fail per validator
+    V-->>API: pass or warn or fail per validator
     alt any FAIL
         API-->>W: blocked; SME revises
     else all PASS
@@ -211,8 +213,8 @@ sequenceDiagram
             T-->>API: rollback file mutation
             API-->>W: error surfaced to SME
         else integrity PASS
-            API-->>W: PR template (copy-to-clipboard)
-            S->>S: gh pr create (paste body)
+            API-->>W: PR template ready to copy
+            S->>S: gh pr create with pasted body
         end
     end
 ```
@@ -299,9 +301,9 @@ The methodology adapts the AHE paper's three observability pillars to a healthca
 | 📖 **[`docs/ITERATIONS.md`](docs/ITERATIONS.md)** | Narrative log per iteration tag. Format borrowed from the AHE paper's Appendix C — failure pattern → change → trajectory before/after → eval delta. |
 | 🔒 **[`harness/manifests/change_manifest.schema.json`](harness/manifests/change_manifest.schema.json)** | JSON Schema 2020-12 specification for change manifests. Includes PACCA-specific fields (`phi_impact`, `audit_relevant`) tying the discipline to healthcare governance requirements. |
 
-### v2.3 Cycle Phases
+### v2.4 Cycle Phases
 
-The v2.3 release commits PACCA to a six-phase cycle over 10–12 weeks. Each phase has explicit exit criteria verifiable from git history and the evaluation suite:
+The v2.4 release commits PACCA to a six-phase cycle over 10–12 weeks. Each phase has explicit exit criteria verifiable from git history and the evaluation suite:
 
 | Phase | Name | Weeks | Constraint Levels |
 |-------|------|-------|-------------------|
@@ -312,7 +314,7 @@ The v2.3 release commits PACCA to a six-phase cycle over 10–12 weeks. Each pha
 | **H4** | Change Manifest Discipline | 3–10 (parallel) | Process layer |
 | **H5** | Evaluation Harness Expansion | 10–12 | Eval infrastructure |
 
-Full phase specifications, exit criteria, expected impact, and AHE paper citations are in **[the consolidated PRD §15](docs/PACCA_PRD_v2.3_Consolidated.md)**.
+Full phase specifications, exit criteria, expected impact, and AHE paper citations are in **[the consolidated PRD §15](docs/PACCA_PRD_v2.4_Consolidated.md)**.
 
 ---
 
@@ -336,7 +338,7 @@ Full phase specifications, exit criteria, expected impact, and AHE paper citatio
 
 - **`nccn_guidelines`** — authoritative clinical guidelines (NCCN, CMS, AHA, ADA, ACR), quarterly updates, independent versioning and rollback
 - **`case_precedents`** — Medical Director override decisions with documented rationales, embedded immediately, surfaced in semantically similar future cases
-- v2.3+ adds per-agent `long_term_memory.md` files: human-readable, git-versioned cross-cutting clinical lessons that ride in the prompt context on every request (Phase H2)
+- v2.4+ adds per-agent `long_term_memory.md` files: human-readable, git-versioned cross-cutting clinical lessons that ride in the prompt context on every request (Phase H2)
 
 ### 🛡️ Production-Grade Safety
 
@@ -477,11 +479,11 @@ pytest tests/test_clinical_accuracy.py        # Clinical reasoning + LLM-as-judg
 pytest tests/test_escalation_tree.py          # All 7 escalation branches
 pytest tests/test_security_and_scalability.py # Auth, async, RAG
 
-# v2.3+: harness benchmark suite (Phase H5 deliverable)
+# v2.4+: harness benchmark suite (Phase H5 deliverable)
 pytest tests/eval/                             # 100+ case benchmark with k=2 rollouts
 ```
 
-### Validating Change Manifests (v2.3+)
+### Validating Change Manifests (v2.4+)
 
 ```bash
 # Validate a manifest against the schema before committing
@@ -598,7 +600,7 @@ PACCA includes 53 synthesized cases across 8 groups (A–H) covering all 7 escal
 
 Plus a 20-case clinical golden dataset with LLM-as-judge scoring (Claude Haiku, 1–5 rubric) and a CI gate at ≥80% accuracy. Hallucinations score automatic 1 — there is no acceptable rate of inventing clinical data.
 
-In v2.3 Phase H5, these case sources are unified into a single benchmark of 100+ cases with k=2 rollouts per case and pass@1 / tokens-per-case / Succ/Mtok metrics.
+Phase H5 (delivered in v2.4) unifies these case sources into a single benchmark of 100+ cases with k=2 rollouts per case and pass@1 / tokens-per-case / Succ/Mtok metrics.
 
 ---
 
@@ -617,7 +619,7 @@ In v2.3 Phase H5, these case sources are unified into a single benchmark of 100+
 | `HIGH_COST_THRESHOLD` | Cost escalation trigger (USD) | 100000 | Per payer contract |
 | `LLM_RETRY_MAX_ATTEMPTS` | Max LLM retry attempts | 3 | 3–5 |
 | `ENABLE_AUTONOMOUS_DECISIONS` | Master autonomy switch | true | true (false for audit) |
-| `HARNESS_ITERATION_TAG` | Active harness iteration (v2.3+) | `harness-iter-0` | Latest tagged iteration |
+| `HARNESS_ITERATION_TAG` | Active harness iteration (v2.4+) | `harness-iter-0` | Latest tagged iteration |
 
 See [`.env.example`](.env.example) for all configuration options.
 
@@ -664,7 +666,7 @@ pacca/
 │   ├── DECISIONS.md         # v2.3: append-only change log with verdicts
 │   ├── ITERATIONS.md        # v2.3: narrative log per iteration
 │   ├── EVALUATION.md        # v2.3: benchmark methodology + scores
-│   └── PACCA_PRD_v2.3_Consolidated.md  # Full PRD with phase specs
+│   └── PACCA_PRD_v2.4_Consolidated.md  # Full PRD with phase specs
 └── docker-compose.yml       # Full stack including Langfuse
 ```
 
@@ -684,7 +686,7 @@ pacca/
 | **Observability** | OpenTelemetry → Langfuse 1.27+ | One span per agent call |
 | **Testing** | pytest, pytest-asyncio, pytest-cov | 140 unit + benchmark suite |
 | **Security** | python-jose, bcrypt | JWT + timing-safe passwords |
-| **Manifest validation** | jsonschema (Draft 2020-12) | v2.3+: validates change manifests in CI |
+| **Manifest validation** | jsonschema (Draft 2020-12) | v2.4+: validates change manifests in CI |
 | **CI/CD** | GitHub Actions | Includes manifest schema validation |
 | **Containerization** | Docker, Docker Compose | 6 services in full stack |
 
@@ -698,9 +700,9 @@ PACCA's documentation is structured to serve four audiences: engineers, healthca
 
 - **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** — system architecture, component responsibilities, request lifecycle
 - **[`docs/HARNESS.md`](docs/HARNESS.md)** — harness layer reference: 11 editable surfaces, three rules of engagement, three observability pillars
-- **[`docs/PACCA_PRD_v2.3_Consolidated.md`](docs/PACCA_PRD_v2.3_Consolidated.md)** — full Product Requirements Document, including v2.3 harness engineering cycle phases (H0–H5)
+- **[`docs/PACCA_PRD_v2.4_Consolidated.md`](docs/PACCA_PRD_v2.4_Consolidated.md)** — full Product Requirements Document, including the harness engineering cycle phases (H0–H5) and §16 Clinical Validation Strategy
 
-### Iteration record (v2.3+)
+### Iteration record (v2.4+)
 
 - **[`docs/DECISIONS.md`](docs/DECISIONS.md)** — append-only log of every behavioral change with predictions and verdicts
 - **[`docs/ITERATIONS.md`](docs/ITERATIONS.md)** — narrative log per iteration tag (paper Appendix C format)
@@ -748,7 +750,7 @@ If you reference PACCA's harness engineering implementation in academic work or 
 
 ```
 Reed, D. (2026). PACCA: Prior Authorization & Care Coordination Agent Platform —
-v2.3 Consolidated PRD. github.com/drdgreed/pacca.
+v2.4 Consolidated PRD. github.com/drdgreed/pacca.
 
 Methodology adapted from:
 Lin, J., Liu, S., Pan, C., Lin, L., Dou, S., Huang, X., Yan, H., Han, Z., & Gui, T. (2026).
@@ -773,5 +775,5 @@ MIT — see [LICENSE](LICENSE) for details.
 
 ---
 
-**PACCA v2.3** — Healthcare Prior Authorization, Iterated Like Engineering
+**PACCA v2.4** — Healthcare Prior Authorization, Iterated Like Engineering
 *github.com/drdgreed/pacca | David Reed, PhD | May 2026*
