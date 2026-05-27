@@ -38,6 +38,9 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('token', data.access_token);
+        // Notify RequireAuth so any mounted guard re-checks immediately
+        // (same-tab change; browser's `storage` event doesn't fire for it).
+        window.dispatchEvent(new Event('pacca:auth-changed'));
         onLoginSuccess();
         return;
       }

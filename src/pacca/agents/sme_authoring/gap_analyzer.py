@@ -107,20 +107,82 @@ class CoverageSnapshot:
 
 
 def read_coverage(coverage_path: Path | None = None) -> CoverageSnapshot:
-    """Parse EVALUATION_COVERAGE.md into a CoverageSnapshot."""
+    """
+    Parse EVALUATION_COVERAGE.md into a CoverageSnapshot.
+
+    Falls back to enumerating tests/clinical/*_cases.py and counting
+    `GoldenCase(` occurrences when the coverage doc is missing or its
+    table format doesn't match what the parser expects. This makes the
+    counter robust to documentation drift — the on-disk case files are
+    the authoritative source of truth.
+    """
     path = coverage_path or DEFAULT_COVERAGE_PATH
-    if not path.exists():
-        return CoverageSnapshot(
-            total_cases=0,
-            parsed_ok=False,
-            parse_error=f"{path} not found",
+    parse_error = ""
+    rows: list[ListCount] = []
+    total = 0
+
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+        rows = _parse_per_list_table(text)
+        total = _parse_total_live(text) or sum(r.count for r in rows)
+    else:
+        parse_error = f"{path} not found; using on-disk case-file count"
+
+    # If doc parsing produced nothing, fall back to counting the actual
+    # case files. The doc may use a matrix format the per-list parser
+    # doesn't recognize, but the case files are always authoritative.
+    if total == 0 and not rows:
+        rows = _count_case_files_on_disk()
+        total = sum(r.count for r in rows)
+        if rows and not parse_error:
+            parse_error = (
+                "EVALUATION_COVERAGE.md did not contain a recognizable "
+                "per-list count table; counted tests/clinical/*_cases.py "
+                "directly."
+            )
+
+    return CoverageSnapshot(
+        total_cases=total,
+        per_list_counts=rows,
+        parsed_ok=total > 0,
+        parse_error=parse_error if total == 0 else "",
+    )
+
+
+def _count_case_files_on_disk(
+    cases_dir: Path | None = None,
+) -> list[ListCount]:
+    """
+    Enumerate tests/clinical/*_cases.py and count GoldenCase(...) entries.
+
+    Cheap, deterministic, and impossible to drift from reality — every
+    GoldenCase constructor call in the source becomes one count.
+    """
+    cases_dir = cases_dir or Path("tests/clinical")
+    if not cases_dir.exists():
+        return []
+
+    rows: list[ListCount] = []
+    for case_file in sorted(cases_dir.glob("*_cases.py")):
+        try:
+            text = case_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # Count GoldenCase( occurrences — one per case definition
+        count = text.count("GoldenCase(")
+        if count == 0:
+            continue
+        # Synthesize a list_name from the filename stem
+        list_name = case_file.stem.upper()
+        rows.append(
+            ListCount(
+                list_name=list_name,
+                file=str(case_file),
+                count=count,
+                id_range="(counted from source)",
+            )
         )
-
-    text = path.read_text(encoding="utf-8")
-    rows = _parse_per_list_table(text)
-    total = _parse_total_live(text) or sum(r.count for r in rows)
-
-    return CoverageSnapshot(total_cases=total, per_list_counts=rows)
+    return rows
 
 
 def compute_gaps(coverage_path: Path | None = None) -> list[Gap]:

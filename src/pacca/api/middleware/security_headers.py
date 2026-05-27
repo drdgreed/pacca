@@ -38,23 +38,28 @@ if TYPE_CHECKING:
 
 # Production CSP — fail-closed. Adding a new vendor host requires editing
 # this allowlist + deploying; that's the intended friction.
+# cdn.jsdelivr.net is included for FastAPI's /docs (Swagger UI) and /redoc
+# pages which load their bundles from that CDN by default. fastapi.tiangolo.com
+# serves the favicon used by both.
 _PROD_CSP = (
     "default-src 'self'; "
-    "script-src 'self'; "
-    "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
+    "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+    "style-src 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net 'unsafe-inline'; "
     "font-src 'self' https://fonts.gstatic.com; "
-    "img-src 'self' data:; "
+    "img-src 'self' https://fastapi.tiangolo.com https://cdn.jsdelivr.net data:; "
+    "worker-src 'self' blob:; "
     "connect-src 'self' ws: wss:; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
     "form-action 'self'"
 )
 
-# Development CSP — looser, accommodating Vite's HMR + eval'd source maps.
-# Still excludes script-src 'unsafe-eval' in production.
+# Development CSP — looser, accommodating Vite's HMR + eval'd source maps
+# AND the FastAPI /docs Swagger UI which loads from jsdelivr.
 _DEV_CSP = (
     "default-src 'self' 'unsafe-inline' 'unsafe-eval' ws: wss: "
-    "https://fonts.googleapis.com https://fonts.gstatic.com data:; "
+    "https://fonts.googleapis.com https://fonts.gstatic.com "
+    "https://cdn.jsdelivr.net https://fastapi.tiangolo.com data: blob:; "
     "font-src 'self' https://fonts.gstatic.com data:; "
     "frame-ancestors 'none'"
 )

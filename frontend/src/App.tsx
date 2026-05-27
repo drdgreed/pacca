@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
 } from 'react-router-dom';
 import { AppLayout } from './AppLayout';
@@ -39,12 +40,43 @@ import { SMEAuthoringLayout } from './sme-authoring/SMEAuthoringLayout';
  * localStorage synchronously on first render to avoid login-flash.
  */
 
+/**
+ * RequireAuth — auth guard for any subtree behind sign-in.
+ *
+ * Re-checks localStorage on every render (cheap) AND re-renders on:
+ *   - Route navigation (via useLocation dependency).
+ *   - Cross-tab sign-out (via the browser's `storage` event, which
+ *     fires when localStorage changes in another tab).
+ *   - Same-tab sign-out by EditorialNav (which dispatches a synthetic
+ *     `pacca:auth-changed` event — the browser doesn't fire `storage`
+ *     for changes in the same tab that made them).
+ *
+ * Pre-fix behavior: used a `useState(() => ...)` initializer that only
+ * ran on mount. Because React Router keeps the parent Route element
+ * mounted across child-route navigation, the auth state was effectively
+ * frozen at first-render. After sign-out, nav'ing back into the
+ * protected subtree (without leaving it first) bypassed the check.
+ */
 function RequireAuth({ children }: { children: JSX.Element }) {
-  const [hasToken] = useState<boolean>(() =>
-    Boolean(localStorage.getItem('token')),
-  );
+  const location = useLocation();
+  const [, forceRerender] = useState(0);
+
+  useEffect(() => {
+    const onChange = () => forceRerender((n) => n + 1);
+    window.addEventListener('storage', onChange);
+    window.addEventListener('pacca:auth-changed', onChange);
+    return () => {
+      window.removeEventListener('storage', onChange);
+      window.removeEventListener('pacca:auth-changed', onChange);
+    };
+  }, []);
+
+  // Read fresh on every render — also re-runs when `location` changes
+  // (React Router updates location on every navigation, including
+  // intra-subtree, so this picks up post-signout navigation too).
+  const hasToken = Boolean(localStorage.getItem('token'));
   if (!hasToken) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
   return children;
 }
