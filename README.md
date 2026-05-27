@@ -16,9 +16,9 @@
 
 ---
 
-## ⚠️ Portfolio disclaimer
+## Portfolio disclaimer
 
-PACCA is a **portfolio / demo / academic** project. It is **not HIPAA-validated**, has **no Business Associate Agreements** in place with any subcontractor, and **must not be used with real Protected Health Information**. Every clinical case in this repository is synthetic (see `tests/clinical/*_cases.py`). The pre-commit PHI guard (`.githooks/pacca_guard.py`) actively blocks PHI-shaped strings from being committed.
+PACCA is a **pre-production** project. It is **not HIPAA-validated**, has **no Business Associate Agreements** in place with any subcontractor, and **must not be used with real Protected Health Information**. Every clinical case in this repository is synthetic (see `tests/clinical/*_cases.py`). The pre-commit PHI guard (`.githooks/pacca_guard.py`) actively blocks PHI-shaped strings from being committed.
 
 The engineering practices shown here — multi-agent orchestration, RAG over clinical guidelines, audit-grade observability, the harness-engineering discipline, the SME case-authoring workflow — are production-grade. The *deployment* is not. Treat the repo as a reference architecture, not a turnkey product.
 
