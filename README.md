@@ -1,28 +1,207 @@
-# PACCA — Prior Authorization & Care Coordination Agent Platform
+<div align="center">
 
-**Multi-agent prior authorization with observability-driven harness engineering**
+# PACCA
 
-[Features](#features) • [Architecture](#architecture) • [Harness Engineering](#harness-engineering) • [Quick Start](#quick-start) • [API Docs](#api-documentation) • [Demo](#demo-scenarios)
+### Prior Authorization & Care Coordination Agent
+
+**A multi-agent healthcare AI platform with audit-grade observability, a clinician-facing case-authoring agent, and a unified Editorial-Clinical design system.**
 
 [![CI](https://github.com/drdgreed/pacca/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drdgreed/pacca/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/drdgreed/pacca/branch/main/graph/badge.svg)](https://codecov.io/gh/drdgreed/pacca)
+[![Claude API](https://img.shields.io/badge/Claude-Sonnet%204.5-blueviolet.svg)](https://anthropic.com/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![React 18](https://img.shields.io/badge/React-18+-61dafb.svg)](https://react.dev/)
-[![Claude API](https://img.shields.io/badge/Claude-Sonnet%204.5-blueviolet.svg)](https://anthropic.com/)
-[![Synthetic data](https://img.shields.io/badge/data-synthetic%20only-orange.svg)](#-portfolio-disclaimer)
-[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
+[![Synthetic data](https://img.shields.io/badge/data-synthetic%20only-orange.svg)](#portfolio-disclaimer)
 [![MIT License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
+
+<a href="docs/images/screenshot-03-sme-dashboard.png"><img src="docs/images/screenshot-03-sme-dashboard.png" alt="PACCA SME Case Authoring dashboard — Editorial-Clinical aesthetic with Source Serif typography, cream paper background, JetBrains Mono technical data, and the 33-case dataset state" width="820"></a>
+
+*SME Case Authoring dashboard — the Editorial-Clinical design system across every PACCA surface*
+
+[Why this matters](#why-this-matters) • [Engineering depth](#engineering-depth-on-display) • [Claude API patterns](#claude-api--agentic-patterns) • [Architecture](#architecture) • [Process Flow](#process-flow) • [Quick Start](#quick-start) • [Portfolio disclaimer](#portfolio-disclaimer)
+
+</div>
 
 ---
 
-## ⚠️ Portfolio disclaimer
+## Why this matters
 
-PACCA is a **portfolio / demo / academic** project. It is **not HIPAA-validated**, has **no Business Associate Agreements** in place with any subcontractor, and **must not be used with real Protected Health Information**. Every clinical case in this repository is synthetic (see `tests/clinical/*_cases.py`). The pre-commit PHI guard (`.githooks/pacca_guard.py`) actively blocks PHI-shaped strings from being committed.
+**Prior authorization is healthcare's most measurable failure.** Providers spend 34+ hours per practice per week navigating it. Patients face an average 2–3 day treatment delay, with 29% of delays directly harming care. Payers process 200+ million requests annually, mostly by hand. Reviewers work from outdated guideline versions 35% of the time, with decision quality varying 18–35% between individuals. The total US administrative burden is **$50–100B annually**.
 
-The engineering practices shown here — multi-agent orchestration, RAG over clinical guidelines, audit-grade observability, the harness-engineering discipline, the SME case-authoring workflow — are production-grade. The *deployment* is not. Treat the repo as a reference architecture, not a turnkey product.
+The conventional fix — "wrap an LLM around the existing form" — fails because prior authorization isn't a text-summarization problem. It's a **multi-stakeholder, evidence-grounded, auditable clinical decision** with regulatory consequences and zero tolerance for hallucinated facts.
 
-What would close the gap to actual HIPAA compliance is documented in [`docs/PACCA_PRD_v2.4_Consolidated.md` § 16](docs/PACCA_PRD_v2.4_Consolidated.md) (SaMD-grade validation) and `docs/HIPAA_COMPLIANCE.md`. The short version: signed BAAs with every subcontractor (AWS, Anthropic, etc.), encryption-at-rest column-level, role-based access controls, breach-notification procedures, named Privacy + Security Officers, and an ongoing risk-assessment program. The code is one part of a much larger compliance posture.
+PACCA is the engineering answer to *what would a system that actually handles this responsibly look like*. Five agents (frontline clinical, classification, decision support, medical director, policy evolution) with **forced-tool-use structured output**, **dual-collection RAG** over real guideline bodies + institutional precedents, a **7-branch deterministic escalation tree** that overrides AI confidence on experimental treatments and rare conditions, and a **HIPAA-shaped audit trail** with correlation IDs linking every event across the pipeline.
+
+Plus — uniquely — a clinician-facing **SME Case Authoring Agent** (CLI + Web) that removes the engineering middleware from the dataset-growth bottleneck. SMEs grow the golden-case dataset from 33 → 100 → 300 → 500 cases without needing to write Python.
+
+It's built as a portfolio piece. The synthetic-only constraint is explicit. The engineering is real.
+
+---
+
+## Engineering depth on display
+
+For recruiters and technical evaluators scanning quickly, here's what this project demonstrates:
+
+### Agentic systems
+- **5-agent hierarchical orchestrator** with confidence-based escalation (Decision → Medical Director at 0.90–0.95)
+- **7-branch deterministic escalation tree** (4 pre-flight + 3 post-agent) — overrides AI confidence on experimental treatments, rare conditions, conflicting guidelines, prior denials
+- **Versioned `PROMPT_REGISTRY`** ([`src/pacca/agents/prompts/templates.py:50`](src/pacca/agents/prompts/templates.py)) — every system prompt has a `MAJOR.MINOR` version + `changed_in` provenance
+- **`BaseAgent` abstraction** ([`src/pacca/agents/base.py`](src/pacca/agents/base.py)) — retry, tracing, forced-tool-use structured output, OTel span attributes per call
+- **Governed policy evolution** — AI-proposed guideline amendments routed through a Medical Director approval pipeline; deployed amendments append-only logged
+
+### Claude API mastery
+- **Forced tool-use for structured output** ([`base.py:230-310`](src/pacca/agents/base.py)) — the schema-from-Pydantic pattern that guarantees structured returns, not text-parsing roulette
+- **Model-version pinned** to `claude-sonnet-4-5-20250929` ([`config/settings.py:97`](src/pacca/config/settings.py)) — never `claude-3-sonnet-latest` drift
+- **`AsyncAnthropic` + `tenacity` exponential backoff** with `RateLimitError` + `APIStatusError` handling
+- **Token usage recorded on every OTel span** — `llm.input_tokens` + `llm.output_tokens` + `llm.total_tokens` → cost tracking with no extra instrumentation
+- **Structured `structlog.BoundLogger`** ([`config/logging.py`](src/pacca/config/logging.py)) — `logger.warning("event", error=str(e), correlation_id=...)` everywhere; the one stdlib outlier was a bug that broke prod (see PR #26)
+
+### RAG sophistication
+- **Dual-collection ChromaDB**: `nccn_guidelines` (authoritative) + `case_precedents` (institutional memory from human overrides)
+- **Chunking with overlap** (1000-char chunks, 200-char overlap), cosine similarity scoring, metadata filtering by specialty + treatment category
+- **Fallback retry** without category filter if the filtered query returns no results
+- **Adapter pattern** — `GuidelineRetriever` is the stable interface; `RAGPipeline` is the swappable implementation behind it
+
+### Observability + audit
+- **OpenTelemetry → Langfuse** distributed tracing on every agent call
+- **Correlation ID across agents** — one ID ties the submission record, every agent call, the decision record, and any follow-up audit events together; one query returns the full trace
+- **Pre-write audit pairs** — the submission record is written *before* AI processing, so a crash mid-flight still leaves evidence
+- **`structlog` JSON output** with ISO timestamps + level + logger name + arbitrary context kwargs
+
+### Healthcare-domain rigor
+- **Pre-commit PHI guard** ([`.githooks/pacca_guard.py`](.githooks/pacca_guard.py)) — regex sweep for SSN, MRN, DOB, full names, emails, phone numbers, street addresses, dates of birth; same `scan_for_phi()` powers the SME validators
+- **Anti-hallucination guards** on every agent system prompt + **zero-tolerance tests** (GC-018, GC-019 fail the build on any score-1 hallucination)
+- **SaMD-shaped policy change-control** — proposals → review → approval → deploy → append-only log; mapped to FDA Action Plan intent
+- **CRISP-AG governance envelope** ([author's framework](https://drdavidreed.com/portfolio)) — Orchestration Contract + Delegation Authority Scoping artifacts instantiated in code
+
+### Production discipline
+- **549+ passing unit tests** in ~17s, ≥80% coverage gate, ruff + mypy strict, pre-commit hooks
+- **Harness-engineering methodology** — every behavioral change is a one-file diff with a falsifiable predicted-impact contract; verdicts in [`DECISIONS.md`](docs/DECISIONS.md), file-granularity rollback on reject (Lin et al., arXiv:2604.25850)
+- **CI clinical-accuracy gate** — LLM-as-judge (Claude Haiku, 1–5 rubric) on 33 golden cases; fails build below 80%
+- **Editorial-Clinical design system** — 13 KB CSS gzipped, scoped CSS variables, single global stylesheet powering every authenticated surface
+
+---
+
+## Claude API & agentic patterns
+
+This is the section an Anthropic evaluator should read first. Every pattern below is in production code today, with file paths and line ranges.
+
+### Forced tool-use as structured-output contract
+
+The single most important pattern. Instead of asking the model to "return JSON in this format" (which it can misformat, fail to escape, or wrap in conversational text), PACCA defines the Pydantic response model's JSON schema as a tool and forces the model to call it. The API guarantees structured output:
+
+```python
+# src/pacca/agents/base.py:255-285 (excerpt)
+
+tool_def = {
+    "name": "submit_result",
+    "description": f"Submit the structured result for {self.name}",
+    "input_schema": response_model.model_json_schema(),
+}
+
+with self._tracer.start_as_current_span(f"agent.{self.name}") as span:
+    span.set_attribute("agent.name", self.name)
+    span.set_attribute("llm.model", self.config.model)
+    span.set_attribute("llm.max_tokens", self.config.max_tokens)
+    span.set_attribute("input.length_chars", len(user_input))
+
+    response = await self._call_with_retry(user_input, tool_def)
+
+    # The API guarantees a tool_use block when tool_choice is forced.
+    for content_block in response.content:
+        if content_block.type == "tool_use":
+            if response.usage:
+                span.set_attribute("llm.input_tokens", response.usage.input_tokens)
+                span.set_attribute("llm.output_tokens", response.usage.output_tokens)
+                span.set_attribute(
+                    "llm.total_tokens",
+                    response.usage.input_tokens + response.usage.output_tokens,
+                )
+            # model_validate raises ValidationError (NOT retried) if the
+            # LLM returned data that doesn't match the schema.
+            return response_model.model_validate(content_block.input)
+
+    raise ValueError(
+        f"Agent {self.name} did not return a tool_use response. "
+        f"Content blocks: {[b.type for b in response.content]}"
+    )
+```
+
+Every agent (`DecisionAgent`, `MedicalDirectorAgent`, `ClinicalClassificationAgent`, `EvolutionAgent`, `SMECaseAuthoringAgent`) inherits this. One place to change retry policy, tracing, or token-counting; every agent picks it up.
+
+### Versioned prompt registry
+
+PACCA refuses to let prompts drift unattributed. Every system prompt is registered with a version + provenance:
+
+```python
+# src/pacca/agents/prompts/templates.py:50 (excerpt)
+PROMPT_REGISTRY: dict[str, dict[str, str]] = {
+    "DecisionAgent": {
+        "version": "v1.4",
+        "description": "iter-3 chg-1: pediatric-complexity guard added",
+        "changed_in": "harness-iter-3-chg-1",
+    },
+    "MedicalDirectorAgent": { ... },
+    "SMECaseAuthoringAgent": {
+        "version": "v1.0",
+        "description": "Iter-7 chg-1: initial release",
+        "changed_in": "iter-7-chg-1",
+    },
+    ...
+}
+```
+
+A prompt change without a registry bump fails CI. The `harness/manifests/iter-N.json` file lists which prompts changed in which iteration, mapped to the AHE paper's "constrained surface" discipline.
+
+### Model pinning (no `-latest` drift)
+
+```python
+# src/pacca/config/settings.py:97
+default_model: str = Field(
+    default="claude-sonnet-4-5-20250929",
+    description="Default Claude model for agents",
+)
+```
+
+Production agents pin to exact model dates. Model upgrades go through the harness-engineering cycle: predict the impact, ship the change at a constrained surface, run the eval suite, ratify or revert at file granularity. Documented in `harness/manifests/`.
+
+### Structlog BoundLogger (kwargs everywhere)
+
+```python
+# Anywhere in the codebase:
+logger.info(
+    "decision_made",
+    correlation_id=correlation_id,
+    request_id=request.request_id,
+    outcome=decision.status.value,
+    confidence=decision.confidence_score,
+    duration_ms=duration_ms,
+    review_tier=decision.review_tier_used.value,
+)
+```
+
+JSON-rendered, ISO timestamps, level, logger name, arbitrary context. The `pacca.config.get_logger()` wrapper ([`config/logging.py:98`](src/pacca/config/logging.py)) returns a `structlog.stdlib.BoundLogger` — every module uses the same pattern. The PR-#26 bug was a single outlier file using raw stdlib `logging.getLogger()`; the integration test caught it.
+
+### WebSocket with first-message JWT auth
+
+Browsers can't set custom headers on WebSocket connections, so the cleaner-than-query-string-token pattern is first-message authentication:
+
+```typescript
+// frontend/src/sme-authoring/hooks/useDrafting.ts (excerpt)
+sock.onopen = () => {
+  setState((s) => ({ ...s, status: 'authenticating' }));
+  sock.send(JSON.stringify({ type: 'auth', token }));
+};
+```
+
+Server-side ([`src/pacca/api/websockets/draft_stream.py`](src/pacca/api/websockets/draft_stream.py)) validates the JWT on the first message and rejects any other event before the auth handshake completes. Typed event union (`delta` | `done` | `error` | `heartbeat`) with TypeScript discriminated-union narrowing on the client.
+
+### OpenTelemetry on every Claude call
+
+Every agent invocation opens an OTel span named `agent.<AgentName>`. Attributes recorded: `agent.name`, `llm.model`, `llm.max_tokens`, `llm.temperature`, `input.length_chars`, `llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `duration_ms`. Span errors recorded via `record_span_error(span, exc)`. Exporter pluggable via `OTEL_ENDPOINT` env var; defaults to Langfuse in dev.
+
+Cost tracking is a query over span attributes — no separate billing instrumentation.
 
 ---
 
@@ -247,6 +426,25 @@ Numbers are *measured locally* (the unit and integration suites) or *clearly lab
 
 > *Beginning with v2.3, PACCA is iterated using a structured, falsifiable methodology. Every behavioral change is a one-file diff with a recorded prediction. The next evaluation round verifies the prediction. Rejected changes are reverted at file granularity.*
 
+### The build journey
+
+Eight iteration tags shipped to date, each with a recorded change_manifest, predicted impact, and post-eval verdict. The full audit lives in [`docs/DECISIONS.md`](docs/DECISIONS.md) + [`harness/manifests/iter-*.json`](harness/manifests/).
+
+| Tag | What landed | Why it mattered |
+|---|---|---|
+| **iter-0** | OpenTelemetry tracer init, span emission baseline | Established the observability floor — every behavioral change after this is measurable against a recorded baseline |
+| **iter-1** | Decision Support + Medical Director system prompts extracted to file-level mount points | First constrained surface; prompts now versioned via `PROMPT_REGISTRY`; one-file-diff rollback feasible |
+| **iter-2** | Per-case regression gate, near-miss "memory trap" cases (GC-021/022), doc drift guard | Made dataset-level regressions catchable in CI; introduced adversarial probes the agents have to handle |
+| **iter-3** | H2 institutional-memory layer (first entry: NSCLC pembrolizumab); regression_gate noise threshold + k=2 rollouts | Production-grade RAG hardening; first cross-cutting clinical lesson encoded as a memory fact, not retraining |
+| **iter-4** | Second H2 entry (RA biologic DMARD); 330 LOC of dead `decision_agent.py` deleted | Memory layer pattern proven; codebase actively shrinking as the design matures |
+| **iter-5** | Pediatric case expansion (3 cases), complexity-score model (integer 1–5), third H2 entry (asthma dupilumab), structlog wrap | Heuristic → quantitative model; institutional memory passes 3+ samples and is robustly retrievable |
+| **iter-6** | SME Authoring Agent (PRs #10–#12): CLI tool + 549-test library + PHI guard hook | Removed the engineer middleware from dataset growth — clinicians self-serve from 33 → target 500 cases |
+| **iter-7** | SME Web UI (PRs #13–#17) + UI convergence (PRs #20–#24) + 4 bug fixes (PR #26) | Editorial-Clinical aesthetic across every authenticated surface; 13 KB CSS gzipped; single design system |
+
+This isn't a changelog — every row is a *predicted-impact contract* that the next evaluation round either verified or rejected. Rejected iterations get rolled back at file granularity. The discipline is the deliverable.
+
+
+
 <p align="center">
   <img src="docs/assets/iteration_cycle.svg" alt="PACCA harness iteration cycle: observe failure pattern in trajectory logs, write change_manifest with predicted impact and rollback plan, ship a one-file diff at a constrained surface, CI validates schema and tests, tag the iteration and run the eval suite, then ratify or revert at file granularity" width="520">
 </p>
@@ -356,6 +554,10 @@ Full phase specifications, exit criteria, expected impact, and AHE paper citatio
 - OpenTelemetry → Langfuse distributed tracing (Docker Compose included)
 - Comprehensive test coverage: 549+ unit tests (Python) + Playwright smoke tests (frontend)
 
+<a href="docs/images/screenshot-04-sme-wizard.png"><img src="docs/images/screenshot-04-sme-wizard.png" alt="SME Case Authoring 6-step wizard, step 1 (Scenario): Editorial-Clinical aesthetic with sandbox-vs-production mode selector and PHI-shaped pattern detection" width="820"></a>
+
+*The SME New Case Wizard — six steps from plain-English scenario to committed, validated, attested clinical test case.*
+
 ### ✍️ SME Case Authoring Agent (2026-Q2)
 
 The clinical-evaluation dataset must grow from 33 cases → 100 (production-pilot) → 300 (general-payer) → 500+ (SaMD-grade). Authoring each case used to take an engineer 60–90 minutes per case to translate clinical knowledge into Python, wire it into the test aggregator, update companion docs, and verify integrity tests. **The SME Case Authoring Agent removes the engineer middleware entirely.**
@@ -374,6 +576,10 @@ A clinician runs one command (CLI) or opens the browser to `/sme-author` (Web UI
 **Two surfaces, one library.** The CLI (`pacca sme-author new`) and the Web UI (`/sme-author/new` — 6-step wizard with WebSocket live-drafting) call the same underlying `src/pacca/agents/sme_authoring/` Python modules. SMEs pick the interface they prefer; the audit trail is identical.
 
 **Architecture details:** [`docs/SME_CASE_AGENT_DESIGN.md`](docs/SME_CASE_AGENT_DESIGN.md) (engineering). **Clinician walkthrough:** [`docs/SME_CASE_AGENT_USER_MANUAL.md`](docs/SME_CASE_AGENT_USER_MANUAL.md) (Section 11 = Web UI, Sections 1–10 = CLI).
+
+<a href="docs/images/screenshot-02-provider.png"><img src="docs/images/screenshot-02-provider.png" alt="Provider Submit Case page rendered in the Editorial-Clinical aesthetic with cream paper background, Source Serif body type, JetBrains Mono for CPT codes, and a clinical-notes textarea" width="820"></a>
+
+*The Provider surface — same design system as the SME Authoring surface; no aesthetic context-switch when clinicians move between workflows.*
 
 ### 🎨 Editorial-Clinical Design System (2026-Q2)
 
@@ -487,6 +693,18 @@ pytest tests/eval/                             # 100+ case benchmark with k=2 ro
 # Validate a manifest against the schema before committing
 python -m pacca.harness.validate_manifest harness/manifests/iter-1.json
 ```
+
+---
+
+<a id="portfolio-disclaimer"></a>
+
+## Portfolio disclaimer
+
+PACCA is a **portfolio / demo / academic** project. It is **not HIPAA-validated**, has **no Business Associate Agreements** in place with any subcontractor, and **must not be used with real Protected Health Information**. Every clinical case in this repository is synthetic (see `tests/clinical/*_cases.py`). The pre-commit PHI guard ([`.githooks/pacca_guard.py`](.githooks/pacca_guard.py)) actively blocks PHI-shaped strings from being committed.
+
+The engineering practices shown here — multi-agent orchestration, RAG over clinical guidelines, audit-grade observability, the harness-engineering discipline, the SME case-authoring workflow — are production-grade. The **deployment** is not. Treat the repo as a reference architecture, not a turnkey product.
+
+What would close the gap to actual HIPAA compliance is documented in [`docs/PACCA_PRD_v2.4_Consolidated.md` § 16](docs/PACCA_PRD_v2.4_Consolidated.md) (SaMD-grade validation) and [`docs/HIPAA_COMPLIANCE.md`](docs/HIPAA_COMPLIANCE.md). Short version: signed BAAs with every subcontractor (AWS, Anthropic, etc.), encryption-at-rest at column level, role-based access controls, breach-notification procedures, named Privacy + Security Officers, and an ongoing risk-assessment program. The code is one part of a much larger compliance posture.
 
 ---
 
