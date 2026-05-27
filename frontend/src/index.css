@@ -1,54 +1,15 @@
+/*
+ * Tailwind base + utilities — kept for LAYOUT only (flex, grid, gap-*,
+ * p-*, m-*, etc.). Color + typography utilities are NOT used in
+ * application code; those come from styles/theme.css via CSS custom
+ * properties + .sme-* classes.
+ *
+ * Legacy classes (.status-badge, .card-hover, .spinner, .confidence-*)
+ * removed in PR-UI-1 — superseded by .sme-status-* / .sme-card / etc.
+ * defined in theme.css. The body font-family declaration is also gone
+ * — theme.css owns it now.
+ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Custom styles */
-body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-}
-
-/* Status badge animations */
-.status-badge {
-  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-}
-
-.status-processing {
-  @apply bg-blue-100 text-blue-800;
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-/* Card hover effects */
-.card-hover {
-  @apply transition-all duration-200;
-}
-
-.card-hover:hover {
-  @apply shadow-md -translate-y-0.5;
-}
-
-/* Loading spinner */
-.spinner {
-  @apply animate-spin h-5 w-5 text-primary-600;
-}
-
-/* Confidence score colors */
-.confidence-high {
-  @apply text-success-600;
-}
-
-.confidence-medium {
-  @apply text-warning-600;
-}
-
-.confidence-low {
-  @apply text-danger-600;
-}

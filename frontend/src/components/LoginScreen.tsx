@@ -1,75 +1,161 @@
-import React, { useState } from 'react';
+/**
+ * LoginScreen — pre-auth landing page.
+ *
+ * Editorial-Clinical aesthetic from first paint (per PR-UI-1 plan):
+ *   - Cream paper background (body owns this; the form is a card)
+ *   - Spectral display heading
+ *   - .sme-input form fields
+ *   - .sme-button primary action
+ *   - Status-deny ink color for errors (no filled red banner)
+ *
+ * The login endpoint URL is relative (`/api/v1/login/`) so Vite's
+ * dev-server proxy + production nginx both work without code changes.
+ * The previous hardcoded `http://127.0.0.1:8000` URL has been removed.
+ */
 
-export function LoginScreen({ onLoginSuccess }: { onLoginSuccess: () => void }) {
+import { useState, type FormEvent } from 'react';
+
+interface LoginScreenProps {
+  onLoginSuccess: () => void;
+}
+
+export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setSubmitting(true);
     try {
-      // Sending JSON instead of Form Data to see if it fixes the 422 Error!
-      const response = await fetch('http://127.0.0.1:8000/api/v1/login/', {
+      const response = await fetch('/api/v1/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: username,
-          password: password
-        }),
+        body: JSON.stringify({ username, password }),
       });
-
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem('token', data.access_token); // Save the JWT
-        onLoginSuccess(); // Tell App.tsx to switch to the dashboard!
-      } else {
-        setError('Invalid credentials or 422 Error');
+        localStorage.setItem('token', data.access_token);
+        onLoginSuccess();
+        return;
       }
-    } catch (err) {
-      setError('Connection failed. Is the backend running?');
+      const body = await response.json().catch(() => ({}));
+      setError(body.detail || `Sign-in failed (HTTP ${response.status})`);
+    } catch {
+      setError('Could not reach the server. Is the backend running on port 8000?');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white p-8 rounded shadow-md w-96 border-t-4 border-indigo-600">
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">PACCA Secure Login</h2>
-        
+    <main
+      id="pacca-main"
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 'var(--sme-space-lg)',
+      }}
+    >
+      <div
+        className="sme-card-emphasis"
+        style={{
+          width: '100%',
+          maxWidth: '420px',
+        }}
+      >
+        <div className="sme-label">Sign in</div>
+        <h1
+          style={{
+            fontSize: '2rem',
+            marginTop: '0.5rem',
+            marginBottom: '0.25rem',
+          }}
+        >
+          PACCA
+        </h1>
+        <p
+          className="sme-mono"
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--sme-muted)',
+            marginBottom: '2rem',
+          }}
+        >
+          prior authorization &amp; care coordination agent
+        </p>
+
         {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 mb-6 text-sm">
+          <p
+            className="sme-status-deny"
+            style={{
+              fontStyle: 'italic',
+              borderLeft: '2px solid var(--sme-deny)',
+              paddingLeft: '0.75rem',
+              marginBottom: '1.5rem',
+            }}
+          >
             {error}
-          </div>
+          </p>
         )}
 
         <form onSubmit={handleLogin}>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">Username</label>
-            <input 
-              type="text" 
-              className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-indigo-500" 
-              value={username} 
-              onChange={(e) => setUsername(e.target.value)} 
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label
+              htmlFor="login-username"
+              className="sme-label"
+              style={{ display: 'block', marginBottom: '0.5rem' }}
+            >
+              Username
+            </label>
+            <input
+              id="login-username"
+              type="text"
+              autoComplete="username"
+              className="sme-input"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
+              disabled={submitting}
             />
           </div>
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2">Password</label>
-            <input 
-              type="password" 
-              className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-indigo-500" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
+          <div style={{ marginBottom: '2rem' }}>
+            <label
+              htmlFor="login-password"
+              className="sme-label"
+              style={{ display: 'block', marginBottom: '0.5rem' }}
+            >
+              Password
+            </label>
+            <input
+              id="login-password"
+              type="password"
+              autoComplete="current-password"
+              className="sme-input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={submitting}
             />
           </div>
-          <button 
-            type="submit" 
-            className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded hover:bg-indigo-700 transition-colors"
+          <button
+            type="submit"
+            className="sme-button"
+            style={{
+              width: '100%',
+              opacity: submitting ? 0.6 : 1,
+              cursor: submitting ? 'not-allowed' : 'pointer',
+            }}
+            disabled={submitting}
           >
-            Sign In
+            {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </div>
-    </div>
+    </main>
   );
 }
