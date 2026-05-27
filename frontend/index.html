@@ -8,13 +8,13 @@
     <meta name="description" content="AI-powered healthcare prior authorization platform" />
 
     <!--
-      Fonts for the SME Case Authoring surface (Editorial-Clinical aesthetic).
-      Loaded with display=swap to avoid blocking render. Preconnect saves
-      ~80–150ms on first paint.
+      Editorial-Clinical aesthetic fonts. Loaded app-wide as of the
+      UI-convergence migration (PR-UI-1 through PR-UI-5). All surfaces
+      use these fonts via theme tokens defined in
+      frontend/src/styles/theme.css.
 
-      The existing Provider/Director/Admin surfaces use Inter via the
-      Tailwind defaults; that aesthetic is preserved by scoping these
-      fonts to the .sme-authoring CSS class (see frontend/src/sme-authoring/theme.css).
+      display=swap avoids blocking render; preconnect saves ~80–150ms
+      on first paint.
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

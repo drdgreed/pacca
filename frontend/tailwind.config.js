@@ -1,42 +1,34 @@
 /** @type {import('tailwindcss').Config} */
+
+/**
+ * Tailwind configuration — LAYOUT UTILITIES ONLY.
+ *
+ * PACCA's visual identity is owned by the Editorial-Clinical theme
+ * in src/styles/theme.css (CSS custom properties + .sme-* utility
+ * classes). Tailwind is retained for layout utilities — flex, grid,
+ * gap-*, p-*, m-*, etc. — that have no aesthetic opinion.
+ *
+ * Color + typography customization deliberately not extended here.
+ * Use the theme.css CSS variables instead:
+ *
+ *   ❌  className="bg-indigo-700 text-white"     ← do not use
+ *   ✅  className="sme-button"                   ← use this
+ *
+ *   ❌  className="bg-success-50 text-success-600" ← do not use
+ *   ✅  <StatusInk outcome="approved">…</StatusInk> ← use this
+ *
+ * Previously (pre-PR-UI-5) extended `colors:` with custom primary /
+ * success / warning / danger palettes. Removed in PR-UI-5 once the
+ * UI-convergence migration retired every consumer of those tokens.
+ */
+
 export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {
-      colors: {
-        // Healthcare-themed color palette
-        primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
-        },
-        success: {
-          50: '#f0fdf4',
-          500: '#22c55e',
-          600: '#16a34a',
-        },
-        warning: {
-          50: '#fffbeb',
-          500: '#f59e0b',
-          600: '#d97706',
-        },
-        danger: {
-          50: '#fef2f2',
-          500: '#ef4444',
-          600: '#dc2626',
-        },
-      },
-    },
+    extend: {},
   },
   plugins: [],
-}
+};
