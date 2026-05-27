@@ -7,12 +7,22 @@
 [![CI](https://github.com/drdgreed/pacca/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drdgreed/pacca/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/drdgreed/pacca/branch/main/graph/badge.svg)](https://codecov.io/gh/drdgreed/pacca)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![React 18](https://img.shields.io/badge/React-18+-61dafb.svg)](https://react.dev/)
-[![Claude API](https://img.shields.io/badge/Claude-API-blueviolet.svg)](https://anthropic.com/)
-[![Harness Iter](https://img.shields.io/badge/harness--iter-1-orange.svg)](docs/ITERATIONS.md)
+[![Claude API](https://img.shields.io/badge/Claude-Sonnet%204.5-blueviolet.svg)](https://anthropic.com/)
+[![Synthetic data](https://img.shields.io/badge/data-synthetic%20only-orange.svg)](#-portfolio-disclaimer)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![MIT License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
+
+---
+
+## ⚠️ Portfolio disclaimer
+
+PACCA is a **portfolio / demo / academic** project. It is **not HIPAA-validated**, has **no Business Associate Agreements** in place with any subcontractor, and **must not be used with real Protected Health Information**. Every clinical case in this repository is synthetic (see `tests/clinical/*_cases.py`). The pre-commit PHI guard (`.githooks/pacca_guard.py`) actively blocks PHI-shaped strings from being committed.
+
+The engineering practices shown here — multi-agent orchestration, RAG over clinical guidelines, audit-grade observability, the harness-engineering discipline, the SME case-authoring workflow — are production-grade. The *deployment* is not. Treat the repo as a reference architecture, not a turnkey product.
+
+What would close the gap to actual HIPAA compliance is documented in [`docs/PACCA_PRD_v2.4_Consolidated.md` § 16](docs/PACCA_PRD_v2.4_Consolidated.md) (SaMD-grade validation) and `docs/HIPAA_COMPLIANCE.md`. The short version: signed BAAs with every subcontractor (AWS, Anthropic, etc.), encryption-at-rest column-level, role-based access controls, breach-notification procedures, named Privacy + Security Officers, and an ongoing risk-assessment program. The code is one part of a much larger compliance posture.
 
 ---
 
@@ -110,6 +120,102 @@ graph TD
 </details>
 
 For the complete architecture, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For the harness layer specifically, see [`docs/HARNESS.md`](docs/HARNESS.md).
+
+---
+
+## Process Flow
+
+Three concurrent workflows feed the same data store. Each generates audit records under a shared `correlation_id` so the full trace is queryable by one ID.
+
+### Workflow A: Provider submits → agent decides
+
+```mermaid
+sequenceDiagram
+    participant P as Provider
+    participant API as FastAPI
+    participant O as Orchestrator
+    participant RAG as ChromaDB
+    participant L as Claude API
+    participant A as Audit Log
+
+    P->>API: POST /authorizations/ (case + JWT)
+    API->>A: log("authorization_submitted", actor=NPI)
+    API->>RAG: query(case → guidelines + precedents)
+    RAG-->>API: retrieved chunks
+    API->>O: process_decision(ctx)
+    O->>L: Decision Agent prompt
+    L-->>O: confidence + rationale
+    alt confidence ≥ 0.95
+        O-->>API: AUTO_APPROVED
+    else 0.90 ≤ confidence < 0.95
+        O->>L: Medical Director prompt
+        L-->>O: nuanced decision
+        O-->>API: IN_REVIEW or APPROVED
+    else
+        O-->>API: IN_REVIEW (Director queue)
+    end
+    API->>A: log("decision_made", outcome, latency_ms)
+    API-->>P: JSON decision + rationale
+```
+
+### Workflow B: Medical Director reviews escalation → teaches the system
+
+```mermaid
+sequenceDiagram
+    participant D as Director
+    participant API as FastAPI
+    participant V as ChromaDB Precedents
+    participant A as Audit Log
+
+    D->>API: GET /director-queue (sees IN_REVIEW cases)
+    D->>D: Reviews case + agent rationale
+    alt Director overrides AI
+        D->>API: POST /authorizations/feedback (decision + reason)
+        API->>V: embed(case + rationale) → case_precedents
+        API->>A: log("human_override", actor=director_id)
+    else Director confirms agent
+        D->>API: (no-op; AI decision stands)
+        API->>A: log("director_confirmed", actor=director_id)
+    end
+    Note over V: Future semantically-similar cases<br/>retrieve this precedent alongside guidelines
+```
+
+### Workflow C: SME authors a new clinical test case
+
+```mermaid
+sequenceDiagram
+    participant S as SME (clinician)
+    participant W as Web UI (/sme-author/new)
+    participant API as FastAPI
+    participant Ag as SME Authoring Agent
+    participant V as Validators (6)
+    participant FS as Case Files
+    participant T as Integrity Tests
+
+    S->>W: Plain English scenario + mode (sandbox/prod)
+    W->>API: POST /sessions (scenario)
+    API->>Ag: allocate next GC-NNN; draft via LLM
+    Ag-->>W: typewriter stream over WebSocket
+    S->>W: Edit fields if needed
+    W->>API: POST /sessions/{id}/validate
+    API->>V: run 6 deterministic checks
+    V-->>API: pass/warn/fail per validator
+    alt any FAIL
+        API-->>W: blocked; SME revises
+    else all PASS
+        S->>W: Type attestation
+        W->>API: POST /sessions/{id}/commit
+        API->>FS: emit GoldenCase Python via AST
+        API->>T: pytest TestGoldenDatasetIntegrity
+        alt integrity FAIL
+            T-->>API: rollback file mutation
+            API-->>W: error surfaced to SME
+        else integrity PASS
+            API-->>W: PR template (copy-to-clipboard)
+            S->>S: gh pr create (paste body)
+        end
+    end
+```
 
 ---
 
@@ -248,7 +354,39 @@ Full phase specifications, exit criteria, expected impact, and AHE paper citatio
 - PostgreSQL 16 for persistence, SQLite for development (one env-var switch)
 - Dual-collection ChromaDB with metadata filtering
 - OpenTelemetry → Langfuse distributed tracing (Docker Compose included)
-- Comprehensive test coverage: 120 unit tests, 0 failures, ~7 seconds (146 total across unit, integration, and clinical-accuracy tiers)
+- Comprehensive test coverage: 549+ unit tests (Python) + Playwright smoke tests (frontend)
+
+### ✍️ SME Case Authoring Agent (2026-Q2)
+
+The clinical-evaluation dataset must grow from 33 cases → 100 (production-pilot) → 300 (general-payer) → 500+ (SaMD-grade). Authoring each case used to take an engineer 60–90 minutes per case to translate clinical knowledge into Python, wire it into the test aggregator, update companion docs, and verify integrity tests. **The SME Case Authoring Agent removes the engineer middleware entirely.**
+
+A clinician runs one command (CLI) or opens the browser to `/sme-author` (Web UI), describes a clinical scenario in plain English, reviews the agent's draft case, attests their professional review, and the agent handles everything else:
+
+- Allocates a monotonic `GC-NNN` case ID (file-locked across concurrent SMEs)
+- Runs six deterministic validators (PHI scan, guideline citation, schema completeness, outcome ↔ branch consistency, reasoning specificity, judge criteria specificity) — failures block the write
+- Routes to the correct thematic case file
+- Emits valid Python via AST manipulation (parses + idempotent)
+- Updates `docs/CASE_PROVENANCE.md` with one row including the SME attestation
+- Bumps `docs/EVALUATION_COVERAGE.md` cells
+- Runs `pytest TestGoldenDatasetIntegrity` and **rolls back the file mutation on any failure**
+- Generates a PR template with the SME attestation embedded
+
+**Two surfaces, one library.** The CLI (`pacca sme-author new`) and the Web UI (`/sme-author/new` — 6-step wizard with WebSocket live-drafting) call the same underlying `src/pacca/agents/sme_authoring/` Python modules. SMEs pick the interface they prefer; the audit trail is identical.
+
+**Architecture details:** [`docs/SME_CASE_AGENT_DESIGN.md`](docs/SME_CASE_AGENT_DESIGN.md) (engineering). **Clinician walkthrough:** [`docs/SME_CASE_AGENT_USER_MANUAL.md`](docs/SME_CASE_AGENT_USER_MANUAL.md) (Section 11 = Web UI, Sections 1–10 = CLI).
+
+### 🎨 Editorial-Clinical Design System (2026-Q2)
+
+Every PACCA surface (Login, Provider, Director Queue, Admin, SME Authoring) uses a single visual identity:
+
+- **Typography**: Source Serif 4 body, Spectral display, JetBrains Mono technical (case IDs, codes, timestamps)
+- **Palette**: warm cream paper (`#faf8f3`), ink text, navy emphasis, forest-green approve, oxblood deny, mustard review
+- **Status color is ink, not filled badges** — `<StatusInk outcome="approved">` is a colored text span, never a pill
+- **Hairline rules + small-caps section labels** for editorial rhythm
+- **Restrained motion** — 200ms fade + 4px translate-up on page-enter, no bounce
+- **CSS bundle: ~3.5 KB gzipped** (Tailwind retained for layout utilities only; colors + typography owned by `frontend/src/styles/theme.css`)
+
+The single global stylesheet is **15 files / ~400 LOC** and powers every surface. See [`docs/SME_WEB_UI_DEPLOYMENT.md`](docs/SME_WEB_UI_DEPLOYMENT.md) for the production deployment topology + CSP allowlist + nginx config.
 
 ---
 
@@ -290,27 +428,39 @@ git clone https://github.com/drdgreed/pacca.git
 cd pacca
 
 # Create virtual environment
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+python -m venv .venv
+source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
 
-# Install dependencies
+# Install Python + Node dependencies
 pip install -e ".[dev]"
+cd frontend && npm install && cd ..
 
-# Set environment variables
+# Set environment variables (your Anthropic key is required for agent calls)
 export ANTHROPIC_API_KEY=sk-ant-your-key-here
 export DATABASE_URL=sqlite+aiosqlite:///./pacca.db
 export SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')
+export CORS_ORIGINS=http://localhost:3000
 
-# Initialize database
-python -c "import asyncio; from pacca.db import init_database; asyncio.run(init_database())"
+# Boot both servers (backend on :8000, frontend on :3000)
+make sme-author-web
+```
 
-# Start the API server
-uvicorn pacca.api.main:app --reload
+Browse <http://localhost:3000/login>. Register your first user via `/admin` after sign-in, or by hitting `POST /api/v1/register/` directly. There is no default admin account by design — the portfolio context doesn't ship shared credentials.
 
-# In another terminal, start the frontend
-cd frontend
-npm install
-npm run dev
+### Authoring clinical cases as an SME
+
+```bash
+# CLI workflow (for engineers + power users)
+make sme-author          # interactive new-case session
+make sme-author-status   # dataset state + milestone gaps
+make sme-author-help     # CLI subcommand reference
+
+# Web UI workflow (clinician-friendly)
+make sme-author-web      # boots both servers, then browse /sme-author/new
+
+# Playwright smoke tests (one-time browser install required)
+cd frontend && npm run test:e2e:install
+make sme-author-web-e2e
 ```
 
 ### Running Tests
@@ -404,20 +554,30 @@ Content-Type: application/json
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/api/v1/register/` | Create a new user account |
 | POST | `/api/v1/login/` | Exchange credentials for JWT |
 | POST | `/api/v1/authorizations/` | Submit authorization request |
-| GET | `/api/v1/authorizations/` | List authorizations with pagination |
-| GET | `/api/v1/authorizations/{id}` | Decision + full audit trail |
+| POST | `/api/v1/authorizations/feedback` | Medical Director override → vector-store precedent |
 | GET | `/api/v1/admin/config` | Read operational configuration |
 | PATCH | `/api/v1/admin/config` | Update config at runtime |
 | GET | `/api/v1/admin/proposals` | Pending policy proposals |
 | POST | `/api/v1/admin/proposals/{id}/approve` | Approve and deploy guideline amendment |
 | GET | `/api/v1/admin/change-log` | Immutable policy change audit log |
-| GET | `/api/v1/admin/harness/iterations` | v2.3+: list harness iteration tags |
-| GET | `/api/v1/admin/harness/manifest/{tag}` | v2.3+: retrieve a specific iteration's manifest |
+| GET | `/api/v1/admin/harness/iterations` | List harness iteration tags |
+| **SME Authoring Agent (2026-Q2)** | | |
+| GET | `/api/v1/sme-authoring/status` | Dataset state: total cases, per-file counts, milestone gaps |
+| GET | `/api/v1/sme-authoring/batches` | List planned authoring batches from the roadmap |
+| GET | `/api/v1/sme-authoring/batches/{id}` | One batch's case-slot manifest |
+| GET | `/api/v1/sme-authoring/gaps` | Prioritized coverage gaps |
+| GET / POST | `/api/v1/sme-authoring/sessions` | List or create an authoring session |
+| GET / DELETE | `/api/v1/sme-authoring/sessions/{id}` | Inspect or remove a session |
+| POST | `/api/v1/sme-authoring/sessions/{id}/draft` | Generate LLM draft (buffered REST) |
+| POST | `/api/v1/sme-authoring/sessions/{id}/validate` | Run six deterministic validators |
+| POST | `/api/v1/sme-authoring/sessions/{id}/commit` | Commit with SME attestation |
+| WebSocket | `/api/v1/sme-authoring/sessions/{id}/draft-stream` | Live token streaming with first-message JWT auth |
 | GET | `/health` | Health check |
 
-Full API documentation at `/docs` when running the server.
+Full API documentation at `/docs` when running the server (Swagger UI).
 
 ---
 
