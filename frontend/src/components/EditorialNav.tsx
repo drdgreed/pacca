@@ -30,6 +30,10 @@ export function EditorialNav() {
 
   const handleLogout = () => {
     safeLogout();
+    // The browser's `storage` event only fires for changes in OTHER
+    // tabs. RequireAuth listens for this synthetic event so the same
+    // tab's auth guard re-checks immediately after sign-out.
+    window.dispatchEvent(new Event('pacca:auth-changed'));
     navigate('/login');
   };
 

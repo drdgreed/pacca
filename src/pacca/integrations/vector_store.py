@@ -40,13 +40,19 @@ Teaching note — why not just change the import in routes?
 """
 
 import asyncio
-import logging
 import os
 
 import chromadb
 from chromadb.utils import embedding_functions
 
-logger = logging.getLogger(__name__)
+# Use the project's structlog-backed logger — accepts arbitrary kwargs
+# like logger.warning("event", error=str(e)). The previous
+# logging.getLogger() returned a stdlib Logger which rejected such
+# kwargs and crashed the authorization-submission endpoint with
+# "Logger._log() got an unexpected keyword argument 'error'".
+from pacca.config import get_logger
+
+logger = get_logger(__name__)
 
 # ── Lazy import of RAGPipeline ────────────────────────────────────────────────
 # We use a lazy import to avoid circular imports and to allow the module
