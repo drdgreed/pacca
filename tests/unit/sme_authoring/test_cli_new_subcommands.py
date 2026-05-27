@@ -59,11 +59,42 @@ _SAMPLE_ROADMAP = """# Roadmap
 
 
 class TestStatusCmd:
-    def test_status_no_coverage_file(self, tmp_path: Path) -> None:
-        # Default path won't exist in tmp env
+    def test_status_no_coverage_file_falls_back_to_on_disk_count(self, tmp_path: Path) -> None:
+        """
+        When EVALUATION_COVERAGE.md is missing, the analyzer falls back to
+        counting GoldenCase( occurrences in tests/clinical/*_cases.py.
+        This makes the counter robust to documentation drift: case files
+        are the authoritative source of truth.
+
+        The "not available" / "not found" message only appears when BOTH
+        the coverage doc AND the on-disk case files are missing — see
+        test_status_no_coverage_and_no_cases below.
+        """
         with patch(
             "pacca.agents.sme_authoring.gap_analyzer.DEFAULT_COVERAGE_PATH",
             tmp_path / "missing.md",
+        ):
+            r = CliRunner().invoke(sme_author, ["status"])
+        assert r.exit_code == 0
+        # Real on-disk case files supply the count via the fallback path.
+        assert "counted from source" in r.output.lower()
+        assert "total cases:" in r.output.lower()
+
+    def test_status_no_coverage_and_no_cases(self, tmp_path: Path) -> None:
+        """
+        When BOTH the coverage doc AND the cases directory are missing,
+        the analyzer truly has no data source and the CLI surfaces a
+        "not available" state to the SME.
+        """
+        with (
+            patch(
+                "pacca.agents.sme_authoring.gap_analyzer.DEFAULT_COVERAGE_PATH",
+                tmp_path / "missing.md",
+            ),
+            patch(
+                "pacca.agents.sme_authoring.gap_analyzer._count_case_files_on_disk",
+                return_value=[],
+            ),
         ):
             r = CliRunner().invoke(sme_author, ["status"])
         assert r.exit_code == 0
