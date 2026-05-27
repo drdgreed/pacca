@@ -1,126 +1,276 @@
-import React, { useState } from 'react';
+/**
+ * DirectorQueue — Medical Director review queue.
+ *
+ * Reskinned in PR-UI-4 to the Editorial-Clinical aesthetic. Each
+ * escalated case renders as a .sme-card-emphasis with a mustard top
+ * border (signals "in review"). The two clinical actions
+ * (override-and-approve vs confirm-denial) use .sme-button-approve
+ * and .sme-button-deny.
+ *
+ * PHI scrub: the previous synthetic patient string included a titled
+ * full name + a date-of-birth phrasing — the exact patterns CLAUDE.md
+ * forbids in committed source even for demo data. Replaced with the
+ * SME-authoring convention: opaque IDs + age representation (no name,
+ * no DOB). See git history for the pre-scrub content.
+ *
+ * Bug fix: hardcoded `http://127.0.0.1:8000` URL replaced with
+ * relative `/api/v1/...` (works through Vite proxy + nginx).
+ *
+ * Also fixes the last pre-existing tsc warning: unused `React`
+ * import removed (React 18 + new JSX transform doesn't need it).
+ */
+
+import { useState } from 'react';
+import { MonoChip } from './MonoChip';
+import { StatusInk } from './StatusInk';
+import { PageHeader } from '../sme-authoring/components/PageHeader';
+
+interface DirectorCase {
+  id: string;
+  patient: string;
+  diagnosis: string;
+  procedure: string;
+  clinical_notes: string;
+  ai_status: string;
+  ai_rationale: string;
+}
+
+// Synthetic demo case. NO real PHI. Patient identifier is opaque +
+// age-only (no DOB, no full name). Per CLAUDE.md HIPAA rules.
+const DEMO_QUEUE: DirectorCase[] = [
+  {
+    id: 'REQ-8842',
+    patient: 'Patient DEMO-8842 · 47yo',
+    diagnosis: 'M54.5 (Low back pain)',
+    procedure: '72148 (MRI Lumbar Spine)',
+    clinical_notes:
+      'Acute lower back pain that started 2 weeks ago after lifting a heavy box. No numbness or weakness. Imaging requested.',
+    ai_status: 'IN_REVIEW',
+    ai_rationale:
+      'Frontline agent confidence 0.82. Guidelines require 6 weeks of conservative therapy (PT, NSAIDs) for routine back pain without red flags; patient has had pain for only 2 weeks.',
+  },
+];
 
 export function DirectorQueue() {
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  
-  // For the portfolio demo, we hardcode a "gray area" case that the AI flagged for review.
-  const [queue, setQueue] = useState([
-    {
-      id: "REQ-8842",
-      patient: "Jane Doe (DOB: 04/12/1978)",
-      diagnosis: "M54.5 (Low back pain)",
-      procedure: "72148 (MRI Lumbar Spine)",
-      clinical_notes: "Patient presents with acute lower back pain that started 2 weeks ago after lifting a heavy box. No numbness or weakness. Requesting MRI to see what is wrong.",
-      ai_status: "IN_REVIEW",
-      ai_rationale: "Frontline Nurse Agent Confidence: 0.82. The guidelines explicitly require 6 weeks of conservative therapy (PT, NSAIDs) for routine back pain without red flags. Patient has only had pain for 2 weeks."
-    }
-  ]);
+  const [queue, setQueue] = useState<DirectorCase[]>(DEMO_QUEUE);
+  const [status, setStatus] = useState<{
+    tone: 'approved' | 'denied' | 'info';
+    message: string;
+  } | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
 
-  const handleOverride = async (caseItem: any) => {
-    setStatusMessage("Injecting human override into Vector Database...");
-    
-    // The rationale the human doctor provides for overriding the AI
-    const humanRationale = "Medical Director Override: Patient is a manual laborer and primary earner. Delaying imaging risks long-term structural damage that could permanently prevent return to work. Approved as an exception.";
+  const handleOverride = async (caseItem: DirectorCase) => {
+    setPending(caseItem.id);
+    setStatus({ tone: 'info', message: 'Injecting human override into vector store…' });
+
+    const humanRationale =
+      'Medical Director override: patient is a manual laborer and primary earner. Delaying imaging risks long-term structural damage that could prevent return to work. Approved as exception.';
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/authorizations/feedback', {
+      const response = await fetch('/api/v1/authorizations/feedback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // If you secured the feedback route, it will use this token:
-          'Authorization': `Bearer ${localStorage.getItem('token')}` 
+          Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
         },
         body: JSON.stringify({
           case_summary: caseItem.clinical_notes,
-          decision: "APPROVED",
-          rationale: humanRationale
-        })
+          decision: 'APPROVED',
+          rationale: humanRationale,
+        }),
       });
-
       if (response.ok) {
-        setStatusMessage("✅ Success! The AI has learned this precedent. It will reference this decision for future cases.");
-        // Remove the case from the UI queue
-        setQueue(queue.filter(c => c.id !== caseItem.id));
+        setStatus({
+          tone: 'approved',
+          message: 'Precedent recorded. The agent will reference this decision for future cases.',
+        });
+        setQueue((q) => q.filter((c) => c.id !== caseItem.id));
       } else {
-        setStatusMessage("❌ Failed to submit override.");
+        setStatus({ tone: 'denied', message: `Failed to submit override (HTTP ${response.status}).` });
       }
-    } catch (error) {
-      setStatusMessage(`❌ Connection error. Is the backend running?`);
+    } catch {
+      setStatus({
+        tone: 'denied',
+        message: 'Connection error. Is the backend running on port 8000?',
+      });
+    } finally {
+      setPending(null);
     }
   };
 
-  return (
-    <div className="max-w-4xl mx-auto px-4">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-800">Medical Director Queue</h2>
-        <p className="text-gray-600 mt-2">Review complex cases escalated by the AI Orchestrator.</p>
-      </div>
+  const handleConfirmDenial = (caseItem: DirectorCase) => {
+    setQueue((q) => q.filter((c) => c.id !== caseItem.id));
+    setStatus({ tone: 'denied', message: `${caseItem.id} denial confirmed.` });
+  };
 
-      {statusMessage && (
-        <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-md shadow-sm font-medium">
-          {statusMessage}
+  return (
+    <div className="sme-page sme-page-enter sme-page-enter-active">
+      <PageHeader
+        label="Director"
+        title="Medical Director queue"
+        hint="Review complex cases the agent escalated. Override-and-approve teaches the AI; confirm-denial leaves the AI's decision intact."
+      />
+
+      {status && (
+        <div
+          className="sme-card"
+          style={{
+            borderLeft: `4px solid ${
+              status.tone === 'approved'
+                ? 'var(--sme-approve)'
+                : status.tone === 'denied'
+                  ? 'var(--sme-deny)'
+                  : 'var(--sme-info)'
+            }`,
+            marginBottom: '2rem',
+          }}
+        >
+          <StatusInk outcome={status.tone === 'info' ? 'info' : status.tone}>
+            {status.message}
+          </StatusInk>
         </div>
       )}
 
       {queue.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-lg shadow border border-gray-200">
-          <p className="text-xl text-gray-500">🎉 The queue is empty. Great job!</p>
+        <div className="sme-empty">
+          Queue empty. No cases pending Medical Director review.
         </div>
       ) : (
         queue.map((caseItem) => (
-          <div key={caseItem.id} className="bg-white rounded-lg shadow-md border-l-4 border-amber-500 overflow-hidden mb-6">
-            <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
+          <article
+            key={caseItem.id}
+            className="sme-card-emphasis"
+            style={{
+              borderTopColor: 'var(--sme-review)',
+              marginBottom: '2rem',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                gap: '1rem',
+                marginBottom: '1rem',
+                flexWrap: 'wrap',
+              }}
+            >
               <div>
-                <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Case ID: {caseItem.id}</span>
-                <h3 className="text-lg font-bold text-gray-800 mt-1">{caseItem.patient}</h3>
+                <div className="sme-label">Case</div>
+                <div
+                  style={{
+                    fontFamily: 'var(--sme-font-display)',
+                    fontSize: '1.375rem',
+                    fontWeight: 600,
+                    color: 'var(--sme-deep-ink)',
+                    marginTop: '0.25rem',
+                  }}
+                >
+                  {caseItem.patient}
+                </div>
+                <MonoChip size="sm" tone="muted">
+                  {caseItem.id}
+                </MonoChip>
               </div>
-              <span className="px-3 py-1 bg-amber-100 text-amber-800 font-semibold rounded-full text-sm">
-                {caseItem.ai_status}
-              </span>
+              <StatusInk
+                outcome="review"
+                style={{
+                  fontSize: '0.9375rem',
+                  fontVariant: 'small-caps',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {caseItem.ai_status.toLowerCase().replace(/_/g, ' ')}
+              </StatusInk>
             </div>
-            
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <p className="text-sm text-gray-500 font-semibold">Diagnosis</p>
-                  <p className="text-gray-800">{caseItem.diagnosis}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-semibold">Requested Procedure</p>
-                  <p className="text-gray-800">{caseItem.procedure}</p>
-                </div>
-              </div>
 
-              <div className="mb-6">
-                <p className="text-sm text-gray-500 font-semibold mb-1">Clinical Notes</p>
-                <div className="p-3 bg-gray-50 rounded border border-gray-200 text-gray-700 text-sm">
-                  {caseItem.clinical_notes}
-                </div>
-              </div>
+            <hr className="sme-rule-soft" />
 
-              <div className="mb-6">
-                <p className="text-sm text-amber-600 font-bold mb-1">AI Escalation Rationale</p>
-                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded text-sm italic">
-                  "{caseItem.ai_rationale}"
-                </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '1.5rem',
+                marginBottom: '1.5rem',
+              }}
+            >
+              <div>
+                <div className="sme-label">Diagnosis</div>
+                <p style={{ marginTop: '0.25rem', marginBottom: 0 }}>{caseItem.diagnosis}</p>
               </div>
-
-              <div className="flex gap-4 border-t pt-4">
-                <button 
-                  onClick={() => handleOverride(caseItem)}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded transition-colors shadow-sm"
-                >
-                  Override & Approve (Teach AI)
-                </button>
-                <button 
-                  onClick={() => setQueue(queue.filter(c => c.id !== caseItem.id))}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded transition-colors shadow-sm"
-                >
-                  Confirm Denial
-                </button>
+              <div>
+                <div className="sme-label">Requested procedure</div>
+                <p style={{ marginTop: '0.25rem', marginBottom: 0 }}>{caseItem.procedure}</p>
               </div>
             </div>
-          </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div className="sme-label">Clinical notes</div>
+              <p
+                style={{
+                  marginTop: '0.25rem',
+                  color: 'var(--sme-ink-soft)',
+                  lineHeight: 1.55,
+                }}
+              >
+                {caseItem.clinical_notes}
+              </p>
+            </div>
+
+            <div
+              style={{
+                borderLeft: '2px solid var(--sme-review)',
+                paddingLeft: '0.75rem',
+                marginBottom: '2rem',
+              }}
+            >
+              <div className="sme-label sme-status-review">Agent escalation rationale</div>
+              <p
+                style={{
+                  marginTop: '0.25rem',
+                  marginBottom: 0,
+                  fontStyle: 'italic',
+                  color: 'var(--sme-ink-soft)',
+                }}
+              >
+                {caseItem.ai_rationale}
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: '0.75rem',
+                paddingTop: '1rem',
+                borderTop: '1px solid var(--sme-rule-soft)',
+              }}
+            >
+              <button
+                type="button"
+                className="sme-button sme-button-approve"
+                onClick={() => void handleOverride(caseItem)}
+                disabled={pending === caseItem.id}
+                style={{
+                  opacity: pending === caseItem.id ? 0.6 : 1,
+                  cursor: pending === caseItem.id ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {pending === caseItem.id ? 'Submitting…' : 'Override · teach AI'}
+              </button>
+              <button
+                type="button"
+                className="sme-button sme-button-deny"
+                onClick={() => handleConfirmDenial(caseItem)}
+                disabled={pending === caseItem.id}
+                style={{
+                  opacity: pending === caseItem.id ? 0.6 : 1,
+                  cursor: pending === caseItem.id ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Confirm denial
+              </button>
+            </div>
+          </article>
         ))
       )}
     </div>
