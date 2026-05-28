@@ -44,22 +44,58 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.clinical.ambiguous_completeness_cases import AMBIGUOUS_COMPLETENESS_CASES
+from tests.clinical.cardiology_cases import CARDIOLOGY_CASES
+from tests.clinical.denial_cases import DENIAL_CASES
+from tests.clinical.depth_extension_cases import DEPTH_EXTENSION_CASES
+from tests.clinical.endocrinology_cases import ENDOCRINOLOGY_CASES
 from tests.clinical.evaluator import (
     MINIMUM_ACCEPTABLE_ACCURACY,
     ClinicalEvaluator,
     JudgeVerdict,
 )
 from tests.clinical.expansion_cases import EXPANSION_CASES
+from tests.clinical.geriatric_cases import GERIATRIC_CASES
 from tests.clinical.golden_cases import (
     GOLDEN_CASES,
     EscalationBranch,
     ExpectedOutcome,
+    GoldenCase,
     get_cases_by_branch,
     get_dataset_summary,
     get_hallucination_trap_cases,
 )
+from tests.clinical.hematology_cases import HEMATOLOGY_CASES
+from tests.clinical.mental_health_cases import MENTAL_HEALTH_CASES
 from tests.clinical.near_miss_cases import NEAR_MISS_CASES
+from tests.clinical.neurology_cases import NEUROLOGY_CASES
+from tests.clinical.ob_cases import OB_CASES
+from tests.clinical.oncology_depth_cases import ONCOLOGY_DEPTH_CASES
 from tests.clinical.pediatric_cases import PEDIATRIC_CASES
+from tests.clinical.pulmonology_adult_cases import PULMONOLOGY_ADULT_CASES
+from tests.clinical.transplant_cases import TRANSPLANT_CASES
+
+# Aggregate of ALL supplementary case lists — used by the cross-list integrity
+# check and full-pipeline evaluation. Add new list imports above and a
+# corresponding entry below when a new case file lands.
+ALL_SUPPLEMENTARY_LISTS: tuple[list[GoldenCase], ...] = (
+    NEAR_MISS_CASES,
+    PEDIATRIC_CASES,
+    EXPANSION_CASES,
+    DENIAL_CASES,
+    CARDIOLOGY_CASES,
+    MENTAL_HEALTH_CASES,
+    GERIATRIC_CASES,
+    PULMONOLOGY_ADULT_CASES,
+    AMBIGUOUS_COMPLETENESS_CASES,
+    TRANSPLANT_CASES,
+    NEUROLOGY_CASES,
+    OB_CASES,
+    HEMATOLOGY_CASES,
+    ENDOCRINOLOGY_CASES,
+    ONCOLOGY_DEPTH_CASES,
+    DEPTH_EXTENSION_CASES,
+)
 
 # =============================================================================
 # Dataset integrity tests — fast, no API calls
