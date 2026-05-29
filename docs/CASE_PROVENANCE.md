@@ -1,7 +1,9 @@
 # Case Provenance — Per-Case Rationale, Failure Mode, and Iteration of Origin
 
+> **⚠️ Reconciliation note (2026-05-28).** This document carries provenance rows through **GC-033**, but the on-disk dataset is now **100 cases** (GC-001 through GC-100). Provenance rows for **GC-034 through GC-100** are NOT yet in this file — adding them (67 rows: rationale, failure mode, iteration of origin per case) is the immediate follow-up. Each recovered case file does carry its own per-case "WHY THESE EXIST" docstring in the interim, so the rationale is not lost, just not yet consolidated here.
+>
 > **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md) — this document provides the audit-trail "why does each case exist" answer for every case in the dataset.
-> **Status:** v1.1 at iter-6 open (33-case state — added 8 expansion cases per `EVALUATION_COVERAGE.md` gaps). New rows added per case; iteration column tracks when the case landed.
+> **Status:** rows through GC-033; on-disk dataset at 100, GC-034→GC-100 rows pending. New rows added per case; iteration column tracks when the case landed.
 
 ## Schema
 

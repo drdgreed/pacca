@@ -1,6 +1,8 @@
 # Dataset Sufficiency — Golden-Case Coverage, Statistical Power, and HIPAA / SaMD-Grade Validation Path
 
-> **Status:** v1.1 (drafted 2026-05-25, updated at iter-6 open with the 8-case expansion suite).
+> **⚠️ Reconciliation note (2026-05-28).** The on-disk dataset is now **100 cases** (GC-001 through GC-100), reaching the production-pilot milestone this document defines below. The sufficiency analysis, statistical-power tables, and per-specialty breakdowns in the body of this document were written for the **33-case state** and have NOT yet been re-derived at 100 — that re-derivation is the immediate follow-up. Do not cite the body's specific claim verdicts (e.g., "33 below target") as current; they describe the prior state. The milestone *targets* (100 / 300 / 500) and the methodology are unchanged.
+>
+> **Status:** body reflects 33-case state; on-disk dataset at 100, sufficiency re-derivation pending. Originally drafted 2026-05-25, updated at iter-6 open with the 8-case expansion suite.
 > **Audience:** payer-side reviewers, HIPAA / SaMD auditors, clinical-validation board members, prospective customers, and future PACCA contributors who need to defend (or expand) the evaluation dataset.
 > **Scope:** PACCA's clinical golden-case evaluation set. Does NOT cover unit-test, integration-test, or performance-test coverage.
 > **Companion documents:**

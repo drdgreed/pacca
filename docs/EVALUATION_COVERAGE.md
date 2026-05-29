@@ -1,7 +1,9 @@
 # Evaluation Coverage Matrix
 
+> **⚠️ Reconciliation note (2026-05-28).** The on-disk dataset is now **100 cases** (GC-001 through GC-100, across 17 case files — verified by `TestGoldenDatasetIntegrity`). The per-cell matrix below still reflects the **33-case state**; re-baselining the matrix to 100 (mapping GC-034→GC-100 into the dimension cells) is the immediate follow-up, tracked separately. Until then, trust the case files as the source of truth for *which* cases exist; trust this matrix only for the *shape* of the coverage methodology.
+>
 > **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md) — this document grounds the coverage claims at the per-cell level.
-> **Status:** v1.1 at iter-6 open (33-case state — 8 expansion cases added per the iter-5 gap analysis). Re-baseline when the dataset crosses 50 / 100 / 300 / 500.
+> **Status:** matrix at 33-case state; on-disk dataset at 100, re-baseline pending. Originally drafted at iter-6 open (8 expansion cases added per the iter-5 gap analysis); re-baseline when crossing 100 / 300 / 500.
 
 ## How to read this document
 
