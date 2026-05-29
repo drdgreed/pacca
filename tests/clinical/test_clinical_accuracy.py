@@ -143,14 +143,15 @@ class TestGoldenDatasetIntegrity:
             "docs/CASE_AUTHORING_GUIDE.md § 8."
         )
 
-    def test_expansion_dataset_has_eight_cases(self) -> None:
+    def test_expansion_dataset_has_eleven_cases(self) -> None:
         """
-        EXPANSION_CASES (iter-6 gap-closure) is sized at 8. Size is encoded
-        as part of the spec so that drift (a case silently dropped or
-        duplicated) is caught by integrity.
+        EXPANSION_CASES = 8 iter-6 gap-closure cases + 3 cost-boundary cases
+        (GC-073/074/075, iter-6 Batch F). Size is encoded as part of the spec
+        so that drift (a case silently dropped or duplicated) is caught by
+        integrity.
         """
-        assert len(EXPANSION_CASES) == 8, (
-            f"Expected 8 expansion cases, found {len(EXPANSION_CASES)}. "
+        assert len(EXPANSION_CASES) == 11, (
+            f"Expected 11 expansion cases, found {len(EXPANSION_CASES)}. "
             "See docs/CASE_PROVENANCE.md and docs/EVALUATION_COVERAGE.md."
         )
 

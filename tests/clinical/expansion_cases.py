@@ -497,4 +497,131 @@ EXPANSION_CASES: list[GoldenCase] = [
             "guideline support is unambiguous."
         ),
     ),
+    # ─────────────────────────────────────────────────────────────────────────
+    # GC-073, 074, 075 — iter-6 Batch F (cost-boundary cases).
+    # Probe the cost-trigger parser at the $100K threshold.
+    # ─────────────────────────────────────────────────────────────────────────
+    GoldenCase(
+        case_id="GC-073",
+        title="Cost at $99,500/year — just under threshold, cost trigger should NOT fire",
+        diagnosis_code="L40.0",
+        diagnosis_description="Psoriasis vulgaris",
+        procedure_code="J3380",
+        procedure_description="Vedolizumab (Entyvio) injection",
+        clinical_notes=(
+            "47-year-old male with moderate-to-severe psoriatic arthritis "
+            "co-existing with plaque psoriasis (PASI 14). Failed adequate "
+            "MTX + sulfasalazine. Rheumatology requesting vedolizumab "
+            "biologic. Annual cost at planned 8-week interval dosing: "
+            "$99,500/year per pharmacy quote (under $100K policy threshold "
+            "for cost-trigger review by $500)."
+        ),
+        guidelines_context=(
+            "ACR Psoriatic Arthritis Guidelines + AAD-NPF: vedolizumab is "
+            "NOT first-line for PsA (TNFi or IL-17/23 inhibitors are "
+            "preferred); however, the case explicitly tests cost-trigger "
+            "behavior at $99,500. Policy cost-trigger threshold: $100,000 "
+            "annual cost initiates medical-director review. $99,500 is "
+            "just below — cost trigger should not fire."
+        ),
+        expected_outcome=ExpectedOutcome.IN_REVIEW,
+        expected_branch=EscalationBranch.BRANCH_3_LOW_CONFIDENCE,
+        reasoning_must_include=["vedolizumab", "PsA", "first-line"],
+        reasoning_must_not_include=["cost trigger", "$100,000"],
+        clinical_rationale=(
+            "Cost at $99,500 is below $100K threshold — cost trigger should "
+            "NOT fire on the dollar amount. However, vedolizumab is not "
+            "first-line for PsA (clinical issue, separate from cost), so "
+            "IN_REVIEW is the correct outcome based on clinical inappropriateness. "
+            "Tests that the cost parser correctly identifies the amount as "
+            "under-threshold without firing the cost gate."
+        ),
+        judge_scoring_criteria=(
+            "Score highly if rationale identifies the cost as under-"
+            "threshold AND identifies the clinical concern (vedolizumab "
+            "not first-line for PsA) as the actual reason for IN_REVIEW. "
+            "Penalize for routing via cost-trigger when the dollar amount "
+            "is below threshold."
+        ),
+    ),
+    GoldenCase(
+        case_id="GC-074",
+        title="Cost at $102,000/year — just over threshold, cost trigger should fire",
+        diagnosis_code="M06.9",
+        diagnosis_description="Rheumatoid arthritis, unspecified",
+        procedure_code="J0129",
+        procedure_description="Abatacept (Orencia) injection",
+        clinical_notes=(
+            "55-year-old female with seropositive RA, ACR 2021 criteria met. "
+            "Failed adequate trial of MTX × 16 weeks plus combination MTX + "
+            "sulfasalazine + hydroxychloroquine × 12 weeks. Rheumatology "
+            "requesting abatacept IV biologic. Annual cost at IV dosing "
+            "$102,000 per pharmacy quote (above $100K cost-trigger threshold "
+            "by $2,000)."
+        ),
+        guidelines_context=(
+            "ACR 2021 RA Guidelines: biologic step-up after MTX + combination "
+            "DMARD failure is appropriate. Abatacept is a guideline-endorsed "
+            "biologic. Policy cost-trigger: annual cost > $100K initiates "
+            "medical-director review for cost-effectiveness assessment "
+            "regardless of clinical appropriateness."
+        ),
+        expected_outcome=ExpectedOutcome.IN_REVIEW,
+        expected_branch=EscalationBranch.BRANCH_2_MEDICAL_DIRECTOR,
+        reasoning_must_include=["cost", "$100,000", "threshold"],
+        reasoning_must_not_include=["auto-approve", "no review needed"],
+        clinical_rationale=(
+            "Cost at $102K is over $100K threshold — cost trigger fires for "
+            "medical-director review per policy. Clinical criteria are met "
+            "(ACR step therapy satisfied); the IN_REVIEW is for cost-"
+            "effectiveness, not clinical merit. Sibling of GC-010 ($288K) "
+            "near the threshold boundary."
+        ),
+        judge_scoring_criteria=(
+            "Score highly if rationale identifies the cost as over-threshold "
+            "and correctly routes via cost-trigger BRANCH_2. Penalize for "
+            "auto-approval (ignores cost gate) or denial (clinical criteria "
+            "are met)."
+        ),
+    ),
+    GoldenCase(
+        case_id="GC-075",
+        title="Mixed-cost case — $45K requested + $250K unrelated mention, parser disambiguation",
+        diagnosis_code="K50.90",
+        diagnosis_description="Crohn's disease, unspecified, without complications",
+        procedure_code="J1745",
+        procedure_description="Infliximab (Remicade) injection",
+        clinical_notes=(
+            "38-year-old male with moderate Crohn's disease. Failed adequate "
+            "trial of azathioprine; requesting infliximab biologic at "
+            "$45,000/year annual cost. Provider notes mention that the "
+            "patient's spouse is enrolled in a $250,000/year specialty "
+            "rare-disease therapy (unrelated to this request). The $45K "
+            "figure is the requested-drug cost; the $250K figure is "
+            "extraneous context."
+        ),
+        guidelines_context=(
+            "ECCO + AGA Crohn's Disease Guidelines: anti-TNF biologics are "
+            "appropriate after immunomodulator failure. Infliximab is a "
+            "guideline-endorsed option. Cost-trigger threshold $100K applies "
+            "to the requested drug, not extraneous mentions in the notes. "
+            "Policy requires the parser to extract the REQUESTED-drug cost, "
+            "not the maximum dollar amount in the notes."
+        ),
+        expected_outcome=ExpectedOutcome.AUTO_APPROVED,
+        expected_branch=EscalationBranch.BRANCH_1_AUTO_APPROVE,
+        reasoning_must_include=["infliximab", "Crohn", "$45"],
+        reasoning_must_not_include=["$250,000", "cost trigger fires"],
+        clinical_rationale=(
+            "Requested-drug cost is $45K (under threshold). The $250K figure "
+            "is extraneous and refers to a different person. Parser must "
+            "extract the requested-drug cost, not the maximum dollar amount. "
+            "Clinical criteria for biologic are met. Clean approve."
+        ),
+        judge_scoring_criteria=(
+            "Score highly if rationale identifies the correct cost ($45K) "
+            "and ignores the extraneous $250K. Penalize for cost-trigger "
+            "firing on the $250K (parser disambiguation failure)."
+        ),
+    ),
 ]
