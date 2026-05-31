@@ -43,8 +43,6 @@ Teaching note — why a no-op tracer fallback?
   decides whether to record it. Clean separation of concerns.
 """
 
-import logging
-
 from opentelemetry import trace
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -55,7 +53,9 @@ from opentelemetry.sdk.trace.export import (
 )
 from opentelemetry.trace import NonRecordingSpan, Span, StatusCode
 
-logger = logging.getLogger(__name__)
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 # Module-level flag — set to True once configure_tracing() has run
 _tracing_configured = False
@@ -110,19 +110,12 @@ def configure_tracing(
             # BatchSpanProcessor buffers spans and exports them in batches —
             # much more efficient than exporting each span individually.
             provider.add_span_processor(BatchSpanProcessor(exporter))
-            # iter-5 chg-3: wrap structured fields in extra={} so stdlib
-            # logging.Logger accepts them (the kwargs end up on the LogRecord
-            # for downstream handlers/formatters). Cleared the iter-3 chg-1
-            # type-ignores. iter-future: when the project standardizes on
-            # structlog, this can become structlog.get_logger(__name__).info(...).
-            logger.info("otel_exporter_configured", extra={"endpoint": endpoint})
+            logger.info("otel_exporter_configured", endpoint=endpoint)
         except ImportError:
             logger.warning(
                 "otel_otlp_exporter_unavailable",
-                extra={
-                    "detail": "opentelemetry-exporter-otlp-proto-http not installed; "
-                    "falling back to console exporter"
-                },
+                detail="opentelemetry-exporter-otlp-proto-http not installed; "
+                "falling back to console exporter",
             )
             provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
     else:
@@ -132,7 +125,7 @@ def configure_tracing(
         logger.debug("otel_console_exporter_configured")
 
     trace.set_tracer_provider(provider)
-    logger.info("otel_tracing_configured", extra={"service_name": service_name})
+    logger.info("otel_tracing_configured", service_name=service_name)
 
 
 def get_tracer(name: str) -> trace.Tracer:
