@@ -247,3 +247,64 @@ class TestAdultCasesUnaffected:
         case = _case_from_golden(gc010)
         flags = ClinicalRiskDetector().evaluate(case)
         assert EscalationReason.PEDIATRIC_COMPLEX not in flags.reasons
+
+
+class TestAdultComplexCheck:
+    """iter-6 chg-2: deterministic adult specialist-review escalation."""
+
+    def _fire(self, **kwargs: Any) -> bool:
+        from pacca.agents.clinical_risk_detector import EscalationFlags
+
+        detector = ClinicalRiskDetector()
+        flags = EscalationFlags()
+        detector._check_adult_complex(_make_case(**kwargs), flags)
+        return EscalationReason.ADULT_COMPLEX in flags.reasons
+
+    def test_adult_severe_with_failures_and_comorbidity_fires_at_threshold(self) -> None:
+        # adult +0, severe +2, 2 failures +1, comorbidity +1 = 4 == threshold(4)
+        notes = "Refractory to first agent; failed trial of second agent. Comorbid type 2 diabetes."
+        assert self._fire(notes=notes, patient_age=58, disease_severity="severe") is True
+
+    def test_adult_severe_only_does_not_fire(self) -> None:
+        # adult +0, severe +2 = 2 < 4 — the must-not-escalate boundary
+        assert self._fire(notes="", patient_age=49, disease_severity="severe") is False
+
+    def test_elderly_severe_fires(self) -> None:
+        # age>75 +2, severe +2 = 4 == threshold
+        assert self._fire(notes="", patient_age=81, disease_severity="severe") is True
+
+    def test_pediatric_age_does_not_fire_adult_check(self) -> None:
+        # age < 18 is gated out of the ADULT path (pediatric check owns it)
+        assert self._fire(notes="", patient_age=10, disease_severity="severe") is False
+
+    def test_structured_score_below_threshold_does_not_fire(self) -> None:
+        # structured complexity_score=3 short-circuits the compute path; 3 < 4
+        assert self._fire(notes="", patient_age=58, complexity_score=3) is False
+
+    def test_structured_score_at_threshold_fires(self) -> None:
+        assert self._fire(notes="", patient_age=58, complexity_score=4) is True
+
+    def test_missing_age_does_not_fire(self) -> None:
+        # no structured age and no parseable age → cannot confirm adult → no fire
+        assert self._fire(notes="No age stated.", disease_severity="critical") is False
+
+
+class TestGoldenTwentyAdultComplexRegression:
+    """No golden-20 case that currently AUTO_APPROVES may start escalating
+    on the new adult check (the chg-2 regression guard)."""
+
+    def test_no_auto_approved_golden_case_newly_fires_adult_complex(self) -> None:
+        from pacca.agents.clinical_risk_detector import EscalationFlags
+        from tests.clinical.golden_cases import ExpectedOutcome
+
+        detector = ClinicalRiskDetector()
+        for g in GOLDEN_CASES:
+            if g.expected_outcome is not ExpectedOutcome.AUTO_APPROVED:
+                continue
+            case = _make_case(notes=g.clinical_notes)
+            flags = EscalationFlags()
+            detector._check_adult_complex(case, flags)
+            assert EscalationReason.ADULT_COMPLEX not in flags.reasons, (
+                f"{g.case_id} auto-approves today but the adult check would "
+                f"escalate it — chg-2 must not regress the golden-20."
+            )

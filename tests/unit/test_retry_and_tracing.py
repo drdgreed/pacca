@@ -30,6 +30,8 @@ Teaching note — how to test retry logic without waiting:
   This lets us test "did it retry 3 times?" in milliseconds, not seconds.
 """
 
+import logging as _stdlib_logging
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -42,6 +44,7 @@ from anthropic import (
 from pydantic import BaseModel
 
 from pacca.agents.base import AgentConfig, BaseAgent
+from pacca.config import tracing as tracing_module
 
 # =============================================================================
 # Minimal concrete agent for testing
@@ -113,7 +116,7 @@ class TestRetryLogic:
     """
 
     @pytest.fixture
-    def agent(self):
+    def agent(self) -> _ConcreteAgent:
         """Create a test agent with fast retry settings (no real waiting)."""
         cfg = AgentConfig(model="claude-test", temperature=0.0, max_tokens=100)
         a = _ConcreteAgent(config=cfg)
@@ -125,7 +128,7 @@ class TestRetryLogic:
         return a
 
     @pytest.mark.asyncio
-    async def test_rate_limit_error_is_retried(self, agent):
+    async def test_rate_limit_error_is_retried(self, agent: _ConcreteAgent) -> None:
         """
         A 429 RateLimitError on the first attempt should cause a retry,
         with the second attempt succeeding and returning the result.
@@ -155,7 +158,7 @@ class TestRetryLogic:
         assert agent.client.messages.create.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_connection_error_is_retried(self, agent):
+    async def test_connection_error_is_retried(self, agent: _ConcreteAgent) -> None:
         """
         A network connection error should trigger retry.
 
@@ -177,7 +180,7 @@ class TestRetryLogic:
         assert agent.client.messages.create.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_exhausted_retries_reraises_last_error(self, agent):
+    async def test_exhausted_retries_reraises_last_error(self, agent: _ConcreteAgent) -> None:
         """
         After max_attempts failures, the last error must be re-raised.
 
@@ -205,7 +208,7 @@ class TestRetryLogic:
         assert agent.client.messages.create.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_bad_request_error_not_retried(self, agent):
+    async def test_bad_request_error_not_retried(self, agent: _ConcreteAgent) -> None:
         """
         A 400 BadRequestError must NOT be retried.
 
@@ -229,7 +232,7 @@ class TestRetryLogic:
         )
 
     @pytest.mark.asyncio
-    async def test_auth_error_not_retried(self, agent):
+    async def test_auth_error_not_retried(self, agent: _ConcreteAgent) -> None:
         """
         A 401 AuthenticationError must NOT be retried.
 
@@ -252,7 +255,7 @@ class TestRetryLogic:
         )
 
     @pytest.mark.asyncio
-    async def test_successful_call_not_retried(self, agent):
+    async def test_successful_call_not_retried(self, agent: _ConcreteAgent) -> None:
         """
         A successful API call must be called exactly once — no unnecessary retries.
 
@@ -286,7 +289,7 @@ class TestOtelSpans:
     """
 
     @pytest.fixture
-    def agent_with_mock_tracer(self):
+    def agent_with_mock_tracer(self) -> _ConcreteAgent:
         """Create a test agent with a mocked OTel tracer."""
         cfg = AgentConfig(model="claude-test", temperature=0.0, max_tokens=100)
         a = _ConcreteAgent(config=cfg)
@@ -297,7 +300,9 @@ class TestOtelSpans:
         return a
 
     @pytest.mark.asyncio
-    async def test_span_created_for_successful_call(self, agent_with_mock_tracer):
+    async def test_span_created_for_successful_call(
+        self, agent_with_mock_tracer: _ConcreteAgent
+    ) -> None:
         """
         A span named 'agent.TestAgent' must be opened for every successful call.
 
@@ -312,7 +317,7 @@ class TestOtelSpans:
 
         original_start = agent._tracer.start_as_current_span
 
-        def capturing_start(name, **kwargs):
+        def capturing_start(name: str, **kwargs: Any) -> Any:
             opened_spans.append(name)
             return original_start(name, **kwargs)
 
@@ -324,7 +329,9 @@ class TestOtelSpans:
         )
 
     @pytest.mark.asyncio
-    async def test_span_attributes_include_agent_name(self, agent_with_mock_tracer):
+    async def test_span_attributes_include_agent_name(
+        self, agent_with_mock_tracer: _ConcreteAgent
+    ) -> None:
         """
         The span must have 'agent.name' attribute set to the agent's name.
 
@@ -341,7 +348,7 @@ class TestOtelSpans:
         mock_span.__enter__ = MagicMock(return_value=mock_span)
         mock_span.__exit__ = MagicMock(return_value=False)
 
-        def capture_attribute(key, value):
+        def capture_attribute(key: str, value: Any) -> None:
             set_attributes[key] = value
 
         mock_span.set_attribute = capture_attribute
@@ -357,7 +364,9 @@ class TestOtelSpans:
         )
 
     @pytest.mark.asyncio
-    async def test_token_usage_recorded_on_span(self, agent_with_mock_tracer):
+    async def test_token_usage_recorded_on_span(
+        self, agent_with_mock_tracer: _ConcreteAgent
+    ) -> None:
         """
         Token usage (input_tokens, output_tokens) must be recorded on the span.
 
@@ -382,7 +391,9 @@ class TestOtelSpans:
         assert set_attributes.get("llm.total_tokens") == 570
 
     @pytest.mark.asyncio
-    async def test_span_error_recorded_on_failure(self, agent_with_mock_tracer):
+    async def test_span_error_recorded_on_failure(
+        self, agent_with_mock_tracer: _ConcreteAgent
+    ) -> None:
         """
         When an agent call fails permanently, the error must be recorded on
         the span so it shows as a failure in the trace backend.
@@ -395,13 +406,13 @@ class TestOtelSpans:
             side_effect=ValueError("LLM returned unexpected format")
         )
 
-        error_recorded = {"called": False, "exc": None}
+        error_recorded: dict[str, Any] = {"called": False, "exc": None}
         mock_span = MagicMock()
         mock_span.__enter__ = MagicMock(return_value=mock_span)
         mock_span.__exit__ = MagicMock(return_value=False)
         mock_span.set_attribute = MagicMock()
 
-        def capture_record_exception(exc):
+        def capture_record_exception(exc: BaseException) -> None:
             error_recorded["called"] = True
             error_recorded["exc"] = exc
 
@@ -428,7 +439,7 @@ class TestOtelSpans:
 class TestTracingConfiguration:
     """Tests for configure_tracing() setup."""
 
-    def test_configure_tracing_noop_when_disabled(self):
+    def test_configure_tracing_noop_when_disabled(self) -> None:
         """
         configure_tracing(enabled=False) must install a no-op provider.
 
@@ -458,3 +469,20 @@ class TestTracingConfiguration:
 
         # Reset for subsequent tests
         tracing_module._tracing_configured = False
+
+
+class TestTracingStructlogMigration:
+    """iter-6 chg-1: tracing.py's module logger must be structlog, not stdlib."""
+
+    def test_logger_is_structlog_not_stdlib(self) -> None:
+        # RED pre-migration: tracing_module.logger is a logging.Logger.
+        # GREEN post-migration: it is a structlog BoundLogger (or lazy proxy),
+        # neither of which is an instance of logging.Logger.
+        assert not isinstance(tracing_module.logger, _stdlib_logging.Logger)
+
+    def test_configure_tracing_console_path_accepts_kwargs(self) -> None:
+        # Exercises the structured-kwargs call sites (logger.info(event, key=val))
+        # on the console path. Must not raise after the migration.
+        tracing_module._tracing_configured = False
+        tracing_module.configure_tracing(service_name="pacca-test", endpoint=None, enabled=True)
+        tracing_module._tracing_configured = False  # reset for other tests
