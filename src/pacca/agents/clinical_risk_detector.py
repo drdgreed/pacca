@@ -448,6 +448,7 @@ class ClinicalRiskDetector:
         # iter-3 chg-1: branch_2_medical_director triggers.
         self._check_high_cost(case, flags)
         self._check_pediatric_complex(case, flags)
+        self._check_adult_complex(case, flags)  # iter-6 chg-2
 
         return flags
 
@@ -716,4 +717,53 @@ class ClinicalRiskDetector:
             f"threshold {self.PEDIATRIC_COMPLEXITY_THRESHOLD} — specialist "
             f"review required per policy regardless of clinical eligibility "
             f"verification.",
+        )
+
+    # ── Branch 2: Adult complexity (iter-6 chg-2 — generalizes the score model) ─
+    # Shares PEDIATRIC_AGE_CUTOFF (=18) with the pediatric check above — one
+    # boundary constant, so the two age-gated checks can never drift apart.
+
+    def _check_adult_complex(
+        self,
+        case: ClinicalCase,
+        flags: EscalationFlags,
+    ) -> None:
+        """
+        Escalate to specialist review when the patient is an adult (age >= 18)
+        AND the complexity score reaches settings.complexity_specialist_review_min.
+
+        Mirrors _check_pediatric_complex but for the adult population and the
+        standard (higher) specialist-review threshold. Reuses the iter-5
+        _compute_complexity_score unchanged — no model change — and reuses the same
+        PEDIATRIC_AGE_CUTOFF boundary, so the two checks are mutually exclusive by
+        construction (pediatric < 18, adult >= 18 — no double-fire, no drift).
+
+        Data source order for the score:
+          1. ClinicalCase.complexity_score (structured — preferred)
+          2. Computed from case features via _compute_complexity_score
+        """
+        from ..config.settings import get_settings
+
+        notes_blob = _evidence_blob(case)
+
+        age = case.patient_age
+        if age is None:
+            age = _parse_age_from_notes(notes_blob)
+        if age is None or age < self.PEDIATRIC_AGE_CUTOFF:
+            return
+
+        score = (
+            case.complexity_score
+            if case.complexity_score is not None
+            else _compute_complexity_score(case)
+        )
+        threshold = int(get_settings().complexity_specialist_review_min)
+        if score < threshold:
+            return
+
+        flags.add(
+            EscalationReason.ADULT_COMPLEX,
+            f"Adult patient (age {age}) with complexity score {score} >= "
+            f"specialist-review threshold {threshold} — specialist review "
+            f"required per policy regardless of clinical eligibility verification.",
         )

@@ -117,3 +117,14 @@ class EscalationReason(StrEnum):
 
     PEDIATRIC_COMPLEX = "pediatric_complex"
     """Pediatric patient (age < 18) with moderate or higher complexity score."""
+
+    ADULT_COMPLEX = "adult_complex"
+    """
+    Adult patient (age >= 18) whose deterministic complexity score reaches the
+    specialist-review threshold (settings.complexity_specialist_review_min, =4).
+    Escalated because the same policy logic that flags complex pediatric cases
+    applies to complex adults — specialist review is warranted regardless of how
+    confident the clinical-eligibility check is. The classification agent's
+    LLM-self-assessed complexity flag remains advisory; this pre-flight is
+    authoritative and reproducible.
+    """
