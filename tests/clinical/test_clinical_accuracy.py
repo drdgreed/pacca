@@ -44,6 +44,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.clinical.adult_complexity_cases import ADULT_COMPLEXITY_CASES
 from tests.clinical.ambiguous_completeness_cases import AMBIGUOUS_COMPLETENESS_CASES
 from tests.clinical.cardiology_cases import CARDIOLOGY_CASES
 from tests.clinical.denial_cases import DENIAL_CASES
@@ -95,6 +96,7 @@ ALL_SUPPLEMENTARY_LISTS: tuple[list[GoldenCase], ...] = (
     ENDOCRINOLOGY_CASES,
     ONCOLOGY_DEPTH_CASES,
     DEPTH_EXTENSION_CASES,
+    ADULT_COMPLEXITY_CASES,
 )
 
 # =============================================================================
@@ -134,7 +136,14 @@ class TestGoldenDatasetIntegrity:
         uniqueness is necessary but not sufficient.
         """
         all_ids = [
-            c.case_id for c in (GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES + EXPANSION_CASES)
+            c.case_id
+            for c in (
+                GOLDEN_CASES
+                + NEAR_MISS_CASES
+                + PEDIATRIC_CASES
+                + EXPANSION_CASES
+                + ADULT_COMPLEXITY_CASES
+            )
         ]
         duplicates = sorted({x for x in all_ids if all_ids.count(x) > 1})
         assert not duplicates, (
@@ -153,6 +162,16 @@ class TestGoldenDatasetIntegrity:
         assert len(EXPANSION_CASES) == 11, (
             f"Expected 11 expansion cases, found {len(EXPANSION_CASES)}. "
             "See docs/CASE_PROVENANCE.md and docs/EVALUATION_COVERAGE.md."
+        )
+
+    def test_adult_complexity_dataset_has_three_cases(self) -> None:
+        """
+        ADULT_COMPLEXITY_CASES = 3 iter-6 chg-3 cases (GC-101 escalating,
+        GC-102 must-not-escalate boundary, GC-103 geriatric escalating). Size is
+        encoded so drift is caught by integrity.
+        """
+        assert len(ADULT_COMPLEXITY_CASES) == 3, (
+            f"Expected 3 adult-complexity cases, found {len(ADULT_COMPLEXITY_CASES)}."
         )
 
     def test_all_cases_have_required_fields(self) -> None:
@@ -608,7 +627,14 @@ class TestFullClinicalEvaluation:
         # + EXPANSION_CASES (iter-6 — gap-closure suite per EVALUATION_COVERAGE.md).
         # All supplementary lists run through the same judge but are kept separate
         # — the `len == 20` integrity assertion above still holds for GOLDEN_CASES.
-        for golden in GOLDEN_CASES + NEAR_MISS_CASES + PEDIATRIC_CASES + EXPANSION_CASES:
+        # + ADULT_COMPLEXITY_CASES (iter-6 chg-3 — adult pre-flight validation set).
+        for golden in (
+            GOLDEN_CASES
+            + NEAR_MISS_CASES
+            + PEDIATRIC_CASES
+            + EXPANSION_CASES
+            + ADULT_COMPLEXITY_CASES
+        ):
             clinical_case = ClinicalCase(
                 patient_id=f"P-EVAL-{golden.case_id}",
                 primary_diagnosis_code=golden.diagnosis_code,
