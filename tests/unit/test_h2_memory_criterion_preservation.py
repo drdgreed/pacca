@@ -40,7 +40,7 @@ class TestMemoryInjection:
         """
         Any v2.3+ version is a valid H2-active audit signal. The current
         canonical version is asserted by the iter-4 chg-1 test class
-        (test_decision_support_prompt_version_bumped_to_v24); this test
+        (test_decision_support_prompt_version_bumped_to_v26); this test
         only guards against accidental downgrade below v2.3 (the H2 floor).
         """
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
@@ -202,7 +202,7 @@ class TestRABiologicMemoryInjection:
         """
         v2.4+ signals the RA entry was active. The iter-4 chg-1 floor;
         the canonical current version is asserted by the iter-5 chg-4 test
-        (test_decision_support_prompt_version_bumped_to_v25). This guards
+        (test_decision_support_prompt_version_bumped_to_v26). This guards
         against accidental downgrade below v2.4.
         """
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
@@ -342,9 +342,20 @@ class TestAsthmaDupilumabMemoryInjection:
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
         assert "Dupilumab for severe eosinophilic asthma" in rendered
 
-    def test_decision_support_prompt_version_bumped_to_v25(self) -> None:
+    def test_decision_support_prompt_version_is_at_least_v25(self) -> None:
+        """
+        v2.5+ signals the asthma (3rd) entry was active. The iter-5 chg-4 floor;
+        the canonical current version is asserted by the iter-6 chg-4 test
+        (test_decision_support_prompt_version_bumped_to_v26). Guards against
+        accidental downgrade below v2.5.
+        """
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
-        assert "Prompt version: v2.5" in rendered
+        import re
+
+        match = re.search(r"Prompt version: v2\.(\d+)", rendered)
+        assert match is not None
+        minor = int(match.group(1))
+        assert minor >= 5, f"prompt version v2.{minor} predates asthma entry (floor: v2.5)"
 
     def test_all_three_h2_entries_present(self) -> None:
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
@@ -392,14 +403,16 @@ class TestAsthmaAntiPatternsPreserved:
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
         assert "Patient age < 12" in rendered
 
-    def test_every_asthma_anti_pattern_routes_to_in_review_not_denied(self) -> None:
-        """All H2 entries' anti-patterns must say 'Status: IN_REVIEW. (Not DENIED.)'."""
+    def test_every_anti_pattern_routes_to_in_review_not_denied(self) -> None:
+        """All H2 entries' anti-patterns say '(Not DENIED.)'. Four entries now:
+        NSCLC (5) + RA (6) + asthma (5) + benefit-cap-deny over-denial guards (5)
+        = 21. The deny entry INVERTS direction (deny -> IN_REVIEW) but uses the
+        same marker, so the count only grows."""
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
-        # 3 entries now: NSCLC (5 anti-patterns) + RA (6) + asthma (5) = 16
         not_denied_count = rendered.count("(Not DENIED.)")
-        assert not_denied_count >= 16, (
-            f"expected at least 16 (Not DENIED.) clarifications across three "
-            f"H2 entries; found {not_denied_count}"
+        assert not_denied_count >= 21, (
+            f"expected at least 21 (Not DENIED.) clarifications across four "
+            f"H2 entries, found {not_denied_count}."
         )
 
 
@@ -424,3 +437,118 @@ class TestAsthmaPediatricComplexInteraction:
     def test_memory_explicitly_says_does_not_override(self) -> None:
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
         assert "memory does **not** override" in rendered
+
+
+# =============================================================================
+# iter-6 chg-4 — Fourth H2 memory entry: FIRST deny-pattern (benefit-cap
+# exhaustion). Re-anchored from GC-034 to GC-035 after the iter-6 baseline
+# capture showed GC-034 (off-label oncology) is unconditionally intercepted by
+# the pre-flight experimental_treatment check ("off-label" is itself an
+# experimental keyword), so its disposition can never reach the
+# DecisionSupportAgent where this memory lives. GC-035 (PT benefit-cap) reaches
+# the agent, so the deny entry can actually act. The off-label/experimental
+# pre-flight contradiction is recorded as an iter-7 finding.
+#
+# This entry INVERTS the approve-class format of the three entries above: its
+# shortcut outcome is DENIED, and its anti-patterns flip DENIED -> IN_REVIEW.
+# The over-denial guards are the safety property of the whole iteration.
+# =============================================================================
+
+
+class TestBenefitCapDenyMemoryInjection:
+    def test_decision_support_prompt_contains_deny_entry(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Outpatient benefit-cap exhaustion without a documented exception" in rendered
+
+    def test_decision_support_prompt_version_bumped_to_v26(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Prompt version: v2.6" in rendered
+
+    def test_all_four_h2_entries_present(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "First-line pembrolizumab for metastatic NSCLC" in rendered
+        assert "First-line biologic DMARD for seropositive RA" in rendered
+        assert "Dupilumab for severe eosinophilic asthma" in rendered
+        assert "Outpatient benefit-cap exhaustion without a documented exception" in rendered
+
+
+class TestBenefitCapDenyCriterionPreservation:
+    """The 5 denial criteria must appear verbatim in the rendered prompt."""
+
+    def test_lists_benefit_cap_exhausted(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "benefit cap is exhausted" in rendered.lower()
+
+    def test_lists_contractual_not_medical_necessity(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "contractual benefit-design limit" in rendered.lower()
+        assert "separate from medical necessity" in rendered.lower()
+
+    def test_lists_no_exception_criterion(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "acute new injury" in rendered.lower()
+        assert "post-surgical" in rendered.lower()
+        assert "functional progress" in rendered.lower()
+
+    def test_lists_maintenance_not_acute(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "maintenance/chronic, not an acute exacerbation" in rendered.lower()
+
+    def test_lists_plan_policy_alignment(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "benefit document specifies the cap" in rendered.lower()
+
+
+class TestBenefitCapDenyOverDenialGuards:
+    """The over-denial guard: each anti-pattern FLIPS deny -> IN_REVIEW, and the
+    governing 'never auto-deny on doubt' rule is present. This is the safety
+    property of the entire iteration."""
+
+    def test_any_exception_criterion_flips_to_in_review(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "Any documented exception criterion" in rendered
+        assert "(Not DENIED.)" in rendered
+
+    def test_acute_exacerbation_flips_to_in_review(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "acute exacerbation or new episode" in rendered.lower()
+
+    def test_pending_appeal_flips_to_in_review(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "pending appeal" in rendered.lower()
+
+    def test_incomplete_documentation_flips_to_in_review(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "ambiguous or incomplete visit-count" in rendered.lower()
+
+    def test_governing_rule_never_auto_deny_on_doubt(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert (
+            "Any uncertainty -> IN_REVIEW" in rendered or "Any uncertainty → IN_REVIEW" in rendered
+        )
+        assert "never auto-deny on doubt" in rendered.lower()
+        assert "absence of evidence is not evidence of ineligibility" in rendered.lower()
+
+    def test_valid_denial_requires_cited_basis_and_appeal_redirect(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "cite the specific benefit-cap basis" in rendered.lower()
+        assert "appeal" in rendered.lower()
+        assert "exception pathway" in rendered.lower()
+
+
+class TestBenefitCapDenyInteraction:
+    def test_names_gc035_anchor(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "GC-035" in rendered
+
+    def test_does_not_sweep_medical_necessity_into_deny(self) -> None:
+        # A not-medically-necessary denial is a clinical-criteria call, NOT this
+        # contractual benefit-cap pattern.
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "not medically necessary" in rendered.lower()
+        assert "is NOT this deny pattern" in rendered
+
+    def test_does_not_override_pre_flight_checks(self) -> None:
+        rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
+        assert "does not override" in rendered.lower()
+        assert "adult_complex" in rendered  # names the iter-6 chg-2 pre-flight

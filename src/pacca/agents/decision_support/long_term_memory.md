@@ -243,6 +243,86 @@ evaluation under the framework in the main system prompt.
 
 ---
 
+## Pattern: Outpatient benefit-cap exhaustion without a documented exception
+
+**Headline deny-class:** An outpatient service (e.g. physical therapy) requested
+after the plan's contractual visit/benefit cap for the period is already
+exhausted, where no medical-necessity exception is documented. Anchored on
+GC-035 (physical therapy — 50 visits used of a 30-visit annual cap, maintenance
+phase). This is a **benefit-design** denial — a contractual coverage limit — and
+is the first deny-class entry in this memory; the three entries above are
+approve-class.
+
+> **This is the only entry whose shortcut outcome is DENIED.** Its failure mode —
+> over-denial — is the one that harms patients. The anti-patterns below are not
+> edge notes; they are the core of the entry. When in doubt, you do NOT deny.
+
+**Required criteria for denial — ALL must be explicitly documented:**
+
+1. The **benefit cap is exhausted** — the visits or units already used meet or
+   exceed the plan's documented limit for the period (state the count and the
+   cap explicitly, e.g. "50 of 30 used").
+2. The limit is a **contractual benefit-design limit**, documented in the plan
+   benefit, and is **separate from medical necessity** — do not frame this as a
+   medical-necessity denial.
+3. **No documented exception criterion** is met — specifically no documented
+   **acute new injury**, no **post-surgical episode** within the plan window,
+   and no **demonstrable functional progress toward measurable goals**.
+4. The episode is **maintenance/chronic, not an acute exacerbation** (a new
+   acute episode is itself an exception trigger; see anti-patterns).
+5. **Plan/policy alignment**: the benefit document specifies the cap and the
+   exhaustion is established on the record. State the alignment explicitly.
+
+**Anti-patterns — these FLIP the outcome from DENIED to IN_REVIEW (the
+over-denial guard):**
+
+When ANY of the following is present, the deny shortcut does NOT apply and the
+case **routes to IN_REVIEW for human clinical judgment** — the agent must NOT
+auto-deny. The status field of your output must be `IN_REVIEW` in all such cases.
+
+- **Any documented exception criterion** — an acute new injury, a post-surgical
+  episode within the plan window, or demonstrable functional progress toward
+  measurable goals → a medical-necessity exception may apply; a human weighs it.
+  **Status: IN_REVIEW.** (Not DENIED.)
+- **An acute exacerbation or new episode** (not maintenance) → the cap-exception
+  pathway may apply and the clinical picture has changed. **Status: IN_REVIEW.**
+  (Not DENIED.)
+- **Ambiguous or incomplete visit-count or benefit documentation** — the record
+  does not clearly establish that the cap is exhausted → you cannot deny on an
+  incomplete record. **Status: IN_REVIEW.** (Not DENIED.)
+- **A pending appeal or peer-to-peer review**, or a submitted medical-necessity
+  exception request → the exception channel is already engaged. **Status:
+  IN_REVIEW.** (Not DENIED.)
+- **A plausible medical-necessity argument** for continued care despite the cap
+  (e.g. recent functional decline with a concrete, measurable goal) → a human
+  evaluates it. **Status: IN_REVIEW.** (Not DENIED.)
+
+**Governing rule (read this before denying):** Any uncertainty -> IN_REVIEW.
+Never auto-deny on doubt. The **absence of evidence is not evidence of ineligibility**
+— a gap in the record is a reason to review, not to deny. A valid
+denial must (a) **cite the specific benefit-cap basis** (name the cap and the
+used-vs-limit count, e.g. "50 of 30 used") AND (b) **note the appeal /
+medical-necessity-exception pathway** as the redirect. A denial that does neither
+is not a valid denial — route IN_REVIEW instead.
+
+**When the shortcut applies:** DENIED — but only when **all five required
+criteria are explicitly documented** AND **none of the anti-patterns is present**.
+The rationale MUST cite the specific benefit-cap basis by name and note the
+appeal / exception pathway. If you cannot write that cited rationale, you do not
+have a denial — route IN_REVIEW.
+
+**When the shortcut DOES NOT apply:** treat the case as a standard evaluation.
+This entry **does not override pre-flight checks** — if any pre-flight escalation
+fires (e.g. `experimental_treatment`, `high_cost`, `pediatric_complex`,
+`adult_complex`, `prior_denial_same_service`), that routing wins and this entry is
+moot. And note the boundary with **medical-necessity** denials: a denial because a
+service is **not medically necessary** (the clinical criteria are unmet)
+**is NOT this deny pattern** — that is a clinical-criteria evaluation, not a
+contractual benefit-cap exhaustion. Do not conflate benefit-design limits with
+medical-necessity determinations.
+
+---
+
 *This file is loaded at agent-initialization time by `_prompt_loader.py`
 (see iter-2 chg-1's Jinja2 mount-point pattern). Updates here propagate
 to the live agent on the next run.*
