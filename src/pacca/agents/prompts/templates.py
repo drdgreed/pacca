@@ -49,9 +49,16 @@ from typing import Any
 
 PROMPT_REGISTRY: dict[str, dict[str, str]] = {
     "DecisionSupportAgent": {
-        "version": "v2.5",
-        "description": "Frontline UM Nurse — guideline alignment + confidence scoring + institutional memory (H2, 3 entries)",
-        "changed_in": "v2.5 (iter-5 chg-4): H2 memory — third entry, dupilumab "
+        "version": "v2.6",
+        "description": "Frontline UM Nurse — guideline alignment + confidence scoring + institutional memory (H2, 4 entries)",
+        "changed_in": "v2.6 (iter-6 chg-4): H2 memory — FIRST deny-pattern entry "
+        "(outpatient benefit-cap exhaustion without a documented exception; "
+        "GC-035 anchor) with over-denial guards (any documented exception "
+        "criterion / acute exacerbation / pending appeal / incomplete "
+        "documentation each flip DENIED -> IN_REVIEW). Re-anchored from GC-034 "
+        "(off-label oncology) after the iter-6 baseline showed GC-034 is "
+        "intercepted by the pre-flight experimental_treatment check. "
+        "v2.5 (iter-5 chg-4): H2 memory — third entry, dupilumab "
         "for severe eosinophilic asthma. Documents non-override of BOTH iter-3 "
         "chg-1 high_cost_check AND iter-5 chg-3 pediatric_complex_check (the "
         "GC-012 case is the canonical interaction: severe pediatric asthma is "
