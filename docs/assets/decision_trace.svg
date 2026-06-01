@@ -1,0 +1,93 @@
+<svg width="1000" height="852" viewBox="0 0 1000 852" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="1000" height="852" rx="14" fill="#111318"/>
+<text x="36" y="46" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#e8edf5">PACCA Decision Trace</text>
+<text x="37" y="70" text-anchor="start" font-family="Arial, sans-serif" font-size="12.5" font-weight="400" fill="#9aa6b8">One authorization request, end-to-end — every step keyed to a single correlation_id.</text>
+<rect x="37" y="82" width="372" height="22" rx="11" fill="#13202b" stroke="#7fd4cf" stroke-width="1"/>
+<text x="48" y="97" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="11" font-weight="700" fill="#7fd4cf">correlation_id  c7f3a9e2-1b4d-4a2c-9f55-0a1b2c3d4e21</text>
+<rect x="419" y="82" width="250" height="22" rx="11" fill="#1b2030" stroke="#46506a" stroke-width="1"/>
+<text x="430" y="97" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="11" font-weight="400" fill="#aeb9cd">patient_token  SYN-2048  (synthetic)</text>
+<line x1="684" y1="120" x2="684" y2="822" stroke="#222937" stroke-width="1"/>
+<rect x="40" y="116" width="616" height="74" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/><rect x="40" y="116" width="5" height="74" rx="2.5" fill="#5a6a86"/><text x="60" y="138" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="11" font-weight="700" fill="#5a6a86">1 · INTAKE</text><text x="60" y="159" text-anchor="start" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#e8edf5">Authorization request received</text><text x="60" y="178" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">synthetic case · dx seropositive RA (ICD-10 M05.–) · biologic DMARD · est. $7,400</text><text x="60" y="193" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">correlation_id minted here — shared by every audit record below</text>
+<line x1="348.0" y1="190" x2="348.0" y2="205" stroke="#9ca3af" stroke-width="2"/><path d="M343.0,204 L353.0,204 L348.0,211 Z" fill="#9ca3af"/>
+<rect x="40" y="212" width="616" height="150" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<rect x="40" y="212" width="5" height="150" rx="2.5" fill="#2BC0C8"/>
+<text x="60" y="234" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="11" font-weight="700" fill="#2BC0C8">2 · PRE-FLIGHT  ·  ClinicalRiskDetector.evaluate()</text>
+<text x="60" y="253" text-anchor="start" font-family="Arial, sans-serif" font-size="14.5" font-weight="700" fill="#e8edf5">7 deterministic gates — no LLM, runs before any agent</text>
+<rect x="60" y="266" width="163.6" height="21" rx="10" fill="#143038" stroke="#1f5d63" stroke-width="1"/>
+<path d="M71,277 l3,3 l6,-7" stroke="#67e8c3" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="85" y="280.5" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#bfe9ec">experimental_treatment</text>
+<rect x="231.6" y="266" width="117.2" height="21" rx="10" fill="#143038" stroke="#1f5d63" stroke-width="1"/>
+<path d="M242.6,277 l3,3 l6,-7" stroke="#67e8c3" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="256.6" y="280.5" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#bfe9ec">rare_condition</text>
+<rect x="356.8" y="266" width="163.6" height="21" rx="10" fill="#143038" stroke="#1f5d63" stroke-width="1"/>
+<path d="M367.8,277 l3,3 l6,-7" stroke="#67e8c3" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="381.8" y="280.5" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#bfe9ec">conflicting_guidelines</text>
+<rect x="60" y="294" width="181.0" height="21" rx="10" fill="#143038" stroke="#1f5d63" stroke-width="1"/>
+<path d="M71,305 l3,3 l6,-7" stroke="#67e8c3" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="85" y="308.5" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#bfe9ec">prior_denial_same_service</text>
+<rect x="249.0" y="294" width="88.19999999999999" height="21" rx="10" fill="#143038" stroke="#1f5d63" stroke-width="1"/>
+<path d="M260.0,305 l3,3 l6,-7" stroke="#67e8c3" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="274.0" y="308.5" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#bfe9ec">high_cost</text>
+<rect x="345.2" y="294" width="134.6" height="21" rx="10" fill="#143038" stroke="#1f5d63" stroke-width="1"/>
+<path d="M356.2,305 l3,3 l6,-7" stroke="#67e8c3" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="370.2" y="308.5" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#bfe9ec">pediatric_complex</text>
+<rect x="487.79999999999995" y="294" width="111.39999999999999" height="21" rx="10" fill="#143038" stroke="#1f5d63" stroke-width="1"/>
+<path d="M498.79999999999995,305 l3,3 l6,-7" stroke="#67e8c3" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="512.8" y="308.5" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#bfe9ec">adult_complex</text>
+<rect x="60" y="322" width="376" height="21" rx="10" fill="#1d1812" stroke="#5a4326" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="72" y="336.5" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#caa978">✕ any gate hit → escalation_pre_flight_triggered → IN_REVIEW</text>
+<text x="448" y="336.5" text-anchor="start" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#6a5a44" font-style="italic">(path not taken)</text>
+<line x1="348.0" y1="362" x2="348.0" y2="377" stroke="#9ca3af" stroke-width="2"/><path d="M343.0,376 L353.0,376 L348.0,383 Z" fill="#9ca3af"/>
+<rect x="40" y="384" width="616" height="80" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<rect x="40" y="384" width="5" height="80" rx="2.5" fill="#7eb4f8"/>
+<text x="60" y="406" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="11" font-weight="700" fill="#7eb4f8">3 · RETRIEVAL  ·  dual-collection ChromaDB</text>
+<rect x="60" y="416" width="250" height="22" rx="11" fill="#16243f" stroke="#34507e" stroke-width="1"/>
+<text x="72" y="431" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="10.5" font-weight="400" fill="#bcd3f3">guidelines · top-k passages</text>
+<rect x="322" y="416" width="312" height="22" rx="11" fill="#1b2b27" stroke="#2c7350" stroke-width="1"/>
+<text x="334" y="431" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#bfe9cf">H2 memory · 1 ratified prior matched (RA biologic, iter-4)</text>
+<line x1="348.0" y1="464" x2="348.0" y2="479" stroke="#9ca3af" stroke-width="2"/><path d="M343.0,478 L353.0,478 L348.0,485 Z" fill="#9ca3af"/>
+<rect x="40" y="486" width="616" height="78" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<rect x="40" y="486" width="5" height="78" rx="2.5" fill="#F97316"/>
+<text x="60" y="508" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="11" font-weight="700" fill="#F97316">4 · TIER 1  ·  DecisionSupportAgent  (Sonnet 4.5)</text>
+<text x="60" y="530" text-anchor="start" font-family="Arial, sans-serif" font-size="14.5" font-weight="700" fill="#e8edf5">Recommendation produced — confidence 0.93</text>
+<text x="60" y="550" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#f3dca2">0.90 ≤ 0.93 &lt; 0.95  →  Branch 2: escalate to Medical Director</text>
+<rect x="506" y="498" width="134" height="20" rx="10" fill="#2a1c10" stroke="#7a4a1a" stroke-width="1"/>
+<text x="573" y="512" text-anchor="middle" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#f6c98a">started → completed</text>
+<rect x="58" y="578" width="193.3333333333335" height="16" rx="4" fill="#5a2f2f"/>
+<rect x="251.3333333333335" y="578" width="193.33333333333306" height="16" rx="0" fill="#6a5320"/>
+<rect x="444.6666666666666" y="578" width="193.33333333333343" height="16" rx="4" fill="#27613f"/>
+<text x="154.66666666666674" y="589.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="600" fill="#e8b9b9">&lt; 0.90  IN_REVIEW</text>
+<text x="348.00000000000006" y="589.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="600" fill="#f3dca2">0.90–0.95  MED. DIRECTOR</text>
+<text x="541.3333333333333" y="589.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="600" fill="#c2ead2">≥ 0.95  AUTO-APPROVE</text>
+<path d="M362.33333333333366,570 L372.33333333333366,570 L367.33333333333366,577 Z" fill="#ffffff"/>
+<text x="367.33333333333366" y="567" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" fill="#ffffff">Tier 1 = 0.93</text>
+<line x1="348.0" y1="594" x2="348.0" y2="607" stroke="#9ca3af" stroke-width="2"/><path d="M343.0,606 L353.0,606 L348.0,613 Z" fill="#9ca3af"/>
+<rect x="40" y="614" width="616" height="80" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<rect x="40" y="614" width="5" height="80" rx="2.5" fill="#E0A33E"/>
+<text x="60" y="636" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="11" font-weight="700" fill="#E0A33E">5 · TIER 2  ·  MedicalDirectorAgent  (supervised 2nd opinion)</text>
+<text x="60" y="658" text-anchor="start" font-family="Arial, sans-serif" font-size="14.5" font-weight="700" fill="#e8edf5">Reviews case + Tier-1 packet — confidence 0.96</text>
+<text x="60" y="678" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#c2ead2">post-review gate:  ≥ 0.95  →  AUTO_APPROVED</text>
+<rect x="506" y="626" width="134" height="20" rx="10" fill="#2a230f" stroke="#7a661a" stroke-width="1"/>
+<text x="573" y="640" text-anchor="middle" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="400" fill="#f3dca2">started → completed</text>
+<line x1="348.0" y1="694" x2="348.0" y2="709" stroke="#9ca3af" stroke-width="2"/><path d="M343.0,708 L353.0,708 L348.0,715 Z" fill="#9ca3af"/>
+<rect x="40" y="716" width="616" height="70" rx="11" fill="#13251b" stroke="#2f8a5a" stroke-width="1.5"/>
+<text x="60" y="740" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="11" font-weight="700" fill="#2f8a5a">6 · DECISION</text>
+<rect x="60" y="750" width="132" height="24" rx="12" fill="#1f6b42"/>
+<text x="126" y="766.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#d6f5e2">AUTO_APPROVED</text>
+<text x="206" y="767" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">review_tier = MEDICAL_DIRECTOR_AGENT · rationale persisted</text>
+<text x="700" y="138" text-anchor="start" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#a78bd4">AUDIT LOG</text>
+<text x="700" y="154" text-anchor="start" font-family="Arial, sans-serif" font-size="10" font-weight="400" fill="#737f93">write-ahead pairs · one correlation_id</text>
+<line x1="714" y1="176" x2="714" y2="786" stroke="#3a3350" stroke-width="2.5"/>
+<circle cx="714" cy="200" r="5" fill="none" stroke="#4a4258" stroke-width="2" stroke-dasharray="2 2"/>
+<text x="730" y="197" text-anchor="start" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#6a6478" font-style="italic">pre-flight cleared → no record</text>
+<text x="730" y="210" text-anchor="start" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#6a6478" font-style="italic">written (LLM not yet</text>
+<text x="730" y="223" text-anchor="start" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#6a6478" font-style="italic">consulted)</text>
+<circle cx="714" cy="504" r="6" fill="#111318" stroke="#a78bd4" stroke-width="2"/><rect x="730" y="485" width="238" height="38" rx="8" fill="#16131f" stroke="#332b44" stroke-width="1"/><text x="740" y="500" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="700" fill="#cdbfe6">agent_decision_started</text><text x="740" y="515" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9" font-weight="400" fill="#737f93">actor=DecisionSupportAgent</text>
+<circle cx="714" cy="550" r="6" fill="#a78bd4" stroke="#111318" stroke-width="2"/><rect x="730" y="531" width="238" height="38" rx="8" fill="#16131f" stroke="#332b44" stroke-width="1"/><text x="740" y="546" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="700" fill="#cdbfe6">agent_decision_completed</text><text x="740" y="561" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9" font-weight="400" fill="#737f93">status · confidence 0.93</text>
+<circle cx="714" cy="632" r="6" fill="#111318" stroke="#a78bd4" stroke-width="2"/><rect x="730" y="613" width="238" height="38" rx="8" fill="#16131f" stroke="#332b44" stroke-width="1"/><text x="740" y="628" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="700" fill="#cdbfe6">agent_medical_director_started</text><text x="740" y="643" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9" font-weight="400" fill="#737f93">from Tier 1 · conf 0.93</text>
+<circle cx="714" cy="678" r="6" fill="#a78bd4" stroke="#111318" stroke-width="2"/><rect x="730" y="659" width="238" height="38" rx="8" fill="#16131f" stroke="#332b44" stroke-width="1"/><text x="740" y="674" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9.5" font-weight="700" fill="#cdbfe6">agent_medical_director_completed</text><text x="740" y="689" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="9" font-weight="400" fill="#737f93">AUTO_APPROVED · 0.96</text>
+<text x="700" y="808" text-anchor="start" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93" font-style="italic">a &#x27;started&#x27; with no &#x27;completed&#x27;</text>
+<text x="700" y="821" text-anchor="start" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93" font-style="italic">pinpoints exactly where it failed.</text>
+<line x1="36" y1="822" x2="964" y2="822" stroke="#222937" stroke-width="1"/>
+<text x="36" y="839" text-anchor="start" font-family="Arial, sans-serif" font-size="10" font-weight="400" fill="#737f93">Pre-flight: 7 deterministic gates · Confidence routing: 0.95 / 0.90 / human · HIGH_COST_THRESHOLD $100,000 · synthetic data, no PHI</text>
+</svg>

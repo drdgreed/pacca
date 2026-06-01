@@ -1,0 +1,113 @@
+<svg width="900" height="1216" viewBox="0 0 900 1216" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="900" height="1216" rx="14" fill="#111318"/>
+<text x="36" y="46" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#e8edf5">PACCA Harness — Iteration Ledger</text>
+<text x="37" y="70" text-anchor="start" font-family="Arial, sans-serif" font-size="11.5" font-weight="400" fill="#9aa6b8">harness-iter-0 → harness-iter-6 · every behavioral change is a one-file diff with a falsifiable prediction; the next</text>
+<text x="37" y="86" text-anchor="start" font-family="Arial, sans-serif" font-size="11.5" font-weight="400" fill="#9aa6b8">iteration&#x27;s evaluation returns a verdict — keep, improve, or rollback.</text>
+<line x1="158" y1="165" x2="158" y2="1005" stroke="#39435a" stroke-width="2.5"/>
+<circle cx="158" cy="165" r="15" fill="#5a6a86" stroke="#111318" stroke-width="3"/>
+<text x="158" y="170.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">0</text>
+<text x="158" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="600" fill="#737f93">iter</text>
+<text x="158" y="196.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93">2026-04-15</text>
+<rect x="192" y="104" width="684" height="122" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<text x="210" y="127" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="12.5" font-weight="700" fill="#7fd4cf">harness-iter-0</text>
+<rect x="785" y="115" width="75" height="20" rx="10" fill="#384358"/><text x="822.6" y="129" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#aebfd8">BASELINE</text>
+<text x="210" y="149" text-anchor="start" font-family="Arial, sans-serif" font-size="15.5" font-weight="700" fill="#e8edf5">Baseline crystallization</text>
+<text x="210" y="168" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">OpenTelemetry spans + trajectory logs + correlation-ID propagation on every agent call.</text>
+<text x="210" y="183" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">No behavioral change — the precondition for falsifiable verdicts.</text>
+<rect x="210" y="200" width="108" height="18" rx="9" fill="#33476a"/><text x="264.0" y="213" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cfe0f5">instrumentation</text>
+<circle cx="158" cy="305" r="15" fill="#2f8a5a" stroke="#111318" stroke-width="3"/>
+<text x="158" y="310.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">1</text>
+<text x="158" y="240" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="600" fill="#737f93">iter</text>
+<text x="158" y="336.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93">2026-05-04</text>
+<rect x="192" y="244" width="684" height="122" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<text x="210" y="267" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="12.5" font-weight="700" fill="#7fd4cf">harness-iter-1</text>
+<rect x="792" y="255" width="68" height="20" rx="10" fill="#27613f"/><text x="825.9" y="269" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#c2ead2">KEEP ×1</text>
+<text x="210" y="289" text-anchor="start" font-family="Arial, sans-serif" font-size="15.5" font-weight="700" fill="#e8edf5">Extract agent system prompts to file mount points</text>
+<text x="210" y="308" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">Decision-Support and Medical-Director system prompts become standalone files with Jinja2</text>
+<text x="210" y="323" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">templating — versioned components, not hard-coded strings.</text>
+<rect x="210" y="340" width="96" height="18" rx="9" fill="#574a86"/><text x="258.0" y="353" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#e4dbf6">system_prompt</text>
+<circle cx="158" cy="445" r="15" fill="#2f8a5a" stroke="#111318" stroke-width="3"/>
+<text x="158" y="450.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">2</text>
+<text x="158" y="380" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="600" fill="#737f93">iter</text>
+<text x="158" y="476.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93">2026-05-22</text>
+<rect x="192" y="384" width="684" height="122" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<text x="210" y="407" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="12.5" font-weight="700" fill="#7fd4cf">harness-iter-2</text>
+<rect x="792" y="395" width="68" height="20" rx="10" fill="#27613f"/><text x="825.9" y="409" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#c2ead2">KEEP ×6</text>
+<text x="210" y="429" text-anchor="start" font-family="Arial, sans-serif" font-size="15.5" font-weight="700" fill="#e8edf5">Build the evaluation apparatus</text>
+<text x="210" y="448" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">Per-case regression gate + baseline scoreboard, near-miss memory-trap cases</text>
+<text x="210" y="463" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">(GC-021/022), a doc-drift guard, model-as-single-source-of-truth. (6 changes)</text>
+<rect x="210" y="480" width="126" height="18" rx="9" fill="#1f6f78"/><text x="273.0" y="493" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#d2f2f4">evaluation_harness</text>
+<rect x="343.0" y="480" width="108" height="18" rx="9" fill="#33476a"/><text x="397.0" y="493" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cfe0f5">instrumentation</text>
+<circle cx="158" cy="585" r="15" fill="#2f8a5a" stroke="#111318" stroke-width="3"/>
+<text x="158" y="590.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">3</text>
+<text x="158" y="520" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="600" fill="#737f93">iter</text>
+<text x="158" y="616.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93">2026-05-24</text>
+<rect x="192" y="524" width="684" height="122" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<text x="210" y="547" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="12.5" font-weight="700" fill="#7fd4cf">harness-iter-3</text>
+<rect x="792" y="535" width="68" height="20" rx="10" fill="#27613f"/><text x="825.9" y="549" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#c2ead2">KEEP ×3</text>
+<text x="210" y="569" text-anchor="start" font-family="Arial, sans-serif" font-size="15.5" font-weight="700" fill="#e8edf5">First clinical escalation branches + institutional memory</text>
+<text x="210" y="588" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">Wire HIGH_COST + PEDIATRIC_COMPLEX deterministic triggers into the detector; land the</text>
+<text x="210" y="603" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">first H2 long-term-memory entry (NSCLC pembrolizumab).</text>
+<rect x="210" y="620" width="120" height="18" rx="9" fill="#92571f"/><text x="270.0" y="633" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#f6e2c7">escalation_branch</text>
+<rect x="337.0" y="620" width="114" height="18" rx="9" fill="#2c7350"/><text x="394.0" y="633" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cbeed9">long_term_memory</text>
+<rect x="458.0" y="620" width="126" height="18" rx="9" fill="#1f6f78"/><text x="521.0" y="633" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#d2f2f4">evaluation_harness</text>
+<circle cx="158" cy="725" r="15" fill="#2f8a5a" stroke="#111318" stroke-width="3"/>
+<text x="158" y="730.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">4</text>
+<text x="158" y="660" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="600" fill="#737f93">iter</text>
+<text x="158" y="756.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93">2026-05-25</text>
+<rect x="192" y="664" width="684" height="122" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<text x="210" y="687" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="12.5" font-weight="700" fill="#7fd4cf">harness-iter-4</text>
+<rect x="792" y="675" width="68" height="20" rx="10" fill="#27613f"/><text x="825.9" y="689" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#c2ead2">KEEP ×2</text>
+<text x="210" y="709" text-anchor="start" font-family="Arial, sans-serif" font-size="15.5" font-weight="700" fill="#e8edf5">Grow memory, cut dead weight</text>
+<text x="210" y="728" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">Second H2 entry (first-line biologic DMARD for seropositive RA after conventional</text>
+<text x="210" y="743" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">therapy); delete 330 lines of dead decision_agent.py.</text>
+<rect x="210" y="760" width="114" height="18" rx="9" fill="#2c7350"/><text x="267.0" y="773" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cbeed9">long_term_memory</text>
+<rect x="331.0" y="760" width="132" height="18" rx="9" fill="#823a58"/><text x="397.0" y="773" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#f3d2e0">tool_implementation</text>
+<circle cx="158" cy="865" r="15" fill="#2f8a5a" stroke="#111318" stroke-width="3"/>
+<text x="158" y="870.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">5</text>
+<text x="158" y="800" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="600" fill="#737f93">iter</text>
+<text x="158" y="896.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93">2026-05-25</text>
+<rect x="192" y="804" width="684" height="122" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<text x="210" y="827" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="12.5" font-weight="700" fill="#7fd4cf">harness-iter-5</text>
+<rect x="772" y="815" width="88" height="20" rx="10" fill="#866320"/><text x="816.0" y="829" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#f3dca2">IMPROVE ×1</text>
+<rect x="698" y="815" width="68" height="20" rx="10" fill="#27613f"/><text x="731.9" y="829" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#c2ead2">KEEP ×3</text>
+<text x="210" y="849" text-anchor="start" font-family="Arial, sans-serif" font-size="15.5" font-weight="700" fill="#e8edf5">Heuristic → model: integer 1–5 complexity score</text>
+<text x="210" y="868" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">Replace the iter-3 keyword heuristic in _check_pediatric_complex with an integer 1–5</text>
+<text x="210" y="883" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">complexity-score model; +3 pediatric cases; 3rd H2 entry (dupilumab).</text>
+<rect x="210" y="900" width="120" height="18" rx="9" fill="#92571f"/><text x="270.0" y="913" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#f6e2c7">escalation_branch</text>
+<rect x="337.0" y="900" width="126" height="18" rx="9" fill="#1f6f78"/><text x="400.0" y="913" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#d2f2f4">evaluation_harness</text>
+<rect x="470.0" y="900" width="114" height="18" rx="9" fill="#2c7350"/><text x="527.0" y="913" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cbeed9">long_term_memory</text>
+<rect x="591.0" y="900" width="108" height="18" rx="9" fill="#33476a"/><text x="645.0" y="913" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cfe0f5">instrumentation</text>
+<circle cx="158" cy="1005" r="15" fill="#3f6fb0" stroke="#111318" stroke-width="3"/>
+<text x="158" y="1010.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">6</text>
+<text x="158" y="940" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="600" fill="#737f93">iter</text>
+<text x="158" y="1036.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="400" fill="#737f93">2026-05-31</text>
+<rect x="192" y="944" width="684" height="122" rx="11" fill="#171b22" stroke="#2a3242" stroke-width="1"/>
+<text x="210" y="967" text-anchor="start" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" font-size="12.5" font-weight="700" fill="#7fd4cf">harness-iter-6</text>
+<rect x="792" y="955" width="68" height="20" rx="10" fill="#27374f" stroke="#5b86c4" stroke-dasharray="3 3" stroke-width="1"/><text x="825.9" y="969" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#9fc0f0">PENDING</text>
+<text x="210" y="989" text-anchor="start" font-family="Arial, sans-serif" font-size="15.5" font-weight="700" fill="#e8edf5">Generalize the model to adults; first deny-class memory</text>
+<text x="210" y="1008" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">ADULT_COMPLEX pre-flight reuses iter-5&#x27;s score model byte-for-byte; +3 adult cases</text>
+<text x="210" y="1023" text-anchor="start" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#9aa6b8">(GC-101–103); first deny-class H2 entry; structlog finished; PROMPT_REGISTRY → v2.6.</text>
+<rect x="210" y="1040" width="120" height="18" rx="9" fill="#92571f"/><text x="270.0" y="1053" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#f6e2c7">escalation_branch</text>
+<rect x="337.0" y="1040" width="114" height="18" rx="9" fill="#2c7350"/><text x="394.0" y="1053" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cbeed9">long_term_memory</text>
+<rect x="458.0" y="1040" width="126" height="18" rx="9" fill="#1f6f78"/><text x="521.0" y="1053" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#d2f2f4">evaluation_harness</text>
+<rect x="591.0" y="1040" width="108" height="18" rx="9" fill="#33476a"/><text x="645.0" y="1053" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cfe0f5">instrumentation</text>
+<line x1="36" y1="1092" x2="864" y2="1092" stroke="#222937" stroke-width="1"/>
+<text x="36" y="1114" text-anchor="start" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#737f93">CONSTRAINT SURFACE</text>
+<rect x="36" y="1122" width="108" height="18" rx="9" fill="#33476a"/><text x="90.0" y="1135" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cfe0f5">instrumentation</text>
+<rect x="152.0" y="1122" width="96" height="18" rx="9" fill="#574a86"/><text x="200.0" y="1135" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#e4dbf6">system_prompt</text>
+<rect x="256.0" y="1122" width="126" height="18" rx="9" fill="#1f6f78"/><text x="319.0" y="1135" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#d2f2f4">evaluation_harness</text>
+<rect x="390.0" y="1122" width="120" height="18" rx="9" fill="#92571f"/><text x="450.0" y="1135" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#f6e2c7">escalation_branch</text>
+<rect x="518.0" y="1122" width="114" height="18" rx="9" fill="#2c7350"/><text x="575.0" y="1135" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#cbeed9">long_term_memory</text>
+<rect x="640.0" y="1122" width="132" height="18" rx="9" fill="#823a58"/><text x="706.0" y="1135" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#f3d2e0">tool_implementation</text>
+<text x="36" y="1158" text-anchor="start" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#737f93">VERDICT</text>
+<rect x="36" y="1166" width="48" height="20" rx="10" fill="#27613f"/>
+<text x="60.2" y="1180" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#c2ead2">KEEP</text>
+<rect x="92.4" y="1166" width="68" height="20" rx="10" fill="#866320"/>
+<text x="126.5" y="1180" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#f3dca2">IMPROVE</text>
+<rect x="168.6" y="1166" width="95" height="20" rx="10" fill="#5a2f2f"/>
+<text x="215.89999999999998" y="1180" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#e8b9b9">ROLLBACK ×0</text>
+<rect x="271.2" y="1166" width="68" height="20" rx="10" fill="#27374f"/>
+<text x="305.29999999999995" y="1180" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" fill="#9fc0f0">PENDING</text>
+<text x="450.0" y="1198" text-anchor="middle" font-family="Arial, sans-serif" font-size="10.5" font-weight="600" fill="#8fb6f0">7 iterations · 21 changes · 0 rollbacks      |      H2 memory: 4 entries · escalation tree: 7 pre-flight triggers · golden gate: 20 · dataset: 103</text>
+</svg>
