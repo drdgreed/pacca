@@ -12,12 +12,231 @@
 
 ## Index
 
+- [iter-6 — Adult complexity pre-flight + first deny-class H2 entry + full structlog migration, the iteration that met all three of iter-5's success threads](#iter-6-adult-and-deny)
 - [iter-5 — Pediatric data + complexity-score model + third H2 entry + structlog cleanup, the broadest iteration](#iter-5-broad)
 - [iter-4 — Second H2 memory entry + decision_agent.py deletion, the methodology compounding](#iter-4-h2-second-entry)
 - [iter-3 — H2 Institutional Memory + Escalation-Branch Completion, the first behavioral iteration](#iter-3-h2-and-escalation)
 - [iter-2 — Eval-Net Hardening, the boring iteration that earned its keep](#iter-2-eval-net-hardening)
 - [iter-1 — chg-1: Component Decoupling first extraction](#iter-1-component-decoupling)
 - [iter-0 — Baseline Crystallization (seed narrative)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-6-adult-and-deny"></a>
+## iter-6 — Adult complexity pre-flight + first deny-class H2 entry + full structlog migration
+
+**Tag:** `harness-iter-6`
+**Phase:** mixed — instrumentation completion (chg-1), escalation generalization (chg-2), eval expansion (chg-3), H2 first deny-class entry (chg-4)
+**Date:** 2026-05-31
+**Changes:** 4 (sequenced low → high risk)
+**Eval delta:** golden-20 held **100% (20/20), mean 4.9**, distribution identical to iter-5 (GC-009 + GC-012 at 4, all others at 5; zero jitter across 2 rollouts). Adult eval cases route as designed (GC-101/GC-103 IN_REVIEW, GC-102 AUTO_APPROVED); GC-035 DENIED at confidence 0.96 with the specific benefit-cap basis and appeal pathway cited; GC-005 stayed IN_REVIEW. No behavioral predicted_fixes — chg-2/3/4 add capability, coverage, and guardrails, not case repairs.
+
+### What this iteration shipped, and the thread it closes
+
+iter-6 is the iteration that **met all three of iter-5's "what success
+looks like" threads** — the first time in the cycle that a prior
+iteration's forward-looking predictions were satisfied in full, in one
+branch:
+
+1. **Generalize the complexity-score model beyond pediatric cases** →
+   chg-2 adds `EscalationReason.ADULT_COMPLEX` and `_check_adult_complex`,
+   reusing iter-5 chg-3's `_compute_complexity_score` **unchanged**.
+2. **A fourth H2 memory entry on a *deny* pattern** → chg-4 adds the
+   first deny-class entry (benefit-cap exhaustion), the methodology's
+   first test that institutional memory works for denial, not just
+   approval.
+3. **The full structlog migration** → chg-1 finishes the stopgap iter-5
+   chg-1 deliberately left in place.
+
+The four changes span four constraint levels (`instrumentation`,
+`escalation_branch`, `evaluation_harness`, `long_term_memory`) and were
+landed in ascending risk order on the `harness/iter-6` branch via PR,
+each gated by the `reviewer` HIPAA/security subagent before commit.
+
+### chg-2 — the score model generalized without modification (and needed no orchestrator edit)
+
+The headline finding of iter-6 is a **non-event**: generalizing
+complexity escalation from pediatrics to adults required **zero changes
+to `_compute_complexity_score`**. chg-2's commit is additions-only (122
+insertions, 0 deletions): a new `EscalationReason.ADULT_COMPLEX` enum
+member and a new `_check_adult_complex` method that mirrors
+`_check_pediatric_complex`, gated on `age >= 18` and firing when the
+score reaches `settings.complexity_specialist_review_min` (=4). The
+pediatric branch and the score function are byte-for-byte untouched.
+
+This is the **strongest possible validation of the iter-5 chg-3
+constraint-level choice**. iter-5 framed the score model honestly as "a
+heuristic in score-model clothing" — defensible per-feature, not
+data-fit. The open question that framing left was whether the model was
+genuinely general or merely a pediatric heuristic dressed up. iter-6
+answers it: a second age band consumed the same function, the same
+threshold setting, and the same weighted-sum semantics with no edit. A
+score model that generalizes to a new population without modification is
+behaving like a model; one that needed bespoke re-tuning per population
+would have been a heuristic after all. The `escalation_branch`
+constraint level — not `system_prompt` — is why the change compounded.
+
+A second finding, recorded because the design spec anticipated
+otherwise: **no orchestrator edit was required.** The iter-6 design
+flagged a "deferred routing site" in the orchestrator where a new
+escalation reason might need a branch-mapping entry. That site does not
+exist — branch dispatch is generic over `EscalationReason`, so a new
+reason routes to specialist pre-review without a mapping change. The
+design's predicted edit was a phantom; the honest record says so.
+
+### chg-3 — adult eval cases, with a negative control
+
+chg-2 added the adult branch; chg-3 gives it the data to prove it.
+`tests/clinical/adult_complexity_cases.py` adds `ADULT_COMPLEXITY_CASES`
+(GC-101, GC-102, GC-103), parallel to iter-5's `PEDIATRIC_CASES` and
+the iter-2 `NEAR_MISS_CASES` precedent. The design that matters here is
+**GC-102 as a negative control**: a low-complexity adult that must
+*not* escalate. Without it, GC-101 and GC-103 routing IN_REVIEW would
+only prove the branch *can* fire, not that it fires *selectively*.
+GC-102 auto-approving proves the branch discriminates on the
+complexity score, not on adult age alone — the same
+"avoid escalating on demographics" property iter-5 verified for GC-023
+on the pediatric side. `GOLDEN_CASES` stays at 20; the count-integrity
+assertion holds.
+
+### chg-4 — the first deny-class memory entry, and an honest fix-vs-hardening finding
+
+chg-4 ships the cycle's first deny-class H2 entry: "Outpatient
+benefit-cap exhaustion without a documented exception," anchored on
+GC-035. The three prior entries (NSCLC, RA, asthma) are all approve-class
+biologics. A deny-class entry inverts the dangerous failure mode: an
+approve entry's risk is over-approval; a deny entry's risk is **false
+denial** — denying a case that has a documented exception. The entry is
+built around that risk. Five required criteria gate the deny shortcut;
+five anti-patterns each resolve to `**Status: IN_REVIEW.** (Not DENIED.)`;
+a governing rule mandates IN_REVIEW on any uncertainty ("absence of
+evidence is not evidence of ineligibility"). PROMPT_REGISTRY bumps
+v2.5 → v2.6.
+
+**The honest finding, stated plainly: this change is hardening, not a
+fix.** GC-035 was *already* DENIED 5/5 at the pre-entry baseline (Step
+5a, captured before the memory edit). The agent denied benefit-cap
+exhaustion correctly on its own guideline reading without any deny-class
+memory. So chg-4 does not flip a failing case to passing — it encodes
+the institutional reasoning and installs the over-denial guardrail.
+Claiming a "fix" here would inflate the manifest's fix-precision record
+against the AHE paper's own honesty standard. The manifest's
+`predicted_fixes` is empty; this narrative says hardening.
+
+The guardrail was verified in both directions. Post-entry, GC-035 still
+DENIED (confidence 0.96), and its rationale now enumerates all five
+benefit-cap criteria and cites the specific benefit-document basis plus
+the appeal/exception pathway — correct denial, *better explained*. An
+ephemeral probe (GC-035 with a documented acute new injury, not
+committed) routed **IN_REVIEW**: the agent quoted the entry's anti-pattern
+and governing rule verbatim. The deny shortcut does not become reflexive
+when an exception is on the record.
+
+### The re-anchor, and the iter-7 finding it surfaced
+
+The runbook scoped this entry for off-label oncology, anchored on
+GC-034. It was re-anchored to GC-035 mid-iteration for a concrete
+reason that is itself the next iteration's seed: **GC-034 never reaches
+the agent.** `_check_experimental_treatment` substring-scans
+`EXPERIMENTAL_DIAGNOSIS_KEYWORDS` (which includes "off-label") with no
+negation handling, so GC-034 pre-escalates to IN_REVIEW at the pre-flight
+stage — before the `DecisionSupportAgent`, and therefore before the H2
+memory, ever runs. A deny entry anchored on a case that short-circuits
+upstream of the memory could never be exercised through the agent path.
+GC-035 (benefit-cap, no experimental keywords) routes to the agent
+cleanly, so the entry can actually be tested.
+
+The off-label↔experimental contradiction is a real harness bug at a
+*different* constraint level (the pre-flight detector, not memory).
+Fixing it inside a memory change would have crossed constraint levels —
+exactly the move the methodology warns against. It is logged here as the
+**iter-7 finding**: a keyword scanner that cannot tell "this is off-label"
+from "this is not off-label, and not experimental" will mis-route any
+case whose notes mention the keyword in a negated or contrastive context.
+
+### Eval delta
+
+| Case(s) | Routing at iter-6 HEAD | Note |
+|---|---|---|
+| GOLDEN_CASES (20) | **20/20 pass, mean 4.9** | Identical to iter-5; GC-009 + GC-012 at 4, rest at 5; zero jitter across 2 rollouts |
+| GC-101 (adult, high complexity) | IN_REVIEW | chg-2 `ADULT_COMPLEX` fired |
+| GC-102 (adult, low complexity) | AUTO_APPROVED | negative control — branch did not over-fire on adult age |
+| GC-103 (adult, high complexity) | IN_REVIEW | chg-2 `ADULT_COMPLEX` fired |
+| GC-035 (benefit-cap exhausted) | DENIED (0.96) | correct denial preserved, now cites the specific cap basis + appeal pathway |
+| GC-035 + documented exception (ephemeral) | IN_REVIEW | over-denial guard fired; not committed |
+| GC-005 (psoriasis) | IN_REVIEW | deny entry did not bleed into a medical-necessity case |
+
+The golden-20 held at iter-5's exact distribution — no change of any of
+the four chgs regressed a golden case. Because the adult and deny cases
+live in their own lists (`ADULT_COMPLEXITY_CASES`, `DENIAL_CASES`), the
+20-case `capture_baseline` scoreboard is unchanged by design; their
+routing was verified at the per-chg live gates.
+
+### Verdict summary on iter-5's four changes
+
+All four iter-5 changes carry forward; one improves, three keep
+(recorded in [`harness/manifests/iter-6.json`](../harness/manifests/iter-6.json) `verdicts[]`):
+
+- **iter-5 chg-1 → `improve`.** The `extra={...}` stdlib wrap held green
+  through iter-5 and was correct, but kept tracing on stdlib logging
+  rather than the intended structlog substrate. iter-6 chg-1 supersedes
+  it with `structlog.get_logger`: intent preserved, mechanism refined.
+  The textbook "improve" verdict.
+- **iter-5 chg-2 → `keep`.** The pediatric eval set is reused unchanged;
+  iter-6 chg-3 mirrors its file pattern for adults.
+- **iter-5 chg-3 → `keep`** — the strongest "keep" the cycle has
+  recorded. `_compute_complexity_score` is reused byte-for-byte by
+  iter-6 chg-2's adult path. The model generalized to a second
+  population without a single edit.
+- **iter-5 chg-4 → `keep`.** The third H2 entry (asthma) is stable;
+  iter-6 chg-4 adds a fourth without displacing it. The
+  criterion-preservation tests for all four entries pass together; the
+  anti-pattern (`Not DENIED`) count floor was raised 16 → 21 to lock the
+  new deny-class guards in.
+
+### Reflection: the cycle at iter-6 close
+
+Two observations worth recording.
+
+**A score model that generalizes without modification retroactively
+justifies its constraint level.** iter-5 chg-3's honest framing left an
+open question — heuristic or model? iter-6 chg-2 answers it empirically:
+the function consumed a new population with zero edits. This is the
+clearest case study the cycle has produced for the AHE paper's central
+claim that *the constraint level determines whether a change compounds*.
+A system-prompt encoding of the same logic would have needed adult-specific
+re-prompting; the `escalation_branch` encoding generalized for free.
+
+**The methodology generated its own next finding.** The chg-4 re-anchor
+was not a detour — it surfaced the off-label↔experimental contradiction
+that becomes iter-7's seed. This is the cycle behaving as designed: each
+iteration's execution produces the next iteration's spec fragment. iter-3
+produced the H2 forward-design notes; iter-4 produced the dataset survey
+that scoped iter-5; iter-6 produced the pre-flight negation-handling
+finding. The honest fix-vs-hardening call on chg-4 is the same discipline
+in a different place: the record is more useful when it refuses to claim
+a fix it did not make.
+
+### Files changed in this iteration
+
+**chg-1 (instrumentation):** `src/pacca/config/tracing.py`,
+`tests/unit/test_retry_and_tracing.py`.
+
+**chg-2 (escalation_branch):** `src/pacca/agents/clinical_risk_detector.py`,
+`src/pacca/models/enums.py`, `tests/unit/test_complexity_score_model.py`.
+
+**chg-3 (evaluation_harness):** `tests/clinical/adult_complexity_cases.py` (new),
+`tests/clinical/investigate_case.py`, `tests/clinical/test_clinical_accuracy.py`.
+
+**chg-4 (long_term_memory):** `src/pacca/agents/decision_support/long_term_memory.md`,
+`src/pacca/agents/prompts/templates.py` (PROMPT_REGISTRY v2.5 → v2.6),
+`tests/unit/test_h2_memory_criterion_preservation.py`,
+`tests/clinical/investigate_case.py`.
+
+**Documentation:** `docs/ITERATIONS.md` (this section), `docs/DECISIONS.md`
+(iter-6 entries), `harness/manifests/iter-6.json` (manifest + verdicts on
+iter-5's 4 chgs), `RUNBOOK_iter6.md`,
+`tests/clinical/baselines/iter-6-baseline.json` (live capture with `--rollouts 2`).
 
 ---
 

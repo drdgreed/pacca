@@ -12,6 +12,7 @@
 
 ## Index
 
+- [iter-6 — Adult complexity pre-flight + first deny-class H2 entry + full structlog migration (4 changes)](#iter-6-adult-and-deny)
 - [iter-5 — Pediatric data + complexity-score model + third H2 entry + structlog cleanup (4 changes)](#iter-5-broad)
 - [iter-4 — Second H2 memory entry + decision_agent.py deletion (2 changes)](#iter-4-h2-second-entry)
 - [iter-3 — H2 Institutional Memory + Escalation-Branch Completion (3 changes)](#iter-3-h2-and-escalation)
@@ -19,6 +20,96 @@
 - [Correction (2026-05-22) — iter-0 trajectory instrumentation record](#correction-iter0-trajectory)
 - [iter-1 — chg-1: Decision Support and Medical Director prompt extraction (Phase H1)](#chg-1-iter-1)
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-6-adult-and-deny"></a>
+## iter-6 — Adult complexity pre-flight + first deny-class H2 entry + full structlog migration (4 changes)
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-6` |
+| Date | 2026-05-31 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `instrumentation` (chg-1), `escalation_branch` (chg-2), `evaluation_harness` (chg-3), `long_term_memory` (chg-4) |
+| Behavioral surface modified | YES (chg-2 + chg-4) |
+| Changes | 4 |
+| Live clinical gate at iter-6 HEAD | golden-20 aggregate **20/20 = 100%** (median of 2 rollouts; mean 4.9; identical distribution to iter-5, zero jitter) |
+| Predicted fixes verified live | — (no behavioral predictions; chg-4 is hardening, not a fix) |
+| Risk cases preserved | GC-035 (DENIED 0.96 with cited basis + appeal pathway); GC-005 (IN_REVIEW psoriasis — deny memory did not bleed) — chg-4 |
+| Manifest | [`harness/manifests/iter-6.json`](../harness/manifests/iter-6.json) |
+| Narrative | [`docs/ITERATIONS.md` iter-6 section](./ITERATIONS.md#iter-6-adult-and-deny) |
+
+### chg-1 — Migrate tracing.py to structlog.get_logger
+
+| Field | Value |
+|---|---|
+| Type | `improvement` |
+| Constraint level | `instrumentation` |
+| Files | `src/pacca/config/tracing.py`, `tests/unit/test_retry_and_tracing.py` |
+| Predicted fixes | — | Risk cases | — |
+
+Finishes the iter-5 chg-1 stopgap. iter-5 chg-1 wrapped structlog-style kwargs in `extra={...}` against a stdlib `logging.Logger` as a no-new-mechanism fix; iter-6 adopts `structlog.get_logger` proper, so the three call sites pass `endpoint` / `detail` / `service_name` as native structured kwargs again and the `extra={...}` shim is gone. This is the second deferral closing: iter-3 chg-1 added `# type: ignore[call-arg]` markers, iter-5 chg-1 wrapped with `extra=`, iter-6 chg-1 finally adopts the substrate the file was originally written against. Tracing tests updated to assert structured-field capture via structlog rather than a stdlib `LogRecord`. Suite green at chg-1 HEAD.
+
+### chg-2 — Adult complexity pre-flight (ADULT_COMPLEX at threshold 4)
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `escalation_branch` |
+| Files | `src/pacca/agents/clinical_risk_detector.py`, `src/pacca/models/enums.py`, `tests/unit/test_complexity_score_model.py` |
+| Predicted fixes | — |
+| Risk cases | — |
+| Verified live | GOLDEN_CASES held 20/20 green at chg-2 HEAD — no golden adult case crossed threshold 4 to newly escalate |
+
+Adds `EscalationReason.ADULT_COMPLEX` and `ClinicalRiskDetector._check_adult_complex`, mirroring `_check_pediatric_complex`. Fires for age ≥ 18 when `_compute_complexity_score >= settings.complexity_specialist_review_min` (= 4), routing to specialist pre-review. Closes the age-gating gap from iter-5 chg-3: that change built a general integer 1–5 complexity-score model but wired only the pediatric branch to it (the dataset had pediatric points to justify the threshold). A high-complexity adult — multiple comorbidities, prior failures, severe tier — bypassed specialist pre-review because no pre-flight branch consumed the score for adults.
+
+**The phantom finding.** The runbook's design anticipated an orchestrator edit: a branch-2 mapping site that routes the new `EscalationReason` to the IN_REVIEW path. That site does not exist. Branch dispatch in the orchestrator is generic over `EscalationReason` — it routes on `flags.should_pre_escalate` and surfaces `flags.reasons`, never switching on the specific reason. So a new reason routes correctly with zero orchestrator change. The chg-2 commit is additions-only: **122 insertions, 0 deletions**; `_compute_complexity_score` and the pediatric branch are byte-for-byte untouched. The design spec described a routing step the architecture had already generalized past — a reminder that the manifest records what the code did, not what the plan predicted.
+
+### chg-3 — Adult complexity eval set (ADULT_COMPLEXITY_CASES)
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `evaluation_harness` |
+| Files | `tests/clinical/adult_complexity_cases.py` (new), `tests/clinical/investigate_case.py`, `tests/clinical/test_clinical_accuracy.py` |
+| Predicted fixes | — |
+| Risk cases | — |
+| Verified live | GC-101 IN_REVIEW (ADULT_COMPLEX fired); GC-102 AUTO_APPROVED (negative control held); GC-103 IN_REVIEW |
+
+chg-2 added the adult branch; chg-3 gives it the dataset that validates it. `ADULT_COMPLEXITY_CASES = [GC-101, GC-102, GC-103]`, parallel to `PEDIATRIC_CASES`: GC-101 high-complexity adult (expect IN_REVIEW via ADULT_COMPLEX), GC-102 low-complexity adult (expect AUTO_APPROVED — the **negative control** proving the branch does not over-fire on adult age alone), GC-103 high-complexity adult (expect IN_REVIEW). Routes 2-IN_REVIEW / 1-AUTO_APPROVED as designed. GOLDEN_CASES stays 20 — the count assertion still holds; adult cases live in their own list exactly like pediatric and near-miss cases.
+
+**Scope call — no committed near-miss adult case.** The runbook flagged a possible GC-104 just-below-threshold near-miss (complexity score exactly 3, expect AUTO_APPROVED) to pin the boundary. I did not commit one: GC-102 (low-complexity, AUTO_APPROVED) already serves as the negative control, and a clinical fixture asserting "score == 3 does not escalate" duplicates a unit test that lives more cheaply in `test_complexity_score_model.py` (which exercises the clamp and threshold directly). A third clinical fixture for the same boundary would add eval-suite weight without new signal — YAGNI. Recorded here so the omission reads as a decision, not an oversight.
+
+### chg-4 — First deny-class H2 memory entry (benefit-cap, re-anchored GC-035)
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `long_term_memory` |
+| Files | `src/pacca/agents/decision_support/long_term_memory.md`, `src/pacca/agents/prompts/templates.py` (v2.5 → v2.6), `tests/unit/test_h2_memory_criterion_preservation.py`, `tests/clinical/investigate_case.py` |
+| Predicted fixes | — |
+| Risk cases | `["GC-035", "GC-005"]` |
+| Verified live | GC-035 DENIED 0.96 with all five benefit-cap criteria enumerated + benefit-document basis + appeal/exception pathway cited; GC-005 IN_REVIEW psoriasis (deny memory did not bleed into an approve-class case); ephemeral documented-acute-injury variant → IN_REVIEW (over-denial guard fires) |
+
+The first deny-class H2 entry — all three prior entries (NSCLC, RA, asthma) are approve-class biologics. Title: "Outpatient benefit-cap exhaustion without a documented exception." Five required criteria gate the deny shortcut; five anti-patterns each resolve to `**Status: IN_REVIEW.** (Not DENIED.)` as over-denial guards. PROMPT_REGISTRY DecisionSupportAgent v2.5 → v2.6.
+
+**Honest framing: hardening, not a fix.** GC-035 was already DENIED 5/5 *before* the memory edit (Step 5a baseline, no H2 deny entry present). chg-4 does not flip a previously-wrong case — `predicted_fixes` is empty. What it adds is (1) the institutional reasoning encoded for traceability and (2) the over-denial guardrail. A deny entry's dangerous failure mode is the inverse of an approve entry's: false denial. The guard was verified **in both directions** — GC-035 still denies correctly *with citation* (not weakened), and an ephemeral variant documenting an acute-injury exception routes IN_REVIEW (the agent quoted the entry's anti-pattern and governing rule verbatim; denial does not become reflexive on pattern-match).
+
+**The re-anchor (GC-034 → GC-035).** The runbook anchored this entry on GC-034 (off-label oncology). During Step 5 I found GC-034 cannot exercise an agent-path deny entry at all: `_check_experimental_treatment` substring-scans `EXPERIMENTAL_DIAGNOSIS_KEYWORDS` (including "off-label") with no negation handling, so GC-034 pre-escalates to IN_REVIEW *before* the DecisionSupportAgent — and thus the H2 memory — ever runs. A deny entry anchored there would be dead on arrival. GC-035 (benefit-cap, no experimental keywords) routes to the agent cleanly, so the entry re-anchored onto it. The off-label↔experimental contradiction in `_check_experimental_treatment` is logged as an **iter-7 finding**: it is a pre-flight keyword-scanner bug (a different constraint level than this `long_term_memory` change), so fixing it here would violate one-scoped-change-per-iteration.
+
+### Iteration-level verdict and verdict on iter-5's 4 chgs
+
+iter-6 closed at HEAD (final commit on `harness/iter-6` before merge). All gates green: 6 manifests validate against the schema; the pytest suite is green; the live golden gate holds 20/20 = 100% (median of 2 rollouts, mean 4.9, distribution identical to iter-5 with zero jitter — empirically confirming no golden regression from any of the four changes).
+
+**All four iter-5 changes verdict** (recorded in [`harness/manifests/iter-6.json`](../harness/manifests/iter-6.json) `verdicts[]`):
+- **iter-5 chg-1 (tracing `extra={...}` wrap) = `improve`** — the wrap held green and was correct, but kept tracing on stdlib logging rather than the intended structlog substrate. iter-6 chg-1 supersedes it with `structlog.get_logger`: intent preserved, mechanism refined. The only non-`keep` verdict this round.
+- **iter-5 chg-2 (3 pediatric cases) = `keep`** — reused unchanged at iter-6 HEAD; iter-6 chg-3 mirrors its file pattern for the adult eval set.
+- **iter-5 chg-3 (complexity-score model) = `keep`** — `_compute_complexity_score` is reused BYTE-FOR-BYTE by iter-6 chg-2's adult path (122 insertions, 0 deletions to the score function or the pediatric branch). The score model generalized to a second age band without modification — the strongest possible `keep`.
+- **iter-5 chg-4 (third H2 entry, asthma) = `keep`** — stable; iter-6 chg-4 adds a fourth entry (first deny-class) without displacing it. The criterion-preservation tests for all four entries pass together; the anti-pattern (Not DENIED) floor was raised 16 → 21 to lock the new guards in.
+
+iter-6's own chgs have no behavioral predicted_fixes (chg-4 is hardening). Risk-case preservation on chg-4 (GC-035 + GC-005) verified live. Verdicts on iter-6's 4 chgs will land in iter-7.json's `verdicts` array.
 
 ---
 
