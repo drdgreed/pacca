@@ -83,6 +83,30 @@ grep -rn 'parsed_ok is False\|"not available"\|count == 0' tests/
 ```
 Then update or delete every match. This applies any time you change: a function's return semantics, a default value, an error condition, an output format, a public API surface.
 
+### P-007 · Touching a file surfaces its pre-existing mypy errors — annotate them, never blanket-disable
+**Symptom.** Pre-commit `mypy` fails with `no-untyped-def` (missing return annotations) on test functions you didn't write, or `method-assign` on `obj.method = AsyncMock(...)` monkeypatches — surfacing only because you staged that file for an otherwise-unrelated change.
+
+**Cause.** PACCA runs strict mypy (`disallow_untyped_defs = true`) on the staged files, **including tests**. A file that predates strict mode carries latent violations that stay invisible until you touch it and the hook re-checks it (the "py.typed cascade" — each change absorbs the type-debt of the files it touches).
+
+**Rule.** Fix the touched file **in-file**: add `-> None` / proper return annotations to its functions; use a NARROW per-line `# type: ignore[method-assign]` only on the unavoidable mock method-assignment lines. **NEVER** make the hook pass by adding a module-level suppression like:
+```toml
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+ignore_errors = true
+```
+That silently disables type-checking across the whole suite and erases the coverage other work earned. Suppressing a gate to pass it is not a fix — it's hiding the failure. (Related: P-003 covers the inverse — removing a stale *unused* ignore.)
+
+### P-008 · `make test` is deterministic; the live golden-20 gate is `make test-clinical`
+**Symptom.** Unsure how to "run the suite" or how to prove behavior preservation; clinical/accuracy tests show as `deselected`; or a routing change gets called "behavior-preserved" on the strength of `make test` alone.
+
+**Cause.** `make test` runs the DETERMINISTIC suite with `-m "not clinical"`, which deselects the live LLM tests (`@pytest.mark.clinical`). The golden-20 accuracy gate (`tests/clinical/test_clinical_accuracy.py::TestFullClinicalEvaluation`) is clinical-marked: it makes real Claude API calls (~10 min) and runs ONLY via `make test-clinical`, which requires `ANTHROPIC_API_KEY` in the shell env.
+
+**Rule.** For routine verification use `make test` (fast, deterministic, ~25s). For any change to decision routing or agent behavior, ALSO run the live gate **at the final merge HEAD** before claiming behavior preserved — `make test-clinical` (or `pytest tests/clinical/test_clinical_accuracy.py -m clinical`). Source the key from the gitignored `.env`, never hardcode or print it:
+```bash
+export ANTHROPIC_API_KEY=$(grep -m1 '^ANTHROPIC_API_KEY=' .env | cut -d= -f2- | tr -d '"')
+```
+Don't infer live clinical accuracy from the deterministic suite — they cover different things.
+
 ---
 
 ## Git & PR workflow (PACCA-specific overlay on the global rule L-001)
@@ -112,4 +136,4 @@ Keep entries terse. The file is meant to be re-readable in two minutes at sessio
 
 ---
 
-*Last updated: 2026-05-27.*
+*Last updated: 2026-06-02.*
