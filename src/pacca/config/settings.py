@@ -223,6 +223,76 @@ def get_settings() -> Settings:
     return Settings()
 
 
+# ── Runtime override store (shared source of truth for tunable settings) ──────
+# Set via PATCH /config, merged over the cached Settings by effective_settings().
+# Cleared on restart by design (restart == reload from env). Process-local dict;
+# safe under the single asyncio loop, same exposure model as before.
+_runtime_overrides: dict[str, object] = {}
+
+
+def effective_settings() -> "Settings":
+    """get_settings() with runtime overrides applied and re-validated. Cheap; call per request."""
+    base = get_settings()
+    if not _runtime_overrides:
+        return base
+    merged = base.model_dump()
+    merged.update(_runtime_overrides)
+    return Settings.model_validate(merged)
+
+
+def active_overrides() -> dict[str, object]:
+    """The currently-applied runtime overrides (copy).
+
+    Note: secret fields must never appear here — see ``apply_overrides`` docstring."""
+    return dict(_runtime_overrides)
+
+
+def clear_all_overrides() -> list[str]:
+    """Drop all runtime overrides; return the field names that were cleared."""
+    cleared = list(_runtime_overrides.keys())
+    _runtime_overrides.clear()
+    return cleared
+
+
+def _validate_effective() -> None:
+    """Enforce cross-field invariants on the merged effective settings."""
+    s = effective_settings()
+    if s.auto_approve_confidence_threshold <= s.escalation_confidence_threshold:
+        raise ValueError(
+            f"auto_approve_confidence_threshold ({s.auto_approve_confidence_threshold}) "
+            f"must be greater than escalation_confidence_threshold "
+            f"({s.escalation_confidence_threshold}). The Medical Director escalation "
+            f"band would collapse to nothing."
+        )
+    if s.llm_retry_wait_min_seconds > s.llm_retry_wait_max_seconds:
+        raise ValueError(
+            f"llm_retry_wait_min_seconds ({s.llm_retry_wait_min_seconds}) must not "
+            f"exceed llm_retry_wait_max_seconds ({s.llm_retry_wait_max_seconds})."
+        )
+
+
+def apply_overrides(updates: dict[str, object]) -> None:
+    """Apply runtime overrides atomically. Validates the merged result; on failure
+    no field from `updates` is applied. Raises ValueError with a readable message.
+
+    IMPORTANT: Do NOT include secret fields (e.g. ``anthropic_api_key``,
+    ``secret_key``) in ``updates``.  Those values would be stored in
+    ``_runtime_overrides`` in plaintext and returned verbatim by
+    ``active_overrides()``.  The admin endpoint (a later task) will enforce a
+    tunable-field allowlist that excludes secrets."""
+    unknown = set(updates) - set(Settings.model_fields)
+    if unknown:
+        raise ValueError(f"Unknown config field(s): {sorted(unknown)}")
+    snapshot = dict(_runtime_overrides)
+    _runtime_overrides.update(updates)
+    try:
+        _validate_effective()
+    except ValueError:
+        _runtime_overrides.clear()
+        _runtime_overrides.update(snapshot)
+        raise
+
+
 # Convenience function for common settings access
 def get_anthropic_api_key() -> str:
     """Get the Anthropic API key as a string."""
