@@ -42,9 +42,6 @@ Teaching note — runtime config vs. environment variables:
   no-restart override for operational urgency.
 """
 
-import logging
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -57,19 +54,20 @@ from ...agents.evolution import (
     get_proposal_by_id,
     reject_proposal,
 )
-from ...config.settings import get_settings
+from ...config.logging import get_logger
+from ...config.settings import (
+    active_overrides,
+    apply_overrides,
+    clear_all_overrides,
+    effective_settings,
+)
 from ...integrations.vector_store import GuidelineRetriever
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 evolver = EvolutionAgent()
 rag = GuidelineRetriever()
-
-# In-memory override store.
-# Keys match settings field names. Set via PATCH /config, read by GET /config.
-# Cleared on server restart (by design — restart = reload from env vars).
-_config_overrides: dict[str, Any] = {}
 
 
 # =============================================================================
@@ -211,23 +209,28 @@ class ConfigResetResponse(BaseModel):
 
 
 # =============================================================================
-# Helper: resolve effective value (override takes precedence over env var)
-# =============================================================================
-
-
-def _effective(field_name: str, env_value: Any) -> Any:
-    """
-    Return the runtime override if set, otherwise the env-var-loaded value.
-
-    This is how the Config API achieves 'no-restart updates': overrides
-    stored in _config_overrides shadow the pydantic-settings values.
-    """
-    return _config_overrides.get(field_name, env_value)
-
-
-# =============================================================================
 # Config API endpoints
 # =============================================================================
+
+
+def _config_response() -> ConfigResponse:
+    """Build a ConfigResponse from the current effective settings."""
+    es = effective_settings()
+    return ConfigResponse(
+        auto_approve_confidence_threshold=es.auto_approve_confidence_threshold,
+        escalation_confidence_threshold=es.escalation_confidence_threshold,
+        high_cost_threshold=es.high_cost_threshold,
+        complexity_auto_approve_max=es.complexity_auto_approve_max,
+        llm_retry_max_attempts=es.llm_retry_max_attempts,
+        llm_retry_wait_min_seconds=es.llm_retry_wait_min_seconds,
+        llm_retry_wait_max_seconds=es.llm_retry_wait_max_seconds,
+        otel_enabled=es.otel_enabled,
+        otel_service_name=es.otel_service_name,
+        enable_autonomous_decisions=es.enable_autonomous_decisions,
+        enable_rag=es.enable_rag,
+        demo_mode=es.demo_mode,
+        overrides_active=list(active_overrides().keys()),
+    )
 
 
 @router.get(
@@ -248,47 +251,7 @@ async def get_config() -> ConfigResponse:
     `overrides_active` field in the response lists which settings
     have been changed at runtime (vs. loaded from environment variables).
     """
-    s = get_settings()
-
-    return ConfigResponse(
-        auto_approve_confidence_threshold=_effective(
-            "auto_approve_confidence_threshold",
-            s.auto_approve_confidence_threshold,
-        ),
-        escalation_confidence_threshold=_effective(
-            "escalation_confidence_threshold",
-            s.escalation_confidence_threshold,
-        ),
-        high_cost_threshold=_effective(
-            "high_cost_threshold",
-            s.high_cost_threshold,
-        ),
-        complexity_auto_approve_max=_effective(
-            "complexity_auto_approve_max",
-            s.complexity_auto_approve_max,
-        ),
-        llm_retry_max_attempts=_effective(
-            "llm_retry_max_attempts",
-            s.llm_retry_max_attempts,
-        ),
-        llm_retry_wait_min_seconds=_effective(
-            "llm_retry_wait_min_seconds",
-            s.llm_retry_wait_min_seconds,
-        ),
-        llm_retry_wait_max_seconds=_effective(
-            "llm_retry_wait_max_seconds",
-            s.llm_retry_wait_max_seconds,
-        ),
-        otel_enabled=_effective("otel_enabled", s.otel_enabled),
-        otel_service_name=_effective("otel_service_name", s.otel_service_name),
-        enable_autonomous_decisions=_effective(
-            "enable_autonomous_decisions",
-            s.enable_autonomous_decisions,
-        ),
-        enable_rag=_effective("enable_rag", s.enable_rag),
-        demo_mode=_effective("demo_mode", s.demo_mode),
-        overrides_active=list(_config_overrides.keys()),
-    )
+    return _config_response()
 
 
 @router.patch(
@@ -316,56 +279,16 @@ async def patch_config(updates: ConfigPatchRequest) -> ConfigResponse:
         (otherwise the escalation band collapses to nothing)
       - Cannot set retry_min > retry_max
     """
-    global _config_overrides
-    s = get_settings()
-
-    # Apply updates to the override store
-    for field_name, value in updates.model_dump(exclude_none=True).items():
-        _config_overrides[field_name] = value
-        logger.info(
-            "config_override_applied",
-            field=field_name,
-            new_value=value,
-        )
-
-    # Validate that threshold relationships remain consistent
-    effective_auto = _effective(
-        "auto_approve_confidence_threshold",
-        s.auto_approve_confidence_threshold,
-    )
-    effective_esc = _effective(
-        "escalation_confidence_threshold",
-        s.escalation_confidence_threshold,
-    )
-    if effective_auto <= effective_esc:
-        # Roll back the invalid update
-        for field_name in updates.model_dump(exclude_none=True):
-            _config_overrides.pop(field_name, None)
+    updates_dict = updates.model_dump(exclude_none=True)
+    try:
+        apply_overrides(updates_dict)
+    except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"auto_approve_confidence_threshold ({effective_auto}) must be "
-                f"greater than escalation_confidence_threshold ({effective_esc}). "
-                f"The escalation band (values between the two thresholds that trigger "
-                f"Medical Director review) would collapse to nothing."
-            ),
-        )
-
-    effective_min = _effective("llm_retry_wait_min_seconds", s.llm_retry_wait_min_seconds)
-    effective_max = _effective("llm_retry_wait_max_seconds", s.llm_retry_wait_max_seconds)
-    if effective_min > effective_max:
-        for field_name in updates.model_dump(exclude_none=True):
-            _config_overrides.pop(field_name, None)
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"llm_retry_wait_min_seconds ({effective_min}) cannot exceed "
-                f"llm_retry_wait_max_seconds ({effective_max})."
-            ),
-        )
-
-    # Return the new effective configuration
-    return await get_config()
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    for field_name, value in updates_dict.items():
+        logger.info("config_override_applied", field=field_name, new_value=value)
+    return _config_response()
 
 
 @router.delete(
@@ -385,12 +308,9 @@ async def reset_config_overrides() -> ConfigResetResponse:
     After this call, GET /config will return only environment variable defaults.
     No server restart required.
     """
-    global _config_overrides
-    cleared = list(_config_overrides.keys())
-    _config_overrides.clear()
-
-    logger.info("config_overrides_reset", cleared_count=len(cleared))
-
+    cleared = clear_all_overrides()
+    for field_name in cleared:
+        logger.info("config_override_cleared", field=field_name)
     return ConfigResetResponse(
         message=(
             f"Cleared {len(cleared)} runtime override(s). "
@@ -438,23 +358,14 @@ async def get_metrics() -> MetricsResponse:
     in-memory config store and requires no database queries.
     Suitable for health dashboards and status pages.
     """
-    s = get_settings()
+    es = effective_settings()
     return MetricsResponse(
-        config_overrides_active=len(_config_overrides),
-        effective_auto_approve_threshold=_effective(
-            "auto_approve_confidence_threshold",
-            s.auto_approve_confidence_threshold,
-        ),
-        effective_escalation_threshold=_effective(
-            "escalation_confidence_threshold",
-            s.escalation_confidence_threshold,
-        ),
-        autonomous_decisions_enabled=_effective(
-            "enable_autonomous_decisions",
-            s.enable_autonomous_decisions,
-        ),
-        rag_enabled=_effective("enable_rag", s.enable_rag),
-        otel_enabled=_effective("otel_enabled", s.otel_enabled),
+        config_overrides_active=len(active_overrides()),
+        effective_auto_approve_threshold=es.auto_approve_confidence_threshold,
+        effective_escalation_threshold=es.escalation_confidence_threshold,
+        autonomous_decisions_enabled=es.enable_autonomous_decisions,
+        rag_enabled=es.enable_rag,
+        otel_enabled=es.otel_enabled,
         langfuse_note=(
             "Traces available at http://localhost:3001 — login: admin@pacca.local / pacca_admin_dev"
         ),

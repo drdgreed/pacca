@@ -278,8 +278,9 @@ def apply_overrides(updates: dict[str, object]) -> None:
     IMPORTANT: Do NOT include secret fields (e.g. ``anthropic_api_key``,
     ``secret_key``) in ``updates``.  Those values would be stored in
     ``_runtime_overrides`` in plaintext and returned verbatim by
-    ``active_overrides()``.  The admin endpoint (a later task) will enforce a
-    tunable-field allowlist that excludes secrets."""
+    ``active_overrides()``.  The admin PATCH /config endpoint enforces a
+    tunable-field allowlist via the ConfigPatchRequest model (which exposes
+    only non-secret tunables); secret fields must never be passed here."""
     unknown = set(updates) - set(Settings.model_fields)
     if unknown:
         raise ValueError(f"Unknown config field(s): {sorted(unknown)}")
