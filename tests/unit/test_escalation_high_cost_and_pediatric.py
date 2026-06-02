@@ -221,3 +221,19 @@ class TestNoRegressionOnExistingChecks:
         case = _make_case("58-year-old male, stage IV NSCLC, requesting pembrolizumab.")
         flags = ClinicalRiskDetector().evaluate(case)
         assert flags.should_pre_escalate is False
+
+
+class TestHighCostThresholdIsTunable:
+    def test_override_below_cost_makes_it_fire(self) -> None:
+        from pacca.config.settings import apply_overrides, clear_all_overrides
+
+        # $50k case: at the default $100k threshold it must NOT fire.
+        case = _make_case("Cost $50,000.", estimated_annual_cost=50_000.0)
+        assert EscalationReason.HIGH_COST not in ClinicalRiskDetector().evaluate(case).reasons
+        try:
+            # Override the threshold below the cost — detector must now escalate,
+            # proving it reads effective_settings() rather than a static value.
+            apply_overrides({"high_cost_threshold": 40_000})
+            assert EscalationReason.HIGH_COST in ClinicalRiskDetector().evaluate(case).reasons
+        finally:
+            clear_all_overrides()

@@ -649,9 +649,9 @@ class ClinicalRiskDetector:
         cost check exactly when it's most confident on clinical merits, which
         is exactly when the cost trigger is most likely to apply.
         """
-        from ..config.settings import get_settings
+        from ..config.settings import effective_settings
 
-        threshold = float(get_settings().high_cost_threshold)
+        threshold = float(effective_settings().high_cost_threshold)
 
         cost = case.estimated_annual_cost
         if cost is None:
@@ -742,7 +742,7 @@ class ClinicalRiskDetector:
           1. ClinicalCase.complexity_score (structured — preferred)
           2. Computed from case features via _compute_complexity_score
         """
-        from ..config.settings import get_settings
+        from ..config.settings import effective_settings
 
         notes_blob = _evidence_blob(case)
 
@@ -757,7 +757,7 @@ class ClinicalRiskDetector:
             if case.complexity_score is not None
             else _compute_complexity_score(case)
         )
-        threshold = int(get_settings().complexity_specialist_review_min)
+        threshold = int(effective_settings().complexity_specialist_review_min)
         if score < threshold:
             return
 

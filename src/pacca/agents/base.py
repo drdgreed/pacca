@@ -94,7 +94,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from ..config.settings import get_settings
+from ..config.settings import effective_settings, get_settings
 from ..config.tracing import get_tracer, record_span_error
 
 logger = logging.getLogger(__name__)
@@ -337,7 +337,14 @@ class BaseAgent(ABC):
         Returns:
             Anthropic API response object
         """
-        settings = self._settings
+        # Read retry knobs from the CURRENT effective settings (env + runtime
+        # overrides applied via PATCH /config), NOT the construction-time
+        # snapshot in self._settings. This decorator is re-applied on every
+        # call, so evaluating effective_settings() here makes the three
+        # llm_retry_* fields tunable at runtime. Static fields (model name,
+        # etc.) still come from self.config/self._settings — only the retry
+        # knobs need to be dynamic.
+        settings = effective_settings()
 
         @retry(  # type: ignore[misc,unused-ignore]
             stop=stop_after_attempt(settings.llm_retry_max_attempts),

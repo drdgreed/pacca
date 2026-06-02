@@ -11,13 +11,14 @@ These tests verify:
 
 Teaching note — testing configuration APIs:
   Config APIs have a tricky testing property: they share state between
-  tests via the module-level _config_overrides dict. We need to reset
-  that dict before each test so tests don't pollute each other.
+  tests via the runtime override store in ``pacca.config.settings``. We
+  need to reset that store before each test so tests don't pollute each
+  other.
 
-  This is done with a pytest fixture that patches _config_overrides
-  to an empty dict before each test and restores it after. The fixture
-  uses `autouse=True` so it runs automatically for every test in this
-  module without you having to remember to include it.
+  This is done with a pytest fixture that calls ``clear_all_overrides()``
+  before and after each test. The fixture uses `autouse=True` so it runs
+  automatically for every test in this module without you having to
+  remember to include it.
 
 Teaching note — why test configuration validation?
   The most dangerous config change in a clinical AI system is accidentally
@@ -28,6 +29,8 @@ Teaching note — why test configuration validation?
   the escalation tree.
 """
 
+from collections.abc import Iterator
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -37,7 +40,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)
-def reset_config_overrides():
+def reset_config_overrides() -> Iterator[None]:
     """
     Reset runtime config overrides before and after every test.
 
@@ -45,17 +48,15 @@ def reset_config_overrides():
     subsequent tests. The `autouse=True` means this runs for every
     test in this file automatically.
     """
-    import pacca.api.routes.admin as admin_module
+    from pacca.config.settings import clear_all_overrides
 
-    # Clear before the test
-    admin_module._config_overrides.clear()
+    clear_all_overrides()
     yield
-    # Clear after the test (cleanup)
-    admin_module._config_overrides.clear()
+    clear_all_overrides()
 
 
 @pytest.fixture
-def admin_client():
+def admin_client() -> TestClient:
     """
     FastAPI test client for admin routes only.
 
@@ -77,7 +78,7 @@ def admin_client():
 
 
 class TestGetConfig:
-    def test_returns_all_required_fields(self, admin_client):
+    def test_returns_all_required_fields(self, admin_client: TestClient) -> None:
         """
         GET /config must return a complete snapshot of all tunable parameters.
 
@@ -93,6 +94,7 @@ class TestGetConfig:
             "escalation_confidence_threshold",
             "high_cost_threshold",
             "complexity_auto_approve_max",
+            "complexity_specialist_review_min",
             "llm_retry_max_attempts",
             "llm_retry_wait_min_seconds",
             "llm_retry_wait_max_seconds",
@@ -106,7 +108,7 @@ class TestGetConfig:
                 f"All tunable parameters must be visible to operators."
             )
 
-    def test_overrides_active_empty_on_fresh_start(self, admin_client):
+    def test_overrides_active_empty_on_fresh_start(self, admin_client: TestClient) -> None:
         """
         With no runtime overrides applied, overrides_active must be empty.
         """
@@ -116,7 +118,7 @@ class TestGetConfig:
             "No overrides should be active on a fresh config state."
         )
 
-    def test_confidence_thresholds_are_in_valid_range(self, admin_client):
+    def test_confidence_thresholds_are_in_valid_range(self, admin_client: TestClient) -> None:
         """
         Default threshold values must satisfy the constraint:
         auto_approve > escalation (otherwise the MD escalation band is empty).
@@ -141,7 +143,7 @@ class TestGetConfig:
 
 
 class TestPatchConfig:
-    def test_patch_updates_single_field(self, admin_client):
+    def test_patch_updates_single_field(self, admin_client: TestClient) -> None:
         """
         PATCH with one field should update only that field.
         Other fields must retain their original values.
@@ -167,7 +169,7 @@ class TestPatchConfig:
             == baseline["auto_approve_confidence_threshold"]
         ), "PATCH should not affect fields not included in the request."
 
-    def test_patch_override_reflected_in_subsequent_get(self, admin_client):
+    def test_patch_override_reflected_in_subsequent_get(self, admin_client: TestClient) -> None:
         """
         After PATCH, GET /config must return the overridden value.
 
@@ -181,7 +183,9 @@ class TestPatchConfig:
         get_response = admin_client.get("/api/v1/admin/config")
         assert get_response.json()["high_cost_threshold"] == 50000
 
-    def test_patch_shows_overridden_fields_in_overrides_active(self, admin_client):
+    def test_patch_shows_overridden_fields_in_overrides_active(
+        self, admin_client: TestClient
+    ) -> None:
         """
         After PATCH, overrides_active must list the overridden field names.
 
@@ -201,7 +205,7 @@ class TestPatchConfig:
         assert "llm_retry_max_attempts" in overrides
         assert "enable_autonomous_decisions" in overrides
 
-    def test_disable_autonomous_decisions_immediately(self, admin_client):
+    def test_disable_autonomous_decisions_immediately(self, admin_client: TestClient) -> None:
         """
         Setting enable_autonomous_decisions=False must take effect immediately.
 
@@ -220,7 +224,44 @@ class TestPatchConfig:
         get_response = admin_client.get("/api/v1/admin/config")
         assert get_response.json()["enable_autonomous_decisions"] is False
 
-    def test_patch_empty_body_changes_nothing(self, admin_client):
+    def test_complexity_specialist_review_min_patch_round_trip(
+        self, admin_client: TestClient
+    ) -> None:
+        """
+        PATCH /config {"complexity_specialist_review_min": 3} must:
+          1. Return 200 with the new value reflected immediately.
+          2. Appear in overrides_active on a subsequent GET.
+          3. Be returned as 3 on the subsequent GET.
+
+        Also verifies that an out-of-range value (9) is rejected with 422.
+        """
+        # Round-trip: set to 3
+        patch_response = admin_client.patch(
+            "/api/v1/admin/config",
+            json={"complexity_specialist_review_min": 3},
+        )
+        assert patch_response.status_code == 200
+        assert patch_response.json()["complexity_specialist_review_min"] == 3
+
+        # GET should reflect 3
+        get_response = admin_client.get("/api/v1/admin/config")
+        assert get_response.status_code == 200
+        data = get_response.json()
+        assert data["complexity_specialist_review_min"] == 3
+        assert "complexity_specialist_review_min" in data["overrides_active"], (
+            "complexity_specialist_review_min must appear in overrides_active after PATCH."
+        )
+
+        # Out-of-range value must be rejected
+        invalid_response = admin_client.patch(
+            "/api/v1/admin/config",
+            json={"complexity_specialist_review_min": 9},
+        )
+        assert invalid_response.status_code == 422, (
+            "complexity_specialist_review_min=9 exceeds max (5) and must be rejected with 422."
+        )
+
+    def test_patch_empty_body_changes_nothing(self, admin_client: TestClient) -> None:
         """
         PATCH with an empty body (all None fields) must change nothing.
         """
@@ -241,7 +282,9 @@ class TestPatchConfig:
 
 
 class TestConfigValidation:
-    def test_rejects_auto_approve_below_escalation_threshold(self, admin_client):
+    def test_rejects_auto_approve_below_escalation_threshold(
+        self, admin_client: TestClient
+    ) -> None:
         """
         CRITICAL: auto_approve_threshold must always be > escalation_threshold.
 
@@ -270,7 +313,7 @@ class TestConfigValidation:
             or "greater than" in response.json()["detail"].lower()
         ), "Error message should explain the escalation band constraint."
 
-    def test_rejects_equal_thresholds(self, admin_client):
+    def test_rejects_equal_thresholds(self, admin_client: TestClient) -> None:
         """
         Equal auto_approve and escalation thresholds must also be rejected.
         An empty escalation band (zero-width) is as broken as an inverted one.
@@ -284,7 +327,7 @@ class TestConfigValidation:
         )
         assert response.status_code == 422
 
-    def test_rejects_retry_min_above_max(self, admin_client):
+    def test_rejects_retry_min_above_max(self, admin_client: TestClient) -> None:
         """
         llm_retry_wait_min_seconds must not exceed llm_retry_wait_max_seconds.
         """
@@ -297,7 +340,7 @@ class TestConfigValidation:
         )
         assert response.status_code == 422
 
-    def test_invalid_update_does_not_partially_apply(self, admin_client):
+    def test_invalid_update_does_not_partially_apply(self, admin_client: TestClient) -> None:
         """
         If a PATCH is rejected, NONE of its fields should be applied.
         A failed update must be atomic — all or nothing.
@@ -333,7 +376,7 @@ class TestConfigValidation:
 
 
 class TestResetConfigOverrides:
-    def test_reset_clears_all_overrides(self, admin_client):
+    def test_reset_clears_all_overrides(self, admin_client: TestClient) -> None:
         """
         DELETE /config/overrides must clear every runtime override.
         """
@@ -362,7 +405,7 @@ class TestResetConfigOverrides:
         after = admin_client.get("/api/v1/admin/config").json()
         assert after["overrides_active"] == []
 
-    def test_reset_empty_is_safe(self, admin_client):
+    def test_reset_empty_is_safe(self, admin_client: TestClient) -> None:
         """
         DELETE /config/overrides on a clean state must succeed silently.
         Calling reset when there's nothing to reset must not error.
@@ -378,7 +421,7 @@ class TestResetConfigOverrides:
 
 
 class TestMetricsEndpoint:
-    def test_metrics_returns_effective_values(self, admin_client):
+    def test_metrics_returns_effective_values(self, admin_client: TestClient) -> None:
         """
         GET /metrics must reflect runtime overrides, not just env var defaults.
         """
@@ -396,7 +439,7 @@ class TestMetricsEndpoint:
             "Metrics endpoint must reflect runtime override, not env var default."
         )
 
-    def test_metrics_includes_langfuse_note(self, admin_client):
+    def test_metrics_includes_langfuse_note(self, admin_client: TestClient) -> None:
         """
         Metrics response must include the Langfuse URL so operators know
         where to find detailed traces.

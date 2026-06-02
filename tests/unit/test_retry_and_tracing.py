@@ -270,6 +270,132 @@ class TestRetryLogic:
         assert agent.client.messages.create.call_count == 1
 
 
+class TestRetryRespectsRuntimeOverrides:
+    """
+    The three llm_retry_* fields are advertised by PATCH /config as
+    runtime-tunable ("increase retries during API instability"). For that to
+    be true, BaseAgent._call_with_retry() must read them from
+    effective_settings() AT CALL TIME — not from the construction-time
+    self._settings snapshot.
+
+    These tests prove the override actually changes the attempt count, and
+    that behavior is neutral at the default config (no override → 3 attempts,
+    matching settings.llm_retry_max_attempts default).
+
+    Note: unlike TestRetryLogic, these tests deliberately do NOT stub
+    agent._settings — the whole point is that _call_with_retry ignores the
+    snapshot and reads the live effective settings. We drive the runtime
+    override store via the production apply_overrides/clear_all_overrides API.
+    """
+
+    @pytest.fixture
+    def agent(self) -> _ConcreteAgent:
+        """A real agent with no _settings stub — call-time settings only."""
+        cfg = AgentConfig(model="claude-test", temperature=0.0, max_tokens=100)
+        return _ConcreteAgent(config=cfg)
+
+    @staticmethod
+    def _always_rate_limited() -> RateLimitError:
+        return RateLimitError(
+            message="Rate limit exceeded",
+            response=MagicMock(status_code=429),
+            body={"error": {"type": "rate_limit_error"}},
+        )
+
+    @pytest.mark.asyncio
+    async def test_override_increases_attempt_count(self, agent: _ConcreteAgent) -> None:
+        """
+        apply_overrides({"llm_retry_max_attempts": 5}) must make the retry try
+        5 times — proving the override reaches the tenacity stop condition at
+        call time, not the snapshot's default of 3.
+
+        We override the wait bounds to ~0 so the test does not actually sleep;
+        the PRIMARY assertion is the attempt COUNT.
+        """
+        from pacca.config.settings import apply_overrides, clear_all_overrides
+
+        # Always fail with a retriable error so retries run to exhaustion.
+        agent.client.messages.create = AsyncMock(side_effect=self._always_rate_limited())
+
+        try:
+            apply_overrides(
+                {
+                    "llm_retry_max_attempts": 5,
+                    "llm_retry_wait_min_seconds": 0.1,  # ge=0.1 floor; kept tiny
+                    "llm_retry_wait_max_seconds": 1.0,  # ge=1.0 floor; kept tiny
+                }
+            )
+            with (
+                patch("pacca.agents.base.wait_exponential", return_value=MagicMock(sleep=0)),
+                pytest.raises(RateLimitError),
+            ):
+                await agent.execute("test prompt", _TestOutput)
+        finally:
+            clear_all_overrides()
+
+        assert agent.client.messages.create.call_count == 5, (
+            "Override llm_retry_max_attempts=5 must drive 5 attempts. "
+            "If this is 3, _call_with_retry is still reading the "
+            "construction-time self._settings snapshot instead of "
+            "effective_settings() at call time."
+        )
+
+    @pytest.mark.asyncio
+    async def test_override_decreases_attempt_count(self, agent: _ConcreteAgent) -> None:
+        """
+        Task-specified case: apply_overrides({"llm_retry_max_attempts": 2})
+        must cap the retry at exactly 2 attempts (vs the default of 3).
+        """
+        from pacca.config.settings import apply_overrides, clear_all_overrides
+
+        agent.client.messages.create = AsyncMock(side_effect=self._always_rate_limited())
+
+        try:
+            apply_overrides(
+                {
+                    "llm_retry_max_attempts": 2,
+                    "llm_retry_wait_min_seconds": 0.1,
+                    "llm_retry_wait_max_seconds": 1.0,
+                }
+            )
+            with (
+                patch("pacca.agents.base.wait_exponential", return_value=MagicMock(sleep=0)),
+                pytest.raises(RateLimitError),
+            ):
+                await agent.execute("test prompt", _TestOutput)
+        finally:
+            clear_all_overrides()
+
+        assert agent.client.messages.create.call_count == 2, (
+            "Override llm_retry_max_attempts=2 must cap attempts at 2."
+        )
+
+    @pytest.mark.asyncio
+    async def test_default_attempt_count_is_neutral(self, agent: _ConcreteAgent) -> None:
+        """
+        Behavior-neutral at default: with NO override active, the retry must
+        still make exactly 3 attempts (settings.llm_retry_max_attempts default).
+        Guards against the dynamic read changing default behavior.
+        """
+        from pacca.config.settings import active_overrides
+
+        # Sanity: no overrides leaked from another test.
+        assert active_overrides() == {}
+
+        agent.client.messages.create = AsyncMock(side_effect=self._always_rate_limited())
+
+        with (
+            patch("pacca.agents.base.wait_exponential", return_value=MagicMock(sleep=0)),
+            pytest.raises(RateLimitError),
+        ):
+            await agent.execute("test prompt", _TestOutput)
+
+        assert agent.client.messages.create.call_count == 3, (
+            "With no override, attempt count must equal the default of 3. "
+            "The dynamic read must be behavior-neutral at default config."
+        )
+
+
 # =============================================================================
 # OpenTelemetry span tests
 # =============================================================================
