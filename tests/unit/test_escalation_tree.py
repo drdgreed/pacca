@@ -37,6 +37,7 @@ import pytest
 from pacca.agents.clinical_risk_detector import ClinicalRiskDetector
 from pacca.agents.decision import DecisionContext
 from pacca.agents.orchestrator import Orchestrator
+from pacca.config.settings import apply_overrides, clear_all_overrides
 from pacca.models.authorization import AuthorizationDecision
 from pacca.models.clinical import ClinicalCase, EvidenceItem
 from pacca.models.enums import (
@@ -105,12 +106,12 @@ class TestClinicalRiskDetector:
     no agents, no database. Pure input-output verification.
     """
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         self.detector = ClinicalRiskDetector()
 
     # ── Branch 4: Experimental treatment ─────────────────────────────────────
 
-    def test_detects_experimental_procedure_code(self):
+    def test_detects_experimental_procedure_code(self) -> None:
         """
         Branch 4: A known experimental procedure code triggers escalation.
 
@@ -127,7 +128,7 @@ class TestClinicalRiskDetector:
         )
         assert EscalationReason.EXPERIMENTAL_TREATMENT in flags.reasons
 
-    def test_detects_experimental_keyword_in_evidence(self):
+    def test_detects_experimental_keyword_in_evidence(self) -> None:
         """
         Branch 4: Evidence text mentioning 'clinical trial' triggers escalation.
 
@@ -144,7 +145,7 @@ class TestClinicalRiskDetector:
         assert flags.should_pre_escalate
         assert EscalationReason.EXPERIMENTAL_TREATMENT in flags.reasons
 
-    def test_routine_procedure_does_not_trigger_experimental(self):
+    def test_routine_procedure_does_not_trigger_experimental(self) -> None:
         """
         Branch 4 negative test: a standard oncology procedure is not flagged.
 
@@ -161,7 +162,7 @@ class TestClinicalRiskDetector:
 
     # ── Branch 5: Rare condition ──────────────────────────────────────────────
 
-    def test_detects_rare_condition_by_icd10_prefix(self):
+    def test_detects_rare_condition_by_icd10_prefix(self) -> None:
         """
         Branch 5: A Gaucher disease diagnosis code triggers escalation.
 
@@ -175,7 +176,7 @@ class TestClinicalRiskDetector:
         assert flags.should_pre_escalate
         assert EscalationReason.RARE_CONDITION in flags.reasons
 
-    def test_detects_huntington_disease(self):
+    def test_detects_huntington_disease(self) -> None:
         """
         Branch 5: Huntington disease (G10) is correctly flagged as rare.
 
@@ -187,7 +188,7 @@ class TestClinicalRiskDetector:
 
         assert EscalationReason.RARE_CONDITION in flags.reasons
 
-    def test_common_diagnosis_does_not_trigger_rare_condition(self):
+    def test_common_diagnosis_does_not_trigger_rare_condition(self) -> None:
         """
         Branch 5 negative test: common lung cancer code is not flagged.
 
@@ -202,7 +203,7 @@ class TestClinicalRiskDetector:
 
     # ── Branch 6: Conflicting guidelines ─────────────────────────────────────
 
-    def test_detects_conflicting_guidelines(self):
+    def test_detects_conflicting_guidelines(self) -> None:
         """
         Branch 6: Guidelines containing both approval and conflict markers trigger escalation.
 
@@ -224,7 +225,7 @@ class TestClinicalRiskDetector:
         assert flags.should_pre_escalate
         assert EscalationReason.CONFLICTING_GUIDELINES in flags.reasons
 
-    def test_consistent_approval_guidelines_do_not_conflict(self):
+    def test_consistent_approval_guidelines_do_not_conflict(self) -> None:
         """
         Branch 6 negative test: guidelines that only support the treatment
         should not trigger the conflict check.
@@ -239,7 +240,7 @@ class TestClinicalRiskDetector:
 
         assert EscalationReason.CONFLICTING_GUIDELINES not in flags.reasons
 
-    def test_empty_guidelines_context_does_not_error(self):
+    def test_empty_guidelines_context_does_not_error(self) -> None:
         """
         Branch 6 edge case: empty guidelines context (no RAG results) should
         not trigger the conflict check and must not raise an exception.
@@ -254,7 +255,7 @@ class TestClinicalRiskDetector:
 
     # ── Branch 7: Prior denial on same service ────────────────────────────────
 
-    def test_detects_prior_denial_same_procedure(self):
+    def test_detects_prior_denial_same_procedure(self) -> None:
         """
         Branch 7: A prior denial for the same procedure code triggers escalation.
 
@@ -271,7 +272,7 @@ class TestClinicalRiskDetector:
         assert flags.should_pre_escalate
         assert EscalationReason.PRIOR_DENIAL_SAME_SERVICE in flags.reasons
 
-    def test_prior_denial_different_procedure_does_not_trigger(self):
+    def test_prior_denial_different_procedure_does_not_trigger(self) -> None:
         """
         Branch 7 negative test: a prior denial for a DIFFERENT procedure
         should not block the current request.
@@ -287,7 +288,7 @@ class TestClinicalRiskDetector:
 
         assert EscalationReason.PRIOR_DENIAL_SAME_SERVICE not in flags.reasons
 
-    def test_no_prior_denials_does_not_trigger(self):
+    def test_no_prior_denials_does_not_trigger(self) -> None:
         """
         Branch 7 edge case: no prior denial history should never trigger.
         This is the common case for new patients.
@@ -299,7 +300,7 @@ class TestClinicalRiskDetector:
 
     # ── Multi-flag tests ──────────────────────────────────────────────────────
 
-    def test_multiple_flags_can_fire_simultaneously(self):
+    def test_multiple_flags_can_fire_simultaneously(self) -> None:
         """
         A case with multiple risk factors should trigger all applicable branches.
 
@@ -341,12 +342,12 @@ class TestOrchestratorEscalationTree:
         tier1_confidence: float = 0.97,
         tier1_status: AuthorizationStatus = AuthorizationStatus.AUTO_APPROVED,
         tier2_confidence: float = 0.97,
-    ):
+    ) -> Orchestrator:
         """
         Create an Orchestrator with mocked agents.
 
         Returns:
-            Tuple of (orchestrator, mock_decision_agent, mock_md_agent)
+            Orchestrator with decision_agent and medical_director_agent mocked.
         """
         orchestrator = Orchestrator()
 
@@ -371,7 +372,7 @@ class TestOrchestratorEscalationTree:
     # ── Branch 1: Auto-approve ────────────────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_branch1_high_confidence_auto_approves(self):
+    async def test_branch1_high_confidence_auto_approves(self) -> None:
         """
         Branch 1: confidence >= 0.95 with AUTO_APPROVED status returns immediately.
 
@@ -392,7 +393,7 @@ class TestOrchestratorEscalationTree:
     # ── Branch 2: Medical Director escalation ────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_branch2_ambiguous_confidence_calls_medical_director(self):
+    async def test_branch2_ambiguous_confidence_calls_medical_director(self) -> None:
         """
         Branch 2: confidence between 0.90 and 0.95 must invoke Medical Director.
         """
@@ -409,7 +410,7 @@ class TestOrchestratorEscalationTree:
         assert result.status == AuthorizationStatus.AUTO_APPROVED
 
     @pytest.mark.asyncio
-    async def test_branch2_md_low_confidence_routes_to_human_review(self):
+    async def test_branch2_md_low_confidence_routes_to_human_review(self) -> None:
         """
         Branch 2 variant: if the Medical Director is also uncertain (< 0.95),
         the case goes to human review — not auto-approved.
@@ -434,7 +435,7 @@ class TestOrchestratorEscalationTree:
     # ── Branch 3: Low confidence ──────────────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_branch3_low_confidence_routes_to_human_review(self):
+    async def test_branch3_low_confidence_routes_to_human_review(self) -> None:
         """
         Branch 3: confidence < 0.90 routes to human review queue.
 
@@ -454,7 +455,7 @@ class TestOrchestratorEscalationTree:
     # ── Branches 4-7: Pre-flight escalation ──────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_branch4_experimental_treatment_bypasses_llm(self):
+    async def test_branch4_experimental_treatment_bypasses_llm(self) -> None:
         """
         Branch 4: experimental procedure must route to IN_REVIEW without calling
         either agent. No LLM call should happen — this is a policy decision.
@@ -473,7 +474,7 @@ class TestOrchestratorEscalationTree:
         orchestrator.medical_director_agent.run.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_branch5_rare_condition_bypasses_llm(self):
+    async def test_branch5_rare_condition_bypasses_llm(self) -> None:
         """
         Branch 5: rare disease diagnosis routes to IN_REVIEW without LLM calls.
         Gaucher disease (E75.22) must not receive an autonomous AI decision.
@@ -487,7 +488,7 @@ class TestOrchestratorEscalationTree:
         orchestrator.decision_agent.run.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_branch6_conflicting_guidelines_bypasses_llm(self):
+    async def test_branch6_conflicting_guidelines_bypasses_llm(self) -> None:
         """
         Branch 6: conflicting guidelines route to IN_REVIEW without LLM calls.
         """
@@ -505,7 +506,7 @@ class TestOrchestratorEscalationTree:
         orchestrator.decision_agent.run.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_branch7_prior_denial_bypasses_llm(self):
+    async def test_branch7_prior_denial_bypasses_llm(self) -> None:
         """
         Branch 7: prior denial for same service routes to IN_REVIEW without LLM calls.
         """
@@ -520,7 +521,7 @@ class TestOrchestratorEscalationTree:
         orchestrator.decision_agent.run.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_pre_flight_rationale_is_descriptive(self):
+    async def test_pre_flight_rationale_is_descriptive(self) -> None:
         """
         Pre-flight escalations must include a rationale explaining exactly
         which check triggered and why.
@@ -539,7 +540,7 @@ class TestOrchestratorEscalationTree:
         assert "Q2041" in result.rationale
 
     @pytest.mark.asyncio
-    async def test_clean_case_proceeds_to_agent_evaluation(self):
+    async def test_clean_case_proceeds_to_agent_evaluation(self) -> None:
         """
         A case with no risk flags must proceed to normal agent evaluation.
 
@@ -565,3 +566,48 @@ class TestOrchestratorEscalationTree:
         # Decision Agent must have been called — no pre-flight triggers
         orchestrator.decision_agent.run.assert_called_once()
         assert result.status == AuthorizationStatus.AUTO_APPROVED
+
+    # ── Kill switch: enable_autonomous_decisions = False ─────────────────────
+
+    @pytest.mark.asyncio
+    async def test_kill_switch_forces_human_review_regardless_of_confidence(self) -> None:
+        """
+        Task 7 — Kill switch: when enable_autonomous_decisions is False, a case
+        that would normally auto-approve (Tier-1 returns 0.99 confidence /
+        AUTO_APPROVED and no pre-flight trigger fires) must end with IN_REVIEW.
+
+        Real-world meaning: an operator sets this flag during an incident,
+        regulatory audit, or system hold.  Every case that reaches the
+        confidence-routing stage must be redirected to the human review queue
+        regardless of how confident the Tier-1 agent was.  The Tier-1 agent
+        still runs (its rationale is preserved for the human reviewer); it
+        is only the autonomous approval that is blocked.
+
+        The override is cleaned up in a try/finally so it cannot leak into
+        other tests even if this test raises.
+        """
+        orchestrator = self.make_orchestrator_with_mocks(
+            tier1_confidence=0.99,  # Would normally auto-approve (>= 0.95)
+            tier1_status=AuthorizationStatus.AUTO_APPROVED,
+        )
+        ctx = DecisionContext(
+            case=make_case(
+                procedure_code="J9271",  # Standard, non-experimental — no pre-flight
+                diagnosis_code="C34.1",
+                evidence_text="PD-L1 >= 50%, no prior treatment, standard of care.",
+            ),
+            relevant_guidelines="NCCN: pembrolizumab recommended Category 1.",
+        )
+
+        try:
+            apply_overrides({"enable_autonomous_decisions": False})
+            result = await orchestrator.process_decision(ctx)
+        finally:
+            clear_all_overrides()
+
+        # Kill switch must have redirected to human review despite high confidence.
+        assert result.status == AuthorizationStatus.IN_REVIEW
+        # Tier-1 agent must still have been called (rationale preserved for reviewer).
+        orchestrator.decision_agent.run.assert_called_once()
+        # Medical Director must NOT have been called — kill switch returns early.
+        orchestrator.medical_director_agent.run.assert_not_called()

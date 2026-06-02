@@ -192,6 +192,25 @@ class Orchestrator:
 
         # ── Tier-1 confidence routing (PRD §5.4 Branches 1-3) ──────────────────
         s = effective_settings()
+
+        # Kill switch: when autonomous decisions are disabled, every case that
+        # reached the Tier-1 routing stage goes to human review, regardless of
+        # confidence (operator control for incidents / audits / regulatory holds).
+        if not s.enable_autonomous_decisions:
+            decision.status = AuthorizationStatus.IN_REVIEW
+            if audit:
+                await audit.log(
+                    action="autonomous_decisions_disabled",
+                    actor="orchestrator",
+                    actor_type="system",
+                    correlation_id=correlation_id,
+                    details={
+                        "confidence_score": decision.confidence_score,
+                        "branch": "autonomous_disabled",
+                    },
+                )
+            return decision
+
         branch = select_confidence_branch(
             decision.confidence_score,
             decision.status,
