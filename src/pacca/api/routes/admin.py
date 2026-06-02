@@ -114,6 +114,13 @@ class ConfigResponse(BaseModel):
             "approval (subject to confidence threshold). Range: 1–5. Default: 2."
         )
     )
+    complexity_specialist_review_min: int = Field(
+        description=(
+            "Cases with complexity >= this value are always routed to a specialist "
+            "reviewer regardless of AI confidence. Range: 1–5. Default: 4. "
+            "Lower = more cases escalate to specialist; higher = fewer escalations."
+        )
+    )
 
     # ── Retry configuration ───────────────────────────────────────────────────
     llm_retry_max_attempts: int = Field(
@@ -192,6 +199,15 @@ class ConfigPatchRequest(BaseModel):
     escalation_confidence_threshold: float | None = Field(default=None, ge=0.3, le=1.0)
     high_cost_threshold: int | None = Field(default=None, ge=0)
     complexity_auto_approve_max: int | None = Field(default=None, ge=1, le=5)
+    complexity_specialist_review_min: int | None = Field(
+        default=None,
+        ge=1,
+        le=5,
+        description=(
+            "Minimum complexity level that routes a case to specialist review. "
+            "Range: 1–5. Default: 4."
+        ),
+    )
     llm_retry_max_attempts: int | None = Field(default=None, ge=1, le=10)
     llm_retry_wait_min_seconds: float | None = Field(default=None, ge=0.1, le=10.0)
     llm_retry_wait_max_seconds: float | None = Field(default=None, ge=1.0, le=120.0)
@@ -221,6 +237,7 @@ def _config_response() -> ConfigResponse:
         escalation_confidence_threshold=es.escalation_confidence_threshold,
         high_cost_threshold=es.high_cost_threshold,
         complexity_auto_approve_max=es.complexity_auto_approve_max,
+        complexity_specialist_review_min=es.complexity_specialist_review_min,
         llm_retry_max_attempts=es.llm_retry_max_attempts,
         llm_retry_wait_min_seconds=es.llm_retry_wait_min_seconds,
         llm_retry_wait_max_seconds=es.llm_retry_wait_max_seconds,

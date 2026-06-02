@@ -94,6 +94,7 @@ class TestGetConfig:
             "escalation_confidence_threshold",
             "high_cost_threshold",
             "complexity_auto_approve_max",
+            "complexity_specialist_review_min",
             "llm_retry_max_attempts",
             "llm_retry_wait_min_seconds",
             "llm_retry_wait_max_seconds",
@@ -222,6 +223,43 @@ class TestPatchConfig:
         # Verify it persists in subsequent GET
         get_response = admin_client.get("/api/v1/admin/config")
         assert get_response.json()["enable_autonomous_decisions"] is False
+
+    def test_complexity_specialist_review_min_patch_round_trip(
+        self, admin_client: TestClient
+    ) -> None:
+        """
+        PATCH /config {"complexity_specialist_review_min": 3} must:
+          1. Return 200 with the new value reflected immediately.
+          2. Appear in overrides_active on a subsequent GET.
+          3. Be returned as 3 on the subsequent GET.
+
+        Also verifies that an out-of-range value (9) is rejected with 422.
+        """
+        # Round-trip: set to 3
+        patch_response = admin_client.patch(
+            "/api/v1/admin/config",
+            json={"complexity_specialist_review_min": 3},
+        )
+        assert patch_response.status_code == 200
+        assert patch_response.json()["complexity_specialist_review_min"] == 3
+
+        # GET should reflect 3
+        get_response = admin_client.get("/api/v1/admin/config")
+        assert get_response.status_code == 200
+        data = get_response.json()
+        assert data["complexity_specialist_review_min"] == 3
+        assert "complexity_specialist_review_min" in data["overrides_active"], (
+            "complexity_specialist_review_min must appear in overrides_active after PATCH."
+        )
+
+        # Out-of-range value must be rejected
+        invalid_response = admin_client.patch(
+            "/api/v1/admin/config",
+            json={"complexity_specialist_review_min": 9},
+        )
+        assert invalid_response.status_code == 422, (
+            "complexity_specialist_review_min=9 exceeds max (5) and must be rejected with 422."
+        )
 
     def test_patch_empty_body_changes_nothing(self, admin_client: TestClient) -> None:
         """
