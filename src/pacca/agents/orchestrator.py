@@ -47,11 +47,30 @@ Teaching note — pre-flight before post-flight:
 
 import time
 
+from ..config.settings import effective_settings
 from ..db.repository import AuditRepository
 from ..models.authorization import AuthorizationDecision, AuthorizationStatus
 from ..models.enums import EscalationReason, ReviewTier
 from .clinical_risk_detector import ClinicalRiskDetector, EscalationFlags
 from .decision import DecisionAgent, DecisionContext, MedicalDirectorAgent
+
+
+def select_confidence_branch(
+    confidence: float,
+    status: "AuthorizationStatus",
+    auto_approve_threshold: float,
+    escalation_threshold: float,
+) -> str:
+    """Select the Tier-1 confidence routing branch (PRD §5.4 Branches 1-3).
+
+    Returns one of: "auto_approve", "medical_director", "human_review".
+    Pure function of the agent's (confidence, status) and the effective thresholds.
+    """
+    if confidence >= auto_approve_threshold and status == AuthorizationStatus.AUTO_APPROVED:
+        return "auto_approve"
+    if escalation_threshold <= confidence < auto_approve_threshold:
+        return "medical_director"
+    return "human_review"
 
 
 class Orchestrator:
@@ -171,11 +190,16 @@ class Orchestrator:
                 },
             )
 
-        # ── Branch 1: High confidence — auto-approve ──────────────────────────
-        if (
-            decision.confidence_score >= 0.95
-            and decision.status == AuthorizationStatus.AUTO_APPROVED
-        ):
+        # ── Tier-1 confidence routing (PRD §5.4 Branches 1-3) ──────────────────
+        s = effective_settings()
+        branch = select_confidence_branch(
+            decision.confidence_score,
+            decision.status,
+            s.auto_approve_confidence_threshold,
+            s.escalation_confidence_threshold,
+        )
+
+        if branch == "auto_approve":
             if audit:
                 await audit.log(
                     action="escalation_auto_approved",
@@ -190,8 +214,7 @@ class Orchestrator:
                 )
             return decision
 
-        # ── Branch 2: Ambiguous — Medical Director Agent ──────────────────────
-        elif 0.90 <= decision.confidence_score < 0.95:
+        if branch == "medical_director":
             return await self._run_medical_director(
                 context=context,
                 tier1_decision=decision,
@@ -199,23 +222,22 @@ class Orchestrator:
                 correlation_id=correlation_id,
             )
 
-        # ── Branch 3: Low confidence — human review queue ─────────────────────
-        else:
-            decision.status = AuthorizationStatus.IN_REVIEW
-            if audit:
-                await audit.log(
-                    action="escalation_human_review_required",
-                    actor="orchestrator",
-                    actor_type="system",
-                    correlation_id=correlation_id,
-                    details={
-                        "escalation_reason": EscalationReason.CONFIDENCE_BELOW_THRESHOLD.value,
-                        "confidence_score": decision.confidence_score,
-                        "threshold": 0.90,
-                        "branch": "3_low_confidence",
-                    },
-                )
-            return decision
+        # branch == "human_review"
+        decision.status = AuthorizationStatus.IN_REVIEW
+        if audit:
+            await audit.log(
+                action="escalation_human_review_required",
+                actor="orchestrator",
+                actor_type="system",
+                correlation_id=correlation_id,
+                details={
+                    "escalation_reason": EscalationReason.CONFIDENCE_BELOW_THRESHOLD.value,
+                    "confidence_score": decision.confidence_score,
+                    "threshold": s.escalation_confidence_threshold,
+                    "branch": "3_low_confidence",
+                },
+            )
+        return decision
 
     # ── Helper: Pre-flight escalation handler ────────────────────────────────
 
@@ -332,7 +354,7 @@ class Orchestrator:
                 },
             )
 
-        if md_decision.confidence_score >= 0.95:
+        if md_decision.confidence_score >= effective_settings().auto_approve_confidence_threshold:
             md_decision.status = AuthorizationStatus.AUTO_APPROVED
         else:
             md_decision.status = AuthorizationStatus.IN_REVIEW
