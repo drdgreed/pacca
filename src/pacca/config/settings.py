@@ -103,13 +103,13 @@ class Settings(BaseSettings):
 
     # Confidence thresholds
     auto_approve_confidence_threshold: float = Field(
-        default=0.85,
+        default=0.95,
         ge=0.5,
         le=1.0,
         description="Confidence threshold for autonomous approval",
     )
     escalation_confidence_threshold: float = Field(
-        default=0.75,
+        default=0.90,
         ge=0.3,
         le=1.0,
         description="Confidence threshold below which to escalate",

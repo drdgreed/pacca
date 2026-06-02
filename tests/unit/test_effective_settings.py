@@ -79,3 +79,11 @@ def test_rejects_unknown_field() -> None:
     with pytest.raises(ValueError, match="Unknown config field"):
         apply_overrides({"totally_bogus_field": 42})
     assert active_overrides() == {}
+
+
+def test_default_confidence_thresholds_preserve_orchestrator_behavior() -> None:
+    # Orchestrator historically routed at 0.95 / 0.90; defaults must match so
+    # wiring it to settings is a no-op behavior change.
+    fields = get_settings().__class__.model_fields
+    assert fields["auto_approve_confidence_threshold"].default == 0.95
+    assert fields["escalation_confidence_threshold"].default == 0.90
