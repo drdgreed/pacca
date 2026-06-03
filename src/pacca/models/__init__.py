@@ -25,20 +25,25 @@ from pacca.models.enums import (
     EscalationReason,
     EvidenceSourceType,
     ReviewTier,
+    UrgencyLevel,
+)
+from pacca.models.triage import (
+    ClassificationOutput,
+    EvidenceOutput,
 )
 
 __all__ = [
-    # Authorization
     "AuditLogEntry",
     "AuthorizationDecision",
     "AuthorizationRequest",
-    # Enums
     "AuthorizationStatus",
-    # Clinical
+    "ClassificationOutput",
     "ClinicalCase",
     "ComplexityLevel",
     "EscalationReason",
     "EvidenceItem",
+    "EvidenceOutput",
     "EvidenceSourceType",
     "ReviewTier",
+    "UrgencyLevel",
 ]

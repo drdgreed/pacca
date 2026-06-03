@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from ..models.authorization import AuthorizationDecision, ReviewTier
 from ..models.clinical import ClinicalCase
+from ..models.triage import ClassificationOutput, EvidenceOutput
 from ._prompt_loader import load_agent_prompt
 from .base import BaseAgent
 from .prompts.templates import (
@@ -39,10 +40,16 @@ class DecisionContext(BaseModel):
         relevant_guidelines: Raw text from the RAG pipeline — guidelines
                              and institutional precedents most relevant to
                              this specific case
+        evidence:            Optional synthesized evidence summary from the
+                             EvidenceAggregationAgent (advisory enrichment)
+        classification:      Optional triage classification from the
+                             ClinicalClassificationAgent (advisory enrichment)
     """
 
     case: ClinicalCase
     relevant_guidelines: str
+    evidence: EvidenceOutput | None = None
+    classification: ClassificationOutput | None = None
 
 
 class DecisionAgent(BaseAgent):

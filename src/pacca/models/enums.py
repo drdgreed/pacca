@@ -42,6 +42,14 @@ class ComplexityLevel(StrEnum):
     CRITICAL = "CRITICAL"
 
 
+class UrgencyLevel(StrEnum):
+    """Clinical urgency of a request, assessed by the classification agent."""
+
+    ROUTINE = "ROUTINE"
+    EXPEDITED = "EXPEDITED"
+    URGENT = "URGENT"
+
+
 class ReviewTier(StrEnum):
     """Which agent or human tier produced the final decision."""
 
