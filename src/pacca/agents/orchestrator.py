@@ -226,7 +226,6 @@ class Orchestrator:
                     actor_type="system",
                     correlation_id=correlation_id,
                     details={
-                        "escalation_reason": EscalationReason.CONFIDENCE_BELOW_THRESHOLD.value,
                         "confidence_score": decision.confidence_score,
                         "branch": "1_auto_approve",
                     },
