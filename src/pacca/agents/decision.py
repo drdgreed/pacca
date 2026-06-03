@@ -97,7 +97,16 @@ class DecisionAgent(BaseAgent):
         # Build a clear, structured user-turn prompt
         # The user turn provides the case-specific data; the system prompt
         # provides the role definition, safety guidelines, and rubric.
+        # Triage prepend is None-guarded: byte-identical to prior behavior when absent.
+        triage = ""
+        if context.classification is not None:
+            triage += (
+                f"## Triage Classification\n{context.classification.model_dump_json(indent=2)}\n\n"
+            )
+        if context.evidence is not None:
+            triage += f"## Evidence Summary\n{context.evidence.clinical_narrative}\n\n"
         user_input = (
+            f"{triage}"
             f"## Clinical Case\n"
             f"{context.case.model_dump_json(indent=2)}\n\n"
             f"## Relevant Clinical Guidelines\n"
