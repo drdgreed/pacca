@@ -150,12 +150,15 @@ class Orchestrator:
                 correlation_id=correlation_id,
             )
 
-        # ── Triage enrichment (advisory; PRD Evidence -> Classification) ─────────
-        evidence, classification = await self._run_triage(context, audit, correlation_id)
-        if evidence is not None and classification is not None:
-            context = context.model_copy(
-                update={"evidence": evidence, "classification": classification}
-            )
+        # ── Triage (advisory): runs for the audit trail + routing/queue metadata.
+        #    DELIBERATELY NOT fed into the Tier-1 decision. Clinical severity
+        #    (complexity / urgency) is not the same as decision-uncertainty;
+        #    injecting routing-severity language biased the DecisionAgent toward
+        #    over-escalation and regressed GC-020 (oncological emergency:
+        #    auto-approve -> wrongly escalated to human review). The decision
+        #    stays independent of triage. See docs/ENGINEERING_DECISIONS.md
+        #    (ADR-020). Triage output is captured in _run_triage's audit records.
+        await self._run_triage(context, audit, correlation_id)
 
         # ═════════════════════════════════════════════════════════════════════
         # TIER 1: Decision Agent (Branch evaluation: 1, 2, or 3)
@@ -277,8 +280,10 @@ class Orchestrator:
         audit: AuditRepository | None,
         correlation_id: str | None,
     ) -> tuple[EvidenceOutput | None, ClassificationOutput | None]:
-        """Advisory enrichment (PRD Evidence -> Classification). Best-effort:
-        on any failure, returns (None, None) and the decision proceeds un-enriched."""
+        """Run the triage agents (Evidence -> Classification) for the audit trail
+        and routing/queue metadata. Best-effort: on any failure, logs it and
+        returns (None, None). Triage output does NOT feed the Tier-1 decision
+        (decoupled — see process_decision and ADR-020)."""
         try:
             if audit:
                 await audit.log(
