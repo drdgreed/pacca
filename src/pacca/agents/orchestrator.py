@@ -51,8 +51,11 @@ from ..config.settings import effective_settings
 from ..db.repository import AuditRepository
 from ..models.authorization import AuthorizationDecision, AuthorizationStatus
 from ..models.enums import EscalationReason, ReviewTier
+from ..models.triage import ClassificationOutput, EvidenceOutput
+from .classification_agent import ClinicalClassificationAgent
 from .clinical_risk_detector import ClinicalRiskDetector, EscalationFlags
 from .decision import DecisionAgent, DecisionContext, MedicalDirectorAgent
+from .evidence_agent import EvidenceAggregationAgent
 
 
 def select_confidence_branch(
@@ -94,6 +97,8 @@ class Orchestrator:
         self.medical_director_agent = MedicalDirectorAgent()
         # ClinicalRiskDetector is a stateless utility — safe to instantiate once
         self.risk_detector = ClinicalRiskDetector()
+        self.evidence_agent = EvidenceAggregationAgent()
+        self.classification_agent = ClinicalClassificationAgent()
 
     async def process_decision(
         self,
@@ -144,6 +149,16 @@ class Orchestrator:
                 audit=audit,
                 correlation_id=correlation_id,
             )
+
+        # ── Triage (advisory): runs for the audit trail + routing/queue metadata.
+        #    DELIBERATELY NOT fed into the Tier-1 decision. Clinical severity
+        #    (complexity / urgency) is not the same as decision-uncertainty;
+        #    injecting routing-severity language biased the DecisionAgent toward
+        #    over-escalation and regressed GC-020 (oncological emergency:
+        #    auto-approve -> wrongly escalated to human review). The decision
+        #    stays independent of triage. See docs/ENGINEERING_DECISIONS.md
+        #    (ADR-020). Triage output is captured in _run_triage's audit records.
+        await self._run_triage(context, audit, correlation_id)
 
         # ═════════════════════════════════════════════════════════════════════
         # TIER 1: Decision Agent (Branch evaluation: 1, 2, or 3)
@@ -256,6 +271,64 @@ class Orchestrator:
                 },
             )
         return decision
+
+    # ── Helper: Triage enrichment (advisory) ─────────────────────────────────
+
+    async def _run_triage(
+        self,
+        context: DecisionContext,
+        audit: AuditRepository | None,
+        correlation_id: str | None,
+    ) -> tuple[EvidenceOutput | None, ClassificationOutput | None]:
+        """Run the triage agents (Evidence -> Classification) for the audit trail
+        and routing/queue metadata. Best-effort: on any failure, logs it and
+        returns (None, None). Triage output does NOT feed the Tier-1 decision
+        (decoupled — see process_decision and ADR-020)."""
+        try:
+            if audit:
+                await audit.log(
+                    action="agent_evidence_started",
+                    actor="EvidenceAggregationAgent",
+                    actor_type="agent",
+                    correlation_id=correlation_id,
+                )
+            evidence = await self.evidence_agent.run(context)
+            if audit:
+                await audit.log(
+                    action="agent_evidence_completed",
+                    actor="EvidenceAggregationAgent",
+                    actor_type="agent",
+                    correlation_id=correlation_id,
+                    output_summary=f"findings={len(evidence.key_findings)} conf={evidence.confidence_score:.2f}",
+                )
+                await audit.log(
+                    action="agent_classification_started",
+                    actor="ClinicalClassificationAgent",
+                    actor_type="agent",
+                    correlation_id=correlation_id,
+                )
+            classification = await self.classification_agent.run(context, evidence)
+            if audit:
+                await audit.log(
+                    action="agent_classification_completed",
+                    actor="ClinicalClassificationAgent",
+                    actor_type="agent",
+                    correlation_id=correlation_id,
+                    output_summary=f"complexity={classification.complexity} specialty={classification.primary_specialty} urgency={classification.urgency.value}",
+                )
+            return evidence, classification
+        except (
+            Exception
+        ) as exc:  # broad catch is intentional: advisory layer must never break the decision
+            if audit:
+                await audit.log(
+                    action="triage_enrichment_failed",
+                    actor="orchestrator",
+                    actor_type="system",
+                    correlation_id=correlation_id,
+                    details={"error_type": type(exc).__name__},
+                )
+            return None, None
 
     # ── Helper: Pre-flight escalation handler ────────────────────────────────
 

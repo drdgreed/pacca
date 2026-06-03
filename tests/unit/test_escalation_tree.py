@@ -352,7 +352,7 @@ class TestOrchestratorEscalationTree:
         orchestrator = Orchestrator()
 
         # Mock the Tier 1 agent
-        orchestrator.decision_agent.run = AsyncMock(
+        orchestrator.decision_agent.run = AsyncMock(  # type: ignore[method-assign]
             return_value=make_decision(
                 status=tier1_status,
                 confidence=tier1_confidence,
@@ -360,10 +360,29 @@ class TestOrchestratorEscalationTree:
         )
 
         # Mock the Tier 2 agent
-        orchestrator.medical_director_agent.run = AsyncMock(
+        orchestrator.medical_director_agent.run = AsyncMock(  # type: ignore[method-assign]
             return_value=make_decision(
                 status=AuthorizationStatus.AUTO_APPROVED,
                 confidence=tier2_confidence,
+            )
+        )
+
+        # Mock triage agents so process_decision does not attempt real API calls
+        from pacca.models import ClassificationOutput, EvidenceOutput, UrgencyLevel
+
+        orchestrator.evidence_agent.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=EvidenceOutput(
+                clinical_narrative="", key_findings=[], evidence_gaps=[], confidence_score=0.9
+            )
+        )
+        orchestrator.classification_agent.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=ClassificationOutput(
+                complexity=1,
+                complexity_factors=[],
+                primary_specialty="general",
+                urgency=UrgencyLevel.ROUTINE,
+                routing_rationale="",
+                confidence_score=0.9,
             )
         )
 
@@ -388,7 +407,7 @@ class TestOrchestratorEscalationTree:
 
         assert result.status == AuthorizationStatus.AUTO_APPROVED
         # Medical Director should NOT have been called
-        orchestrator.medical_director_agent.run.assert_not_called()
+        orchestrator.medical_director_agent.run.assert_not_called()  # type: ignore[attr-defined]
 
     # ── Branch 2: Medical Director escalation ────────────────────────────────
 
@@ -406,7 +425,7 @@ class TestOrchestratorEscalationTree:
         result = await orchestrator.process_decision(ctx)
 
         # Medical Director MUST have been called for the ambiguous case
-        orchestrator.medical_director_agent.run.assert_called_once()
+        orchestrator.medical_director_agent.run.assert_called_once()  # type: ignore[attr-defined]
         assert result.status == AuthorizationStatus.AUTO_APPROVED
 
     @pytest.mark.asyncio
@@ -421,7 +440,7 @@ class TestOrchestratorEscalationTree:
             tier2_confidence=0.88,  # MD also uncertain
         )
         # Override MD mock to return low confidence
-        orchestrator.medical_director_agent.run = AsyncMock(
+        orchestrator.medical_director_agent.run = AsyncMock(  # type: ignore[method-assign]
             return_value=make_decision(
                 status=AuthorizationStatus.IN_REVIEW,
                 confidence=0.88,
@@ -450,7 +469,7 @@ class TestOrchestratorEscalationTree:
         result = await orchestrator.process_decision(ctx)
 
         assert result.status == AuthorizationStatus.IN_REVIEW
-        orchestrator.medical_director_agent.run.assert_not_called()
+        orchestrator.medical_director_agent.run.assert_not_called()  # type: ignore[attr-defined]
 
     # ── Branches 4-7: Pre-flight escalation ──────────────────────────────────
 
@@ -470,8 +489,8 @@ class TestOrchestratorEscalationTree:
 
         assert result.status == AuthorizationStatus.IN_REVIEW
         # Neither agent should have been called — pre-flight short-circuits
-        orchestrator.decision_agent.run.assert_not_called()
-        orchestrator.medical_director_agent.run.assert_not_called()
+        orchestrator.decision_agent.run.assert_not_called()  # type: ignore[attr-defined]
+        orchestrator.medical_director_agent.run.assert_not_called()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_branch5_rare_condition_bypasses_llm(self) -> None:
@@ -485,7 +504,7 @@ class TestOrchestratorEscalationTree:
         result = await orchestrator.process_decision(ctx)
 
         assert result.status == AuthorizationStatus.IN_REVIEW
-        orchestrator.decision_agent.run.assert_not_called()
+        orchestrator.decision_agent.run.assert_not_called()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_branch6_conflicting_guidelines_bypasses_llm(self) -> None:
@@ -503,7 +522,7 @@ class TestOrchestratorEscalationTree:
         result = await orchestrator.process_decision(ctx)
 
         assert result.status == AuthorizationStatus.IN_REVIEW
-        orchestrator.decision_agent.run.assert_not_called()
+        orchestrator.decision_agent.run.assert_not_called()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_branch7_prior_denial_bypasses_llm(self) -> None:
@@ -518,7 +537,7 @@ class TestOrchestratorEscalationTree:
         )
 
         assert result.status == AuthorizationStatus.IN_REVIEW
-        orchestrator.decision_agent.run.assert_not_called()
+        orchestrator.decision_agent.run.assert_not_called()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_pre_flight_rationale_is_descriptive(self) -> None:
@@ -564,7 +583,7 @@ class TestOrchestratorEscalationTree:
         result = await orchestrator.process_decision(ctx)
 
         # Decision Agent must have been called — no pre-flight triggers
-        orchestrator.decision_agent.run.assert_called_once()
+        orchestrator.decision_agent.run.assert_called_once()  # type: ignore[attr-defined]
         assert result.status == AuthorizationStatus.AUTO_APPROVED
 
     # ── Kill switch: enable_autonomous_decisions = False ─────────────────────
@@ -608,6 +627,6 @@ class TestOrchestratorEscalationTree:
         # Kill switch must have redirected to human review despite high confidence.
         assert result.status == AuthorizationStatus.IN_REVIEW
         # Tier-1 agent must still have been called (rationale preserved for reviewer).
-        orchestrator.decision_agent.run.assert_called_once()
+        orchestrator.decision_agent.run.assert_called_once()  # type: ignore[attr-defined]
         # Medical Director must NOT have been called — kill switch returns early.
-        orchestrator.medical_director_agent.run.assert_not_called()
+        orchestrator.medical_director_agent.run.assert_not_called()  # type: ignore[attr-defined]

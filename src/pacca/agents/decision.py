@@ -39,6 +39,11 @@ class DecisionContext(BaseModel):
         relevant_guidelines: Raw text from the RAG pipeline — guidelines
                              and institutional precedents most relevant to
                              this specific case
+
+    Note: triage output (evidence synthesis + classification) is deliberately
+    NOT carried here. Triage feeds the audit trail and routing/queue, not the
+    Tier-1 decision — keeping the decision independent of the routing-severity
+    signals that biased it toward over-escalation (GC-020). See ADR-020.
     """
 
     case: ClinicalCase
