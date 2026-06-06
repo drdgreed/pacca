@@ -5,9 +5,10 @@ Application startup, middleware configuration, and core auth endpoints.
 
 Architecture notes:
   - All database operations use the async session from db/session.py.
-    The legacy sync session from api/database.py is retained only for
-    table creation at startup (SQLAlchemy Base.metadata.create_all).
-    All route handlers are fully async.
+    The `users` table is created via that same async engine at startup
+    (SQLAlchemy Base.metadata.create_all), so it lands in the configured
+    database (Postgres in compose, SQLite in dev). All route handlers are
+    fully async.
 
   - JWT authentication uses SECRET_KEY loaded from the environment.
     The application validates SECRET_KEY at startup and refuses to start
@@ -31,7 +32,7 @@ from ..config.settings import get_settings
 from ..config.tracing import configure_tracing
 
 # Production async database session — all route handlers use this
-from ..db.session import AsyncSession, get_session, init_database
+from ..db.session import AsyncSession, get_engine, get_session, init_database
 
 # Auth helpers — SECRET_KEY, ALGORITHM, and token expiry come from environment
 from .auth import (
@@ -44,10 +45,9 @@ from .auth import (
     verify_token,
 )
 
-# Legacy sync setup — used ONLY for Base.metadata.create_all at startup
-# All runtime database operations use the async session below
+# Declarative Base for the auth `users` table. The table is created via the
+# async engine at startup (see lifespan); all runtime ops use the async session.
 from .database import Base
-from .database import engine as sync_engine
 
 # Middleware
 from .middleware import SecurityHeadersMiddleware
@@ -70,7 +70,7 @@ async def lifespan(app: FastAPI):
     Startup sequence:
       1. Validate SECRET_KEY (fail fast if misconfigured)
       2. Configure OpenTelemetry tracing
-      3. Initialize database tables (both sync User table and async PACCA tables)
+      3. Initialize database tables via the async engine (PACCA data + auth users)
 
     Teaching note: failing fast on misconfiguration is a production discipline.
     Better to crash at startup with a clear error than to serve requests with
@@ -96,14 +96,18 @@ async def lifespan(app: FastAPI):
     )
 
     # ── 3. Database initialization ────────────────────────────────────────────
-    # Create the User table (sync schema, managed by api/models.py + api/database.py)
-    # This is the legacy auth table — only the User model lives here.
-    # All other PACCA tables are managed by db/models.py via the async engine.
-    Base.metadata.create_all(bind=sync_engine)
-
     # Initialize the PACCA data tables via the async engine
     # (authorization_requests, authorization_decisions, audit_logs, etc.)
     await init_database()
+
+    # Create the auth `users` table in the SAME async database the /register and
+    # /login handlers query via get_session(). It previously lived on a hardcoded
+    # sync SQLite engine, so under Postgres it never existed there and auth 500'd
+    # with: relation "users" does not exist. Creating it through the async engine
+    # makes it land in the configured DB (Postgres in compose, SQLite in dev).
+    # (User is registered on Base via the `from .models import User` import above.)
+    async with get_engine().begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     yield  # Server is running
 
@@ -198,11 +202,11 @@ async def sme_draft_stream(websocket: "WebSocket", session_id: str) -> None:
 # User registration and login — async database operations
 #
 # Teaching note — why these routes are here, not in a dedicated route module:
-#   These are the only routes that touch the User table (the legacy sync
-#   SQLAlchemy model in api/models.py). Keeping them in main.py avoids
-#   creating a route module that mixes the legacy and production database
-#   sessions. Week 6 consolidation note: a full migration would move User
-#   to the async db/models.py schema. That is the production next step.
+#   These are the only routes that touch the User table (defined in
+#   api/models.py on api/database.py's Base). Its table is created via the
+#   async engine at startup — the same engine these handlers query — so there
+#   is no separate sync session to mix in. A future consolidation could move
+#   User onto db/models.py's Base alongside the other PACCA tables.
 # =============================================================================
 
 
