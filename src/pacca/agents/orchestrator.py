@@ -23,10 +23,13 @@ The 7-branch escalation tree (PRD SS5.4 — now fully implemented):
     Branch 6: Conflicting guidelines   → always route to human review
     Branch 7: Prior denial same service→ always route to human review
 
-  POST-AGENT CHECKS (run after Decision Agent returns):
-    Branch 1: confidence >= 0.95       → auto-approve
-    Branch 2: 0.90 <= confidence < 0.95→ Medical Director Agent
-    Branch 3: confidence < 0.90        → human review queue
+  POST-AGENT CHECKS (run after Decision Agent returns) — thresholds are
+  settings-driven via effective_settings(); the values below are the current
+  DEFAULTS (auto_approve_confidence_threshold / escalation_confidence_threshold)
+  and may be overridden per-deployment or at runtime (PATCH /config):
+    Branch 1: confidence >= auto-approve threshold (default 0.95)         → auto-approve
+    Branch 2: escalation <= confidence < auto-approve (default 0.90–0.95) → Medical Director Agent
+    Branch 3: confidence < escalation threshold (default 0.90)            → human review queue
 
   The pre-flight checks are the key architectural addition in Week 2.
   They ensure certain cases NEVER reach autonomous decision regardless of
