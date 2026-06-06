@@ -6,10 +6,21 @@ with validation and sensible defaults.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# Anchor the .env path to the repository root so loaded config never depends on
+# the process working directory. Without this, launching from src/pacca/ would
+# resolve ".env" relative to CWD and pick up a stray nested src/pacca/.env —
+# silently loading different confidence thresholds (a HIPAA-relevant routing
+# foot-gun). settings.py lives at src/pacca/config/, so repo root is 3 parents
+# up. A missing file is skipped by pydantic, so a non-editable/wheel install
+# (where __file__ resolves under site-packages and no repo .env exists) simply
+# falls back to real env vars — the intended prod behavior.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
@@ -21,7 +32,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_REPO_ROOT / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

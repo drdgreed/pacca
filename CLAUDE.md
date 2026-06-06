@@ -8,7 +8,7 @@ KISS, YAGNI, DRY. Minimal code. Empirically verify before claiming done — run 
 ## Workflow
 - Plan first for any change touching >2 files, an agent's logic, a schema/migration, or any PHI handling. Write the plan, wait for approval, then code.
 - Run the full suite before declaring a task done: `make test`   # <-- replace in Step 5
-  Never claim tests pass without running them. Baseline is 140 passing.
+  Never claim tests pass without running them. Baseline is 634 passing (3 clinical deselected).
 - Commits run the hooks in .pre-commit-config.yaml. Do not bypass with --no-verify.
 
 ## HIPAA / safety rules (non-negotiable)

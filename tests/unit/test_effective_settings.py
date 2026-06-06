@@ -1,10 +1,12 @@
 """Unit tests for the shared runtime-override store + effective_settings()."""
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
 from pacca.config.settings import (
+    Settings,
     active_overrides,
     apply_overrides,
     clear_all_overrides,
@@ -82,8 +84,36 @@ def test_rejects_unknown_field() -> None:
 
 
 def test_default_confidence_thresholds_preserve_orchestrator_behavior() -> None:
-    # Orchestrator historically routed at 0.95 / 0.90; defaults must match so
-    # wiring it to settings is a no-op behavior change.
+    # TRIPWIRE: these defaults ARE the live clinical routing policy. The
+    # orchestrator reads them via effective_settings() for Branches 1-3 and the
+    # Medical-Director gate, so changing them is a clinical-policy change, not a
+    # refactor. If you intentionally re-tuned the thresholds and this fails, you
+    # MUST also (see ADR-004):
+    #   1. update docs/assets/decision_trace.svg + docs/assets/architecture_v2.4.svg
+    #      (they render the 0.95 / 0.90 bands),
+    #   2. update the Orchestrator module docstring (Branches 1-3) in
+    #      src/pacca/agents/orchestrator.py, and
+    #   3. re-baseline the live golden-20 gate (make test-clinical) — new
+    #      thresholds change which cases auto-approve vs. escalate.
+    coupling = (
+        "Confidence-threshold DEFAULT changed — this is a clinical-policy change. "
+        "Also update decision_trace.svg + architecture_v2.4.svg, the orchestrator "
+        "docstring (Branches 1-3), and re-baseline the golden-20 gate (make test-clinical)."
+    )
     fields = get_settings().__class__.model_fields
-    assert fields["auto_approve_confidence_threshold"].default == 0.95
-    assert fields["escalation_confidence_threshold"].default == 0.90
+    assert fields["auto_approve_confidence_threshold"].default == 0.95, coupling
+    assert fields["escalation_confidence_threshold"].default == 0.90, coupling
+
+
+def test_env_file_is_anchored_to_repo_root_not_cwd() -> None:
+    """env_file must resolve to an absolute repo-root path, not a CWD-relative
+    '.env'. Otherwise a process launched from src/pacca/ would load the stray
+    nested src/pacca/.env and could silently apply different confidence
+    thresholds (the 0.85/0.75 foot-gun). Regression guard for that drift."""
+    env_file = Settings.model_config["env_file"]
+    repo_root = Path(__file__).resolve().parents[2]  # tests/unit/ -> repo root
+    # Narrow the pydantic-settings union type (Path | Sequence | None) -> Path;
+    # this also asserts we configured a single Path, not a str or sequence.
+    assert isinstance(env_file, Path), f"env_file must be a Path, got {type(env_file)!r}"
+    assert env_file.is_absolute(), "env_file must be absolute (CWD-independent)"
+    assert env_file == repo_root / ".env"
