@@ -1,17 +1,16 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base
 
-# 1. This is the URL for our database.
-# It tells SQLite to create a file named "pacca.db" in your current folder.
-SQLALCHEMY_DATABASE_URL = "sqlite:///./pacca.db"
-
-# 2. The "engine" is the actual engine that runs the database connections.
-# (The 'check_same_thread' part is a specific requirement just for SQLite)
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-
-# 3. A "Session" is a single conversation with the database.
-# Whenever a user logs in, we will open a session, ask the database if the user exists, and close it.
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# 4. We will use this "Base" class in our next file to build our database tables.
+# Declarative base for the auth `users` table (see api/models/user.py).
+#
+# There is intentionally NO standalone engine or session here. The `users`
+# table is created in the application's primary database via the ASYNC engine
+# (db/session.py) at startup — see the lifespan in api/main.py — so it lands in
+# whatever DATABASE_URL points to (Postgres in compose, SQLite in local dev),
+# the same database the /register and /login handlers query.
+#
+# History: this module used to define a sync engine hardcoded to
+# sqlite:///./pacca.db and create the users table there. Under Postgres the
+# table never existed in the DB the handlers queried, so /register and /login
+# 500'd with 'relation "users" does not exist'. The sync engine + SessionLocal
+# were dead code (no runtime caller) and were removed.
 Base = declarative_base()

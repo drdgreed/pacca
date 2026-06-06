@@ -221,13 +221,17 @@ module = [
 ]
 ignore_missing_imports = true
 
-# Click decorators don't carry enough type info to satisfy strict-mode
-# disallow_untyped_decorators. The CLI files use Click extensively;
-# downgrade decorator checks for those specific modules.
+# Click (CLI) and FastAPI (@router.get/@router.post) decorators don't carry
+# enough type info to satisfy strict-mode disallow_untyped_decorators. Downgrade
+# ONLY the decorator check for these modules — all other strict checks stay on.
+# (api.routes.sme_authoring was omitted from this list; main.py imports it, so a
+# change to main.py surfaces its untyped-decorator [misc] errors via mypy's
+# import chain — same friction the CLI modules already opt out of.)
 [[tool.mypy.overrides]]
 module = [
     "pacca.cli",
     "pacca.agents.sme_authoring.cli_commands",
+    "pacca.api.routes.sme_authoring",
 ]
 disallow_untyped_decorators = false
 
