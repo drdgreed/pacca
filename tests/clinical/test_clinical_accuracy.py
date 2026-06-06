@@ -71,6 +71,7 @@ from tests.clinical.mental_health_cases import MENTAL_HEALTH_CASES
 from tests.clinical.near_miss_cases import NEAR_MISS_CASES
 from tests.clinical.neurology_cases import NEUROLOGY_CASES
 from tests.clinical.ob_cases import OB_CASES
+from tests.clinical.oncology_breadth_cases import ONCOLOGY_BREADTH_CASES
 from tests.clinical.oncology_depth_cases import ONCOLOGY_DEPTH_CASES
 from tests.clinical.pediatric_cases import PEDIATRIC_CASES
 from tests.clinical.pulmonology_adult_cases import PULMONOLOGY_ADULT_CASES
@@ -95,6 +96,7 @@ ALL_SUPPLEMENTARY_LISTS: tuple[list[GoldenCase], ...] = (
     HEMATOLOGY_CASES,
     ENDOCRINOLOGY_CASES,
     ONCOLOGY_DEPTH_CASES,
+    ONCOLOGY_BREADTH_CASES,
     DEPTH_EXTENSION_CASES,
     ADULT_COMPLEXITY_CASES,
 )
