@@ -2,7 +2,7 @@
 
 **Project:** PACCA — Prior Authorization & Care Coordination Agent Platform
 **Version:** 2.2.0 (Final)
-**Author:** David Reed, PhD | Head of Career Advancement & AI/ML Delivery, Interview Kickstart
+**Author:** David Reed, PhD | Formerly Head of Career Advancement & AI/ML Delivery, Interview Kickstart
 **Date:** April 2026
 **Status:** Complete — all requirements met
 

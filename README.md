@@ -32,7 +32,7 @@ PACCA is a **secure, multi-agent AI workflow** that automates healthcare prior a
 
 Unlike basic "LLM-wrapper" approaches, PACCA grounds every decision in factual medical guidelines via Retrieval-Augmented Generation, escalates to specialist tiers using a 7-branch deterministic decision tree, and applies **observability-driven harness engineering** to iterate the system itself.
 
-**Current state.** PRD `v2.4` is the active spec (introduces §16 Clinical Validation Strategy). The `DecisionSupportAgent` prompt registry is at `v2.5` after iter-5's institutional-memory bump. Harness `iter-6` is the open iteration.
+**Current state.** PRD `v2.4` is the active spec (introduces §16 Clinical Validation Strategy). The `DecisionSupportAgent` prompt registry is at `v2.6` after iter-6's first deny-class institutional-memory entry. Harness iterations `iter-0` through `iter-6` are complete — each with a change manifest and a verified verdict cycle — and `iter-7` is seeded by the off-label-scanner finding recorded at iter-6 close (see [`docs/ITERATIONS.md`](docs/ITERATIONS.md)).
 
 **A methodology, not just features.** The harness discipline — introduced in `v2.3` and active through every iteration since — requires every behavioral change to PACCA's agent harness to ship as a one-file diff with a falsifiable predicted-impact contract that the next evaluation round verifies. The methodology is adapted from Lin et al., *Agentic Harness Engineering* (arXiv:2604.25850, 2026). The repository's `docs/` folder makes the discipline auditable from outside.
 
@@ -97,7 +97,7 @@ graph TD
     Orchestrator{Multi-Agent<br/>Orchestrator + 7-Branch<br/>Escalation Tree}:::agent
     Agent1[Tier 1: Frontline Nurse Agent]:::agent
     Agent2[Tier 2: Medical Director Agent]:::agent
-    LLM((Claude API<br/>Sonnet 4)):::database
+    LLM((Claude API<br/>Sonnet 4.5)):::database
 
     React -- "POST /login" --> Auth
     Auth -- "Verify/Hash" --> SQL
@@ -223,25 +223,26 @@ sequenceDiagram
 
 ## Results
 
-Numbers are *measured locally* (the unit and integration suites) or *clearly labeled as benchmark/simulated* where they reflect synthesized cases rather than production traffic. The repository ships with no real PHI, so all clinical numbers come from the 53-case synthesized demo dataset and the 20-case clinical golden set.
+Numbers are *measured locally* (the unit and integration suites) or *clearly labeled as benchmark/simulated* where they reflect synthesized cases rather than production traffic. The repository ships with no real PHI, so all clinical numbers come from the 53-case synthesized demo dataset and the 105-case clinical evaluation dataset (GC-001 through GC-105).
 
 | Metric | Value | Source |
 |---|---|---|
-| **Unit tests** | 120 / 120 passing | `pytest tests/unit` — 7.14s |
-| **Total tests across tiers** | 146 (unit + integration + clinical) | `pytest tests/ --collect-only` |
-| **Clinical-accuracy CI gate** | ≥80% pass rate on 20-case golden set, LLM-as-judge (Claude Haiku, 1–5 rubric) | `tests/clinical/`, fails the build below threshold |
+| **Unit tests** | 531 test functions | `pytest tests/unit` |
+| **Total tests across tiers** | 590 test functions (531 unit + 28 clinical + 27 harness) | `pytest tests/ --collect-only` |
+| **Clinical evaluation dataset** | 105 cases (GC-001–GC-105), ~20 thematic suites (oncology, cardiology, pediatric, geriatric, transplant, mental health, denial, …), integrity-verified | `tests/clinical/`, `TestGoldenDatasetIntegrity` |
+| **Clinical-accuracy CI gate** | ≥80% pass rate on the 20-case golden core, LLM-as-judge (Claude Haiku, 1–5 rubric). **At iter-6 close: 20/20 pass, mean 4.9/5, zero jitter across k=2 rollouts** | `tests/clinical/`, fails the build below threshold |
 | **Hallucination tolerance** | **Zero** — sparse-notes traps GC-018, GC-019 fail the build on any score-1 hallucination | `tests/unit/test_clinical_accuracy.py` |
 | **Lint posture** | `ruff check src/ tests/` — clean | CI lint job |
-| **Median decision latency** *(benchmark, single-process)* | ~2.1 s | Synthesized 53-case run, Sonnet 4 |
+| **Median decision latency** *(benchmark, single-process)* | ~2.1 s | Synthesized 53-case run, Sonnet 4.5 |
 | **95p decision latency** *(benchmark, single-process)* | ~4.3 s | Same |
 | **Auto-approval rate** *(synthesized dataset)* | 28% (15 / 53 cases) | Group A — complete documentation, explicit guideline alignment |
 | **Human-review rate** *(synthesized dataset)* | 19% (10 / 53 cases) | Group B — missing documentation, hallucination traps |
 | **Pre-flight escalations triggered** *(synthesized dataset)* | 32% (17 / 53 cases) | Groups D–G — experimental treatment, rare condition, conflicting guidelines, prior denial |
-| **Cost per decision** *(simulated, Sonnet 4 at current pricing)* | ~$0.04 | Token-counted per case; pricing as of 2026-05 |
-| **Harness iterations recorded** | 2 (`harness-iter-0` baseline, `harness-iter-1` first extraction) | `harness/manifests/iter-{0,1}.json` |
+| **Cost per decision** *(simulated, Sonnet 4.5 at current pricing)* | ~$0.04 | Token-counted per case; pricing as of 2026-05 |
+| **Harness iterations recorded** | 7 complete (`iter-0` … `iter-6`), each with a change manifest and predicted-vs-observed verdicts; `iter-7` seeded | `harness/manifests/iter-{0..6}.json`, [`docs/ITERATIONS.md`](docs/ITERATIONS.md) |
 | **Methodology source** | Lin et al., *Agentic Harness Engineering* | [arXiv:2604.25850](https://arxiv.org/abs/2604.25850) |
 
-> **What is *not* measured yet:** sustained-load latency, aggregate cost-per-decision at production volume, and adversarial prompt-injection resistance. These land in Phase H5 (Evaluation Harness Expansion). See [`docs/EVALUATION.md`](docs/EVALUATION.md) for the methodology and the gap list.
+> **What is *not* measured yet:** sustained-load latency, aggregate cost-per-decision at production volume, and adversarial prompt-injection resistance. These are the remaining Phase H5 (Evaluation Harness Expansion) deliverables — the dataset side of H5 is well underway (20 → 105 cases). See [`docs/EVALUATION.md`](docs/EVALUATION.md) and [`docs/DATASET_SUFFICIENCY.md`](docs/DATASET_SUFFICIENCY.md) for methodology and the gap list.
 
 ---
 
@@ -305,14 +306,14 @@ The methodology adapts the AHE paper's three observability pillars to a healthca
 
 The v2.4 release commits PACCA to a six-phase cycle over 10–12 weeks. Each phase has explicit exit criteria verifiable from git history and the evaluation suite:
 
-| Phase | Name | Weeks | Constraint Levels |
-|-------|------|-------|-------------------|
-| **H0** | Baseline Crystallization | 1–2 | Instrumentation only |
-| **H1** | Component Decoupling | 3–4 | system_prompt, tool_description, tool_implementation |
-| **H2** | Institutional Memory Layer | 5–6 | long_term_memory |
-| **H3** | Cross-Step Middleware Tier | 7–8 | middleware |
-| **H4** | Change Manifest Discipline | 3–10 (parallel) | Process layer |
-| **H5** | Evaluation Harness Expansion | 10–12 | Eval infrastructure |
+| Phase | Name | Constraint Levels | Status |
+|-------|------|-------------------|--------|
+| **H0** | Baseline Crystallization | Instrumentation only | ✅ Delivered (iter-0) |
+| **H1** | Component Decoupling | system_prompt, tool_description, tool_implementation | ✅ Delivered (iter-1: prompt extraction to file-level mounts) |
+| **H2** | Institutional Memory Layer | long_term_memory | ✅ Delivered & compounding (four memory entries across iters 3–6, incl. the first deny-class entry) |
+| **H3** | Cross-Step Middleware Tier | middleware | ⏳ Not started |
+| **H4** | Change Manifest Discipline | Process layer | ✅ Active on every change since iter-1 |
+| **H5** | Evaluation Harness Expansion | Eval infrastructure | 🔄 In progress — dataset 20 → 105 cases, k=2 rollouts on the golden core; unified benchmark + load/adversarial testing pending |
 
 Full phase specifications, exit criteria, expected impact, and AHE paper citations are in **[the consolidated PRD §15](docs/PACCA_PRD_v2.4_Consolidated.md)**.
 
@@ -356,11 +357,11 @@ Full phase specifications, exit criteria, expected impact, and AHE paper citatio
 - PostgreSQL 16 for persistence, SQLite for development (one env-var switch)
 - Dual-collection ChromaDB with metadata filtering
 - OpenTelemetry → Langfuse distributed tracing (Docker Compose included)
-- Comprehensive test coverage: 549+ unit tests (Python) + Playwright smoke tests (frontend)
+- Comprehensive test coverage: 590 test functions across unit / clinical / harness tiers (Python) + Playwright smoke tests (frontend)
 
 ### ✍️ SME Case Authoring Agent (2026-Q2)
 
-The clinical-evaluation dataset must grow from 33 cases → 100 (production-pilot) → 300 (general-payer) → 500+ (SaMD-grade). Authoring each case used to take an engineer 60–90 minutes per case to translate clinical knowledge into Python, wire it into the test aggregator, update companion docs, and verify integrity tests. **The SME Case Authoring Agent removes the engineer middleware entirely.**
+The clinical-evaluation dataset has grown from 33 → 105 cases and continues toward the roadmap milestones: 300 (general-payer) → 500+ (SaMD-grade). Authoring each case used to take an engineer 60–90 minutes per case to translate clinical knowledge into Python, wire it into the test aggregator, update companion docs, and verify integrity tests. **The SME Case Authoring Agent removes the engineer middleware entirely.**
 
 A clinician runs one command (CLI) or opens the browser to `/sme-author` (Web UI), describes a clinical scenario in plain English, reviews the agent's draft case, attests their professional review, and the agent handles everything else:
 
@@ -468,16 +469,16 @@ make sme-author-web-e2e
 ### Running Tests
 
 ```bash
-# Full unit test suite (120 tests, ~7 seconds)
+# Full test suite (590 test functions across tiers)
 pytest
 
 # With coverage report
 pytest --cov=pacca --cov-report=html
 
-# Test categories
-pytest tests/test_clinical_accuracy.py        # Clinical reasoning + LLM-as-judge
-pytest tests/test_escalation_tree.py          # All 7 escalation branches
-pytest tests/test_security_and_scalability.py # Auth, async, RAG
+# Test tiers
+pytest tests/unit/                             # 531 unit tests
+pytest tests/clinical/                         # Clinical reasoning + LLM-as-judge (105-case dataset)
+pytest tests/harness/                          # Harness discipline + manifest validation
 
 # v2.4+: harness benchmark suite (Phase H5 deliverable)
 pytest tests/eval/                             # 100+ case benchmark with k=2 rollouts
@@ -544,10 +545,10 @@ Content-Type: application/json
   "complexity": 3,
   "specialty": "oncology",
   "requires_human_review": false,
-  "harness_iteration_tag": "harness-iter-0",
+  "harness_iteration_tag": "harness-iter-6",
   "prompt_registry_versions": {
-    "decision_support": "1.4.0",
-    "medical_director": "1.2.0"
+    "decision_support": "v2.6",
+    "medical_director": "v2.2"
   }
 }
 ```
@@ -598,9 +599,9 @@ PACCA includes 53 synthesized cases across 8 groups (A–H) covering all 7 escal
 | G | 4 | Prior denial pre-flight — resubmissions, fraud patterns |
 | H | 3 | Precedent-based approvals — institutional memory in action |
 
-Plus a 20-case clinical golden dataset with LLM-as-judge scoring (Claude Haiku, 1–5 rubric) and a CI gate at ≥80% accuracy. Hallucinations score automatic 1 — there is no acceptable rate of inventing clinical data.
+Plus a 105-case clinical evaluation dataset (GC-001–GC-105) whose 20-case golden core is CI-gated at ≥80% accuracy with LLM-as-judge scoring (Claude Haiku, 1–5 rubric) — currently 20/20 at mean 4.9/5. Hallucinations score automatic 1 — there is no acceptable rate of inventing clinical data.
 
-Phase H5 (delivered in v2.4) unifies these case sources into a single benchmark of 100+ cases with k=2 rollouts per case and pass@1 / tokens-per-case / Succ/Mtok metrics.
+Phase H5 (in progress) unifies these case sources into a single benchmark with k=2 rollouts per case and pass@1 / tokens-per-case / Succ/Mtok metrics; the dataset side (105 cases) is already on disk.
 
 ---
 
@@ -619,7 +620,6 @@ Phase H5 (delivered in v2.4) unifies these case sources into a single benchmark 
 | `HIGH_COST_THRESHOLD` | Cost escalation trigger (USD) | 100000 | Per payer contract |
 | `LLM_RETRY_MAX_ATTEMPTS` | Max LLM retry attempts | 3 | 3–5 |
 | `ENABLE_AUTONOMOUS_DECISIONS` | Master autonomy switch | true | true (false for audit) |
-| `HARNESS_ITERATION_TAG` | Active harness iteration (v2.4+) | `harness-iter-0` | Latest tagged iteration |
 
 See [`.env.example`](.env.example) for all configuration options.
 
@@ -631,42 +631,34 @@ See [`.env.example`](.env.example) for all configuration options.
 pacca/
 ├── src/pacca/
 │   ├── agents/              # Multi-agent framework
-│   │   ├── decision_support/    # v2.3: per-agent component decoupling (Phase H1)
-│   │   │   ├── system_prompt.md     # System prompt as standalone file
-│   │   │   ├── long_term_memory.md  # v2.3: institutional memory (Phase H2)
-│   │   │   ├── tool_descriptions/   # YAML schemas for tool interfaces
-│   │   │   ├── tools/               # Tool implementations
-│   │   │   ├── middleware/          # v2.3: cross-step hooks (Phase H3)
-│   │   │   └── agent.yaml           # Component registry
-│   │   ├── medical_director/    # Same layout per agent
-│   │   ├── evidence_aggregation/
-│   │   ├── classification/
-│   │   ├── policy_evolution/
-│   │   └── prompts/             # Shared PROMPT_REGISTRY
+│   │   ├── decision_support/    # Phase H1/H2 component mounts
+│   │   │   ├── system_prompt.md     # System prompt as standalone file (H1)
+│   │   │   └── long_term_memory.md  # Institutional memory (H2, four entries)
+│   │   ├── medical_director/    # Same component-mount layout
+│   │   ├── sme_authoring/       # SME Case Authoring Agent (CLI + Web UI share this)
+│   │   ├── prompts/             # Shared PROMPT_REGISTRY (v2.6)
+│   │   ├── tools/               # Agent tool implementations
+│   │   ├── orchestrator.py      # 7-branch escalation tree
+│   │   ├── evidence_agent.py · classification_agent.py · evolution.py
+│   │   └── clinical_risk_detector.py
 │   ├── api/                 # FastAPI application
+│   ├── cli.py               # `pacca` CLI (sme-author, …)
 │   ├── config/              # Settings and logging
 │   ├── db/                  # Database, models, repository, migrations
+│   ├── integrations/        # External-service adapters
 │   ├── models/              # Pydantic domain models
-│   ├── observability/       # v2.3: trajectory logging (Phase H0)
-│   ├── orchestrator/        # 7-branch escalation tree
-│   └── rag/                 # ChromaDB dual-collection pipeline
-├── frontend/                # React 18 frontend
-├── harness/                 # v2.3: harness engineering artifacts
-│   └── manifests/               # Per-iteration change manifests + verdicts
-│       ├── change_manifest.schema.json
-│       ├── iter-0.json
-│       └── iter-N-verdicts.json
+│   ├── rag/                 # ChromaDB dual-collection pipeline
+│   └── utils/
+├── frontend/                # React 18 + TypeScript + Vite frontend
+├── harness/manifests/       # change_manifest.schema.json + iter-0 … iter-6 manifests & verdicts
 ├── tests/
-│   ├── test_*.py            # 120 unit tests
-│   └── eval/                # v2.3: harness benchmark (Phase H5)
+│   ├── unit/                # 531 unit tests
+│   ├── clinical/            # 105-case evaluation dataset + LLM-as-judge harness
+│   ├── harness/             # Manifest-discipline + benchmark tests
+│   └── integration/
 ├── demo/                    # 53-case synthesized demo dataset
-├── docs/                    # Documentation
-│   ├── ARCHITECTURE.md
-│   ├── HARNESS.md           # v2.3: harness component reference
-│   ├── DECISIONS.md         # v2.3: append-only change log with verdicts
-│   ├── ITERATIONS.md        # v2.3: narrative log per iteration
-│   ├── EVALUATION.md        # v2.3: benchmark methodology + scores
-│   └── PACCA_PRD_v2.4_Consolidated.md  # Full PRD with phase specs
+├── docs/                    # ARCHITECTURE, HARNESS, DECISIONS, ITERATIONS, EVALUATION,
+│                            #   EVALUATION_COVERAGE, DATASET_SUFFICIENCY, PACCA_PRD_v2.4_Consolidated, …
 └── docker-compose.yml       # Full stack including Langfuse
 ```
 
@@ -676,7 +668,7 @@ pacca/
 
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| **LLM** | Claude (Anthropic API), `claude-sonnet-4` | Tool-use forced for structured output |
+| **LLM** | Claude (Anthropic API), `claude-sonnet-4-5` | Tool-use forced for structured output |
 | **Backend** | Python 3.12, FastAPI, Pydantic v2 | Fully async throughout |
 | **Production DB** | PostgreSQL 16, SQLAlchemy 2.0, Alembic | JSONB compliance queries, async pool |
 | **Dev DB** | SQLite (same ORM layer) | One env var to switch |
@@ -684,7 +676,7 @@ pacca/
 | **Cache** | Redis (optional) | 40–60% token reduction at scale (V2 release) |
 | **Frontend** | React 18, TypeScript, Tailwind CSS | Vite build pipeline |
 | **Observability** | OpenTelemetry → Langfuse 1.27+ | One span per agent call |
-| **Testing** | pytest, pytest-asyncio, pytest-cov | 140 unit + benchmark suite |
+| **Testing** | pytest, pytest-asyncio, pytest-cov | 590 test functions + k=2 eval rollouts |
 | **Security** | python-jose, bcrypt | JWT + timing-safe passwords |
 | **Manifest validation** | jsonschema (Draft 2020-12) | v2.4+: validates change manifests in CI |
 | **CI/CD** | GitHub Actions | Includes manifest schema validation |
@@ -707,6 +699,8 @@ PACCA's documentation is structured to serve four audiences: engineers, healthca
 - **[`docs/DECISIONS.md`](docs/DECISIONS.md)** — append-only log of every behavioral change with predictions and verdicts
 - **[`docs/ITERATIONS.md`](docs/ITERATIONS.md)** — narrative log per iteration tag (paper Appendix C format)
 - **[`docs/EVALUATION.md`](docs/EVALUATION.md)** — benchmark methodology, scores, regression history
+- **[`docs/EVALUATION_COVERAGE.md`](docs/EVALUATION_COVERAGE.md)** — per-cell coverage matrix (dimension × case ID); re-baseline to the 105-case dataset in progress
+- **[`docs/DATASET_SUFFICIENCY.md`](docs/DATASET_SUFFICIENCY.md)** — statistical grounding for dataset-growth milestones (105 → 300 → 500+)
 - **[`CHANGELOG.md`](CHANGELOG.md)** — per-iteration changelog with eval delta and verified predictions
 
 ### Machine-readable specifications
@@ -723,7 +717,7 @@ PACCA's documentation is structured to serve four audiences: engineers, healthca
 
 ## About the Author
 
-**David Reed, Ph.D.** — Head of AI/ML & Agentic Delivery at Interview Kickstart. PhD in Computer Science, MBA, PMP, Wharton AI Fellow. Holder of [US Patent 6,850,988](https://patents.google.com/patent/US6850988) — the foundational recommendation-engine architecture developed at Oracle and later widely deployed in commerce. Formerly Master Technologist at Hewlett-Packard (Distinguished/Principal-IC track) and Principal TPM-AI at Microsoft. 35+ years across data warehousing, enterprise AI/ML, and edtech, including leading a $70M data-science curriculum portfolio across R1 universities.
+**David Reed, Ph.D.** — Former Head of AI/ML & Agentic Delivery at Interview Kickstart. PhD in Computer Science, MBA, PMP, Wharton AI Fellow. Holder of [US Patent 6,850,988](https://patents.google.com/patent/US6850988) — the foundational recommendation-engine architecture developed at Oracle and later widely deployed in commerce. Formerly Master Technologist at Hewlett-Packard (Distinguished/Principal-IC track) and Principal TPM-AI at Microsoft. 35+ years across data warehousing, enterprise AI/ML, and edtech, including leading a $70M data-science curriculum portfolio across R1 universities.
 
 I built PACCA to demonstrate end-to-end agentic AI engineering on a high-stakes, regulated domain — healthcare prior authorization — where correctness, explainability, human oversight, and observability all matter equally. Beginning with v2.3, the project commits to a falsifiable harness-engineering methodology adapted from Lin et al. (arXiv:2604.25850, 2026) — every behavioral change ships as a one-file diff with a recorded prediction, and the next evaluation round verifies or rejects it at file granularity. The discipline is a concrete instance of the [CRISP-AG](https://drdavidreed.com/portfolio) Orchestration Contract artifact applied to a regulated healthcare domain.
 
@@ -776,4 +770,4 @@ MIT — see [LICENSE](LICENSE) for details.
 ---
 
 **PACCA v2.4** — Healthcare Prior Authorization, Iterated Like Engineering
-*github.com/drdgreed/pacca | David Reed, PhD | May 2026*
+*github.com/drdgreed/pacca | David Reed, PhD | July 2026*

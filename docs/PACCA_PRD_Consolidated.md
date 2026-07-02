@@ -3,7 +3,7 @@
 ### Version 2.2 — Forward-Looking Production Specification
 
 **Author:** David Reed, PhD, MBA, PMP | Executive Fellow, Wharton
-**Affiliation:** Head of Career Advancement & AI/ML Delivery, Interview Kickstart
+**Affiliation:** Formerly Head of Career Advancement & AI/ML Delivery, Interview Kickstart
 **Former:** Master Technologist (Principal/Distinguished Engineer), Hewlett-Packard
 **Repository:** github.com/drdgreed/pacca
 **Date:** April 2026

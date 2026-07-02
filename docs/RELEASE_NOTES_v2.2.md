@@ -1,7 +1,7 @@
 # PACCA Release Notes — Version 2.2 (Development Sprint)
 
 **Project:** PACCA — Prior Authorization & Care Coordination Agent Platform
-**Author:** David Reed, PhD | Head of Career Advancement & AI/ML Delivery, Interview Kickstart
+**Author:** David Reed, PhD | Formerly Head of Career Advancement & AI/ML Delivery, Interview Kickstart
 **Repository:** github.com/drdgreed/pacca
 **Sprint Started:** April 2026
 **Status:** Active development — targeting v2.2.0 production milestone
@@ -185,7 +185,7 @@ The v2.2 sprint is systematically closing every identified gap.
 ## About the Author
 
 David Reed, PhD, MBA, PMP | Executive Fellow, Wharton
-Head of Career Advancement & AI/ML Delivery, Interview Kickstart
+Formerly Head of Career Advancement & AI/ML Delivery, Interview Kickstart
 Former Master Technologist (equivalent: Principal/Distinguished Engineer), Hewlett-Packard
 Sole inventor, Amazon foundational recommendation engine (US Patent 6,850,988)
 
