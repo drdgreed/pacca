@@ -1,6 +1,8 @@
 # PACCA — Product Requirements Document, v2.4 Consolidated
 
-> **Status:** Active draft, iter-6 open. Replaces [`PACCA_PRD_v2.3_Consolidated.md`](PACCA_PRD_v2.3_Consolidated.md) (a stub) by adding §15 (Harness Engineering Cycle, summarized) and §16 (Clinical Validation Strategy — the new substantive chapter).
+> ⚠️ **SUPERSEDED by [`PACCA_PRD_v2.5_Consolidated.md`](PACCA_PRD_v2.5_Consolidated.md) (2026-07-20).** This v2.4 document describes the **33-case** state at iter-6 open and is retained as the historical record. For the current **105-case** state, the two-stage clinical-review-board model, and the corrected iteration/registry/test-count facts, read v2.5. The case counts and "iter-6 open" status below are frozen at v2.4 authoring time and are intentionally not updated.
+>
+> **Status (as of v2.4 authoring):** Active draft, iter-6 open. Replaces [`PACCA_PRD_v2.3_Consolidated.md`](PACCA_PRD_v2.3_Consolidated.md) (a stub) by adding §15 (Harness Engineering Cycle, summarized) and §16 (Clinical Validation Strategy — the new substantive chapter).
 > **Predecessor (v2.2 narrative content):** [`PACCA_PRD_Consolidated.md`](PACCA_PRD_Consolidated.md) — §1–§14 carried forward unchanged.
 > **Audience:** prospective payer customers, HIPAA / SaMD reviewers, clinical-validation board members, investors evaluating production readiness, and the engineering team executing the dataset and validation roadmap.
 > **Honesty disclaimer:** PACCA's current evaluation dataset is 33 cases. This document describes the *path to* HIPAA SaMD-grade clinical validation, the *current state* against that path, and the *evidence the existing dataset can defensibly support*. It does NOT claim the dataset is currently SaMD-adequate — it explicitly states that it is not, and quantifies the gap.

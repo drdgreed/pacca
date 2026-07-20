@@ -1,9 +1,9 @@
 # Case Provenance — Per-Case Rationale, Failure Mode, and Iteration of Origin
 
-> **⚠️ Reconciliation note (2026-05-28).** This document carries provenance rows through **GC-033**, but the on-disk dataset is now **100 cases** (GC-001 through GC-100). Provenance rows for **GC-034 through GC-100** are NOT yet in this file — adding them (67 rows: rationale, failure mode, iteration of origin per case) is the immediate follow-up. Each recovered case file does carry its own per-case "WHY THESE EXIST" docstring in the interim, so the rationale is not lost, just not yet consolidated here.
+> **⚠️ Reconciliation note (updated 2026-07-20).** This document carries provenance rows through **GC-033**, but the on-disk dataset is now **105 cases** (GC-001 through GC-105). Provenance rows for **GC-034 through GC-105** are NOT yet in this file — adding them (72 rows: rationale, failure mode, iteration of origin per case) is a tracked follow-up. Each case file carries its own per-case "WHY THESE EXIST" docstring in the interim, so the rationale is not lost, just not yet consolidated here; `tests/clinical/*_cases.py` and the per-iteration manifests under `harness/manifests/` are the ground truth for the GC-034→GC-105 provenance until this table is backfilled. See [`PACCA_PRD_v2.5_Consolidated.md`](PACCA_PRD_v2.5_Consolidated.md) § 16.5.
 >
 > **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md) — this document provides the audit-trail "why does each case exist" answer for every case in the dataset.
-> **Status:** rows through GC-033; on-disk dataset at 100, GC-034→GC-100 rows pending. New rows added per case; iteration column tracks when the case landed.
+> **Status:** rows through GC-033; on-disk dataset at 105, GC-034→GC-105 rows pending. New rows added per case; iteration column tracks when the case landed.
 
 ## Schema
 

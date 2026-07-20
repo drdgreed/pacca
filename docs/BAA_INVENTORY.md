@@ -51,7 +51,7 @@
 | AWS Secrets Manager (planned) | Runtime secret storage (replaces env-vars pattern) | ⚪ Covered by AWS BAA | n/a | — | — |
 | AWS CloudWatch (planned) | Log aggregation | ⚪ Covered by AWS BAA | n/a | — | — |
 
-### Clinical Review Board (activates at 200-case milestone)
+### Clinical Review Board (formation at 100-case milestone; operational scored sweeps at 200)
 
 | Vendor | Purpose | BAA Status | DPA Status | Last reviewed | Notes |
 |---|---|---|---|---|---|

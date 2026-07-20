@@ -355,9 +355,9 @@ In addition to all 100-case gates:
 7. ✅ Phase 2 clinical-review board (CRB): operational. First quarterly sample (30 cases × 3 reviewers) completed. Inter-rater κ ≥ 0.70.
 8. ✅ Iteration manifest discipline: every batch's chg-N entry has predicted_fix / risk_cases / verdict triple.
 
-### Phase 2 clinical-review board activation (at 300)
+### Phase 2 clinical-review board (formation at 100, operational scored sweeps at 200)
 
-Per `CASE_AUTHORING_GUIDE.md` § 12, the CRB becomes operational:
+Per `CASE_AUTHORING_GUIDE.md` § 12 and `PACCA_PRD_v2.5_Consolidated.md` § 16.7, the CRB activates in two stages: **formation** at the 100-case milestone (crossed — 105 as-built; board being convened) and **operational scored κ-sweeps** at the 200-case milestone. By the 300-case milestone the board is fully operational and has run at least one quarterly sweep. Once operational:
 
 - Panel: 2–3 credentialed clinicians, covering oncology + cardiology + behavioral as the highest-volume specialties.
 - Frequency: quarterly.
