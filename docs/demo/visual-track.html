@@ -1,0 +1,570 @@
+<title>PACCA — Demo Visual Track</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* ============ PACCA Editorial-Clinical tokens (from frontend theme.css) ============ */
+  :root{
+    --paper:#faf8f3; --paper-deep:#f3efe6; --paper-line:rgba(44,42,38,.14);
+    --ink:#1a1a1a; --ink-soft:#2c2a26; --muted:#6b6963;
+    --navy:#1c2435; --navy-2:#232d42; --navy-line:rgba(255,255,255,.12);
+    --paper-on-navy:#eae6dc; --muted-on-navy:#9aa1b0;
+    --approve:#2d5a3d; --approve-soft:#e4ede6;
+    --deny:#6b1f1f; --review:#8a6a1f; --review-soft:#f2ebd8; --info:#2c4d6e;
+    --gold:#c69a3f;
+    --serif:Georgia,'Times New Roman',serif;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --stageW:1280px; --stageH:720px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:#0c0f16; color:var(--ink); font-family:var(--serif);
+    display:grid; place-items:center; min-height:100vh; overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ============ Stage: the 16:9 recording frame ============ */
+  .stage{
+    position:relative; width:min(96vw,var(--stageW)); aspect-ratio:16/9;
+    max-height:94vh; overflow:hidden; background:var(--paper);
+    box-shadow:0 30px 90px rgba(0,0,0,.55); border-radius:6px;
+  }
+  .scene{
+    position:absolute; inset:0; opacity:0; visibility:hidden;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:6.2% 7.4%; transition:opacity .5s ease;
+  }
+  .scene.active{opacity:1; visibility:visible}
+  .scene.active .rise{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+  .scene.active .rise:nth-child(2){animation-delay:.08s}
+  .scene.active .rise:nth-child(3){animation-delay:.16s}
+  .scene.active .rise:nth-child(4){animation-delay:.24s}
+  .scene.active .rise:nth-child(5){animation-delay:.32s}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  /* grounds */
+  .scene--navy{background:radial-gradient(120% 120% at 20% 0%,var(--navy-2),var(--navy)); color:var(--paper-on-navy)}
+  .scene--paper{background:var(--paper)}
+
+  /* ============ Typography ============ */
+  .eyebrow{font-family:var(--mono); font-size:.72rem; letter-spacing:.28em; text-transform:uppercase; color:var(--muted)}
+  .scene--navy .eyebrow{color:var(--muted-on-navy)}
+  .display{font-family:var(--serif); font-weight:700; line-height:1.02; letter-spacing:-.015em; text-wrap:balance; margin:0}
+  .d1{font-size:clamp(2.2rem,6.2vw,4.6rem)}
+  .d2{font-size:clamp(1.7rem,4.2vw,3.1rem)}
+  .lede{font-size:clamp(1rem,1.9vw,1.4rem); line-height:1.5; color:var(--ink-soft); max-width:34ch; text-wrap:pretty}
+  .scene--navy .lede{color:var(--paper-on-navy)}
+  .muted{color:var(--muted)} .scene--navy .muted{color:var(--muted-on-navy)}
+  .mono{font-family:var(--mono)}
+  .stack{display:flex; flex-direction:column; gap:1.1rem; align-items:flex-start}
+  .center{align-items:center; text-align:center}
+  .center .lede{max-width:44ch}
+
+  /* stat scenes */
+  .statnum{font-family:var(--serif); font-weight:700; line-height:.9; letter-spacing:-.03em;
+    font-size:clamp(4rem,15vw,11rem); color:var(--paper-on-navy)}
+  .statnum .unit{font-size:.32em; letter-spacing:0; color:var(--muted-on-navy); margin-left:.15em}
+  .statnum.hot{color:#e9c46a}
+  .statcap{font-size:clamp(1.05rem,2.3vw,1.6rem); max-width:24ch; color:var(--paper-on-navy)}
+
+  /* ============ App mockup chrome (paper scenes) ============ */
+  .app{position:absolute; inset:0; display:flex; flex-direction:column; background:var(--paper)}
+  .appbar{display:flex; align-items:center; gap:.9rem; padding:.85rem 1.4rem; background:var(--navy); color:var(--paper-on-navy)}
+  .appbar .brand{font-weight:700; letter-spacing:.02em}
+  .appbar .brand b{color:#fff}
+  .appbar .tag{font-family:var(--mono); font-size:.62rem; letter-spacing:.22em; text-transform:uppercase; color:var(--muted-on-navy)}
+  .appbar .spacer{flex:1}
+  .appbar .who{font-family:var(--mono); font-size:.72rem; color:var(--muted-on-navy)}
+  .synthetic{position:absolute; top:.7rem; right:1.2rem; z-index:5;
+    font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); background:rgba(255,255,255,.7); border:1px solid var(--paper-line);
+    padding:.3rem .55rem; border-radius:999px}
+  .appbody{flex:1; padding:1.5rem 2rem; overflow:hidden}
+  .apptitle{font-family:var(--serif); font-weight:700; font-size:1.5rem; margin:0 0 .2rem}
+  .appsub{color:var(--muted); font-size:.9rem; margin:0 0 1.1rem}
+
+  .card{background:#fff; border:1px solid var(--paper-line); border-radius:8px; padding:1.1rem 1.25rem}
+  .grid2{display:grid; grid-template-columns:1.15fr .85fr; gap:1.1rem; height:calc(100% - 3.2rem)}
+  .fieldrow{display:flex; justify-content:space-between; gap:1rem; padding:.5rem 0; border-bottom:1px solid var(--paper-line); font-size:.92rem}
+  .fieldrow:last-child{border-bottom:0}
+  .fieldrow .k{color:var(--muted)} .fieldrow .v{font-weight:600; text-align:right}
+  .fieldrow .v .mono{font-weight:400}
+  .chip{display:inline-block; font-family:var(--mono); font-size:.68rem; letter-spacing:.04em; padding:.2rem .5rem; border-radius:4px; border:1px solid var(--paper-line); background:var(--paper-deep)}
+  .submit{margin-top:auto; width:100%; border:0; border-radius:6px; padding:.85rem; font-family:var(--serif); font-weight:700; font-size:1rem; color:#fff; background:var(--navy); cursor:pointer}
+  .submit.go{background:var(--approve)}
+
+  /* pipeline / agents */
+  .agents{display:flex; flex-direction:column; gap:.55rem; margin-top:.4rem}
+  .agent{display:flex; align-items:center; gap:.7rem; font-size:.9rem; color:var(--muted)}
+  .agent .dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--paper-line)}
+  .agent.done{color:var(--ink)} .agent.done .dot{background:var(--approve);border-color:var(--approve)}
+  .agent.run .dot{border-color:var(--info); animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .timer{font-family:var(--mono); font-size:2.4rem; font-weight:400; letter-spacing:-.02em}
+
+  /* decision banners */
+  .verdict{border-radius:10px; padding:1.1rem 1.3rem; display:flex; align-items:center; gap:1rem}
+  .verdict.ok{background:var(--approve-soft); border:1px solid #bcd4c3}
+  .verdict.esc{background:var(--review-soft); border:1px solid #e2d3a2}
+  .verdict .badge{font-family:var(--mono); font-weight:700; letter-spacing:.06em; font-size:.8rem; padding:.35rem .6rem; border-radius:5px; color:#fff; white-space:nowrap}
+  .verdict.ok .badge{background:var(--approve)} .verdict.esc .badge{background:var(--review)}
+  .verdict .vtext{font-size:1.05rem; font-weight:600}
+  .verdict .vtext small{display:block; font-weight:400; color:var(--muted); font-size:.82rem; margin-top:.15rem}
+
+  .reason{display:flex; gap:.65rem; padding:.55rem 0; border-bottom:1px solid var(--paper-line); font-size:.9rem}
+  .reason:last-child{border-bottom:0}
+  .reason .mk{font-family:var(--mono); color:var(--review); font-weight:700}
+  .cite{font-size:.86rem; color:var(--ink-soft); border-left:3px solid var(--info); padding:.35rem .8rem; background:var(--paper-deep); border-radius:0 5px 5px 0}
+  .confbar{height:8px; border-radius:4px; background:var(--paper-deep); overflow:hidden; margin-top:.3rem}
+  .confbar > i{display:block; height:100%; background:var(--approve)}
+
+  /* queue table */
+  table.q{width:100%; border-collapse:collapse; font-size:.88rem}
+  table.q th{font-family:var(--mono); font-size:.64rem; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--ink-soft)}
+  table.q td{padding:.6rem .6rem; border-bottom:1px solid var(--paper-line); font-variant-numeric:tabular-nums}
+  table.q tr.hot td{background:var(--review-soft)}
+  .pill{font-family:var(--mono); font-size:.66rem; padding:.16rem .45rem; border-radius:4px; color:#fff}
+  .pill.esc{background:var(--review)} .pill.ok{background:var(--approve)}
+
+  /* validation / explainer bits */
+  .cols{display:grid; grid-template-columns:repeat(2,1fr); gap:1.6rem; width:100%; max-width:52rem}
+  .gatecard{border:1px solid var(--navy-line); border-radius:10px; padding:1.2rem 1.3rem}
+  .gatecard h4{margin:.2rem 0 .5rem; font-size:1.15rem}
+  .gatecard p{margin:0; color:var(--muted-on-navy); font-size:.92rem; line-height:1.45}
+  .bignum{font-family:var(--serif); font-weight:700; font-size:clamp(3rem,8vw,6rem); line-height:1; color:#fff}
+  .ledger{width:100%; max-width:46rem; border-collapse:collapse; font-size:.95rem}
+  .ledger td{padding:.55rem .4rem; border-bottom:1px solid var(--navy-line)}
+  .ledger td:last-child{text-align:right; font-family:var(--mono); font-size:.82rem}
+  .yes{color:#8fce9d} .no{color:#d99}
+
+  .split{display:grid; grid-template-columns:1fr 1fr; gap:0; width:100%; height:100%}
+  .split > div{display:flex; flex-direction:column; justify-content:center; gap:.6rem; padding:0 8%}
+  .split .l{border-right:1px solid var(--navy-line)}
+  .split .k{font-family:var(--mono); font-size:.7rem; letter-spacing:.2em; text-transform:uppercase}
+  .split .big{font-family:var(--serif); font-weight:700; font-size:clamp(1.6rem,3.4vw,2.6rem); line-height:1.05}
+  .kicker{color:#8fce9d} .kicker.esc{color:#e9c46a}
+
+  .ask{display:flex; gap:1.4rem; width:100%; max-width:52rem}
+  .ask > div{flex:1; border:1px solid var(--navy-line); border-radius:10px; padding:1.15rem 1.25rem}
+  .ask h5{margin:0 0 .45rem; font-size:1.05rem; color:#fff}
+  .ask p{margin:0; color:var(--muted-on-navy); font-size:.9rem; line-height:1.45}
+
+  .rule{height:1px; background:var(--navy-line); width:100%; margin:.2rem 0}
+  .wordmark{font-family:var(--serif); font-weight:700; letter-spacing:-.02em; font-size:clamp(3rem,9vw,6.5rem); color:#fff; line-height:.95}
+  .wordmark .dot{color:var(--gold)}
+
+  /* montage */
+  .montage{display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; width:100%; height:calc(100% - 2rem)}
+  .mtile{background:#fff; border:1px solid var(--paper-line); border-radius:8px; padding:.9rem 1rem; display:flex; flex-direction:column; gap:.5rem; overflow:hidden}
+  .mtile .mh{font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+  .mline{display:flex; justify-content:space-between; font-size:.8rem; padding:.28rem 0; border-bottom:1px solid var(--paper-line)}
+  .mline .mono{color:var(--muted)}
+
+  /* ============ Director chrome (hidden in clean mode) ============ */
+  .hud{position:fixed; left:0; right:0; display:flex; gap:1rem; align-items:center; color:#cbd2e0; font-family:var(--mono); font-size:.72rem; letter-spacing:.05em; z-index:20; padding:.6rem 1rem}
+  .hud.top{top:0; justify-content:space-between}
+  .hud .act{color:#fff; letter-spacing:.14em; text-transform:uppercase}
+  .progress{position:fixed; top:0; left:0; height:3px; background:var(--gold); z-index:21; transition:width .4s ease}
+  .cue{position:fixed; bottom:0; left:0; right:0; z-index:20; background:rgba(8,10,16,.86); color:#e8ebf2;
+    padding:.7rem 1.2rem; font-family:var(--serif); font-size:1rem; line-height:1.4; display:flex; gap:1rem; align-items:baseline}
+  .cue .lab{font-family:var(--mono); font-size:.6rem; letter-spacing:.2em; text-transform:uppercase; color:var(--gold); white-space:nowrap}
+  .cue .dur{margin-left:auto; font-family:var(--mono); font-size:.7rem; color:#9aa1b0; white-space:nowrap}
+  .help{position:fixed; bottom:.5rem; right:1rem; z-index:22; color:#6b7280; font-family:var(--mono); font-size:.62rem}
+  body.clean .hud,body.clean .cue,body.clean .help,body.clean .progress{display:none!important}
+  body.clean{background:#000}
+
+  @media (prefers-reduced-motion:reduce){
+    .scene{transition:none} .scene.active .rise{animation:none}
+    .agent.run .dot{animation:none} .progress{transition:none}
+  }
+</style>
+
+<div class="progress" id="prog"></div>
+<div class="hud top">
+  <span class="act" id="hudAct">Act 0 · Cold open</span>
+  <span id="hudIdx">01 / 24</span>
+</div>
+
+<div class="stage" id="stage">
+
+  <!-- ACT 0 -->
+  <section class="scene scene--navy" data-act="Act 0 · Cold open" data-dur="10" data-vo="[Silent title card — hold for the open.]">
+    <div class="stack center" style="margin:auto">
+      <div class="wordmark rise">PACCA<span class="dot">.</span></div>
+      <div class="lede rise" style="max-width:40ch">Prior Authorization &amp; Care Coordination Agent — multi-agent AI with a human always in the loop.</div>
+      <div class="eyebrow rise" style="margin-top:1rem">Routine flies through &nbsp;·&nbsp; Hard cases get a human</div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy" data-act="Act 0 · The stakes" data-dur="12" data-vo="Providers spend more than thirty-four hours a week on prior authorization.">
+    <div class="stack center" style="margin:auto">
+      <div class="eyebrow rise">The paperwork tax</div>
+      <div class="statnum rise">34<span class="unit">+ hrs / week</span></div>
+      <div class="statcap rise muted">every practice, spent on prior authorization</div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy" data-act="Act 0 · The stakes" data-dur="11" data-vo="Patients wait — two to three days on average.">
+    <div class="stack center" style="margin:auto">
+      <div class="eyebrow rise">Patients wait</div>
+      <div class="statnum rise">2–3<span class="unit">days</span></div>
+      <div class="statcap rise muted">average treatment delay while a request is decided</div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy" data-act="Act 0 · The anchor" data-dur="14" data-vo="Nearly one in three of those delays directly harms the patient who's waiting.">
+    <div class="stack center" style="margin:auto">
+      <div class="eyebrow rise">By the health system's own accounting</div>
+      <div class="statnum hot rise">29<span class="unit">% of delays</span></div>
+      <div class="statcap rise" style="max-width:26ch">directly harm the patient who is waiting</div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy center" data-act="Act 0 · Thesis" data-dur="28" data-vo="PACCA automates the routine, and escalates the rest — to a person, every time.">
+    <div class="stack center" style="margin:auto">
+      <div class="d1 display rise">Automate the routine.<br>Escalate the rest.</div>
+      <div class="lede rise">Most requests are routine and could clear in seconds. The hard ones deserve a human's full attention. PACCA does both — and never takes the doctor out of the loop.</div>
+    </div>
+  </section>
+
+  <!-- ACT 1 — speed win -->
+  <section class="scene scene--paper" data-act="Act 1 · The speed win" data-dur="10" data-vo="Here's a provider's view.">
+    <div class="app">
+      <div class="synthetic">Synthetic data — no real PHI</div>
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Provider Portal</span><span class="spacer"></span><span class="who">sign in</span></div>
+      <div class="appbody" style="display:grid;place-items:center">
+        <div class="card rise" style="width:340px">
+          <p class="eyebrow" style="margin:0 0 .8rem">Provider sign-in</p>
+          <div class="fieldrow"><span class="k">Username</span><span class="v mono">dr.reyes</span></div>
+          <div class="fieldrow"><span class="k">Password</span><span class="v mono">••••••••••</span></div>
+          <button class="submit" style="margin-top:1.1rem">Sign in</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene scene--paper" data-act="Act 1 · Case A" data-dur="45" data-vo="A request for first-line cancer immunotherapy — documentation complete, lined up with clinical guidelines. By hand this can take six to twelve hours.">
+    <div class="app">
+      <div class="synthetic">Synthetic data — no real PHI</div>
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Provider Portal</span><span class="spacer"></span><span class="who mono">Dr. A. Reyes · Oncology</span></div>
+      <div class="appbody">
+        <h2 class="apptitle">New authorization request</h2>
+        <p class="appsub">Case A · 64-year-old · metastatic NSCLC</p>
+        <div class="grid2">
+          <div class="card">
+            <p class="eyebrow" style="margin:0 0 .6rem">Clinical detail</p>
+            <div class="fieldrow"><span class="k">Diagnosis</span><span class="v">Metastatic NSCLC, adenocarcinoma <span class="mono">· C34.11</span></span></div>
+            <div class="fieldrow"><span class="k">PD-L1 (22C3)</span><span class="v">TPS 80%</span></div>
+            <div class="fieldrow"><span class="k">Driver mutations</span><span class="v">EGFR / ALK / ROS1 — negative</span></div>
+            <div class="fieldrow"><span class="k">ECOG</span><span class="v">1</span></div>
+            <div class="fieldrow"><span class="k">Requested</span><span class="v">Pembrolizumab 200 mg Q3W <span class="mono">· J9271</span></span></div>
+            <div class="fieldrow"><span class="k">Est. annual cost</span><span class="v mono">$190,000</span></div>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column">
+            <p class="eyebrow" style="margin:0 0 .6rem">Documentation</p>
+            <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+              <span class="chip">Histology ✓</span><span class="chip">Staging ✓</span><span class="chip">Biomarker report ✓</span><span class="chip">Prior therapy: none ✓</span><span class="chip">No contraindication ✓</span>
+            </div>
+            <button class="submit go">Submit for authorization</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene scene--paper" data-act="Act 1 · Five agents" data-dur="25" data-vo="Five specialized agents worked in sequence — evidence, classification, and a check against the guideline text, retrieved live.">
+    <div class="app">
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Processing</span><span class="spacer"></span><span class="who mono">Case A</span></div>
+      <div class="appbody" style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;align-items:center">
+        <div class="card">
+          <p class="eyebrow" style="margin:0 0 .8rem">Multi-agent pipeline</p>
+          <div class="agents">
+            <div class="agent done"><span class="dot"></span>Evidence Aggregation — synthesized</div>
+            <div class="agent done"><span class="dot"></span>Clinical Classification — routed</div>
+            <div class="agent done"><span class="dot"></span>Guideline retrieval (RAG) — matched</div>
+            <div class="agent run"><span class="dot"></span>Decision Support (Tier 1) — deciding…</div>
+          </div>
+        </div>
+        <div style="text-align:center">
+          <div class="timer">00:23</div>
+          <p class="muted" style="font-size:.85rem;margin:.3rem 0 0">vs. 6–12 hours by hand</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene scene--paper" data-act="Act 1 · Auto-approved" data-dur="55" data-vo="Under thirty seconds — and it gives back the reasoning, the guideline it relied on, and a confidence level. Nothing here is a black box.">
+    <div class="app">
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Decision</span><span class="spacer"></span><span class="who mono">Case A · 00:23</span></div>
+      <div class="appbody">
+        <div class="verdict ok rise" style="margin-bottom:1rem">
+          <span class="badge">AUTO-APPROVED</span>
+          <span class="vtext">Guideline-concordant, first-line pembrolizumab<small>No escalation triggers · decided in 23 seconds</small></span>
+        </div>
+        <div class="grid2" style="height:auto">
+          <div class="card rise">
+            <p class="eyebrow" style="margin:0 0 .5rem">Reasoning</p>
+            <p style="margin:0 0 .7rem;font-size:.92rem;line-height:1.5">PD-L1 TPS 80% (≥50%) with negative EGFR/ALK/ROS1 and ECOG 1 meets the criteria for single-agent first-line pembrolizumab in metastatic NSCLC.</p>
+            <div class="cite">NCCN NSCLC / KEYNOTE-024 — category 1, PD-L1 TPS ≥50%, driver-negative.</div>
+          </div>
+          <div class="card rise">
+            <p class="eyebrow" style="margin:0 0 .5rem">Confidence</p>
+            <div class="mono" style="font-size:1.8rem">0.96</div>
+            <div class="confbar"><i style="width:96%"></i></div>
+            <p class="muted" style="font-size:.82rem;margin:.7rem 0 0">Every conclusion traces to a source. Full audit entry recorded.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACT 2 — safety gate -->
+  <section class="scene scene--paper" data-act="Act 2 · Case B" data-dur="35" data-vo="This time the patient is a child, and the request is a cell therapy for relapsed leukemia.">
+    <div class="app">
+      <div class="synthetic">Synthetic data — no real PHI</div>
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Provider Portal</span><span class="spacer"></span><span class="who mono">Dr. A. Reyes · Oncology</span></div>
+      <div class="appbody">
+        <h2 class="apptitle">New authorization request</h2>
+        <p class="appsub">Case B · 8-year-old · relapsed/refractory B-ALL</p>
+        <div class="grid2">
+          <div class="card">
+            <p class="eyebrow" style="margin:0 0 .6rem">Clinical detail</p>
+            <div class="fieldrow"><span class="k">Patient age</span><span class="v">8 years</span></div>
+            <div class="fieldrow"><span class="k">Diagnosis</span><span class="v">B-cell ALL, in relapse <span class="mono">· C91.02</span></span></div>
+            <div class="fieldrow"><span class="k">Disease status</span><span class="v">2nd relapse, post-transplant</span></div>
+            <div class="fieldrow"><span class="k">Requested</span><span class="v">Tisagenlecleucel (CAR-T) <span class="mono">· Q2042</span></span></div>
+            <div class="fieldrow"><span class="k">One-time cost</span><span class="v mono">$475,000</span></div>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column">
+            <p class="eyebrow" style="margin:0 0 .6rem">Documentation</p>
+            <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+              <span class="chip">CD19+ confirmed ✓</span><span class="chip">Prior lines ✓</span><span class="chip">Organ function ✓</span><span class="chip">Consent ✓</span>
+            </div>
+            <button class="submit go">Submit for authorization</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene scene--paper" data-act="Act 2 · Escalated" data-dur="55" data-vo="Before any AI weighs in, deterministic safety checks run. This request trips three at once — cell therapy, cost, and a child with complex disease. Route it to a human.">
+    <div class="app">
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Decision</span><span class="spacer"></span><span class="who mono">Case B</span></div>
+      <div class="appbody">
+        <div class="verdict esc rise" style="margin-bottom:1rem">
+          <span class="badge">ESCALATED</span>
+          <span class="vtext">Routed to Medical Director — before any AI confidence<small>Deterministic pre-flight · three independent triggers</small></span>
+        </div>
+        <div class="card rise">
+          <p class="eyebrow" style="margin:0 0 .5rem">Why this cannot be automated</p>
+          <div class="reason"><span class="mk">1</span><span><b>Cell / gene therapy.</b> CAR-T (Q2042) requires mandatory specialist review.</span></div>
+          <div class="reason"><span class="mk">2</span><span><b>High cost.</b> $475,000 exceeds the cost-review threshold — fires regardless of clinical merit.</span></div>
+          <div class="reason"><span class="mk">3</span><span><b>Pediatric complexity.</b> Age 8 with complex, relapsed disease meets the pediatric-review threshold.</span></div>
+        </div>
+        <p class="muted rise" style="font-size:.9rem;margin:.9rem 0 0">This is an <b>appropriate</b> request. The escalation isn't catching a mistake — it's routing the highest-stakes therapy to a human.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene scene--paper" data-act="Act 2 · Director Queue" data-dur="30" data-vo="This is the reviewer's side — the Medical Director's queue.">
+    <div class="app">
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Medical Director Queue</span><span class="spacer"></span><span class="who mono">Dr. M. Osei, MD · Tier 2</span></div>
+      <div class="appbody">
+        <h2 class="apptitle">Escalations awaiting review</h2>
+        <p class="appsub">Cases the system routed to a physician</p>
+        <table class="q">
+          <thead><tr><th>Case</th><th>Patient</th><th>Request</th><th>Reason</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr class="hot"><td class="mono">B</td><td>8 yo · B-ALL relapse</td><td>Tisagenlecleucel</td><td>Cell therapy · cost · pediatric</td><td><span class="pill esc">ESCALATED</span></td></tr>
+            <tr><td class="mono">—</td><td>71 yo · myeloma</td><td>Off-pathway regimen</td><td>Conflicting guidelines</td><td><span class="pill esc">ESCALATED</span></td></tr>
+            <tr><td class="mono">—</td><td>59 yo · RA</td><td>3rd-line biologic</td><td>Prior denial on record</td><td><span class="pill esc">ESCALATED</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene scene--paper" data-act="Act 2 · Human decides" data-dur="60" data-vo="The Director sees all three reasons and everything the agents assembled. The machine did the legwork — the decision belongs to the physician, who confirms it's appropriate and approves.">
+    <div class="app">
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Case Review · B</span><span class="spacer"></span><span class="who mono">Dr. M. Osei, MD</span></div>
+      <div class="appbody">
+        <div class="grid2" style="height:calc(100% - .5rem)">
+          <div class="card">
+            <p class="eyebrow" style="margin:0 0 .5rem">Agent-assembled dossier</p>
+            <p style="margin:0 0 .6rem;font-size:.9rem;line-height:1.5">CD19+ B-ALL, second relapse, post-transplant. Tisagenlecleucel is FDA-approved for patients ≤25 with refractory or ≥2nd-relapse B-ALL — on-label for this child.</p>
+            <div class="cite">FDA label (2017) · Boston Children's / Novartis CTL019 program</div>
+            <p class="eyebrow" style="margin:1rem 0 .4rem">Escalation reasons</p>
+            <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+              <span class="chip">cell/gene therapy</span><span class="chip">high cost</span><span class="chip">pediatric complexity</span>
+            </div>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column">
+            <p class="eyebrow" style="margin:0 0 .5rem">Medical Director decision</p>
+            <p style="margin:0 0 auto;font-size:.9rem;line-height:1.5;color:var(--ink-soft)">Confirmed on-label and appropriate for this relapse setting.</p>
+            <div class="verdict ok" style="margin-top:.8rem"><span class="badge">APPROVED</span><span class="vtext" style="font-size:.95rem">by physician review<small>The child gets the therapy — a human looked first.</small></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACT 3 — validation & board -->
+  <section class="scene scene--paper" data-act="Act 3 · The evidence" data-dur="45" data-vo="A system that makes clinical recommendations is only as trustworthy as its evidence. PACCA is tested against 105 curated cases, each reviewed against real guidelines.">
+    <div class="app">
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Clinical Validation · Dataset</span><span class="spacer"></span><span class="who mono">golden set</span></div>
+      <div class="appbody" style="display:grid;grid-template-columns:.8fr 1.2fr;gap:1.6rem;align-items:center">
+        <div style="text-align:center">
+          <div style="font-family:var(--serif);font-weight:700;font-size:5.5rem;line-height:1;color:var(--navy)">105</div>
+          <p class="muted" style="margin:.2rem 0 0">SME-reviewed golden cases<br>GC-001 – GC-105</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow" style="margin:0 0 .6rem">Coverage</p>
+          <div class="fieldrow"><span class="k">Authored against</span><span class="v">Real clinical guidelines</span></div>
+          <div class="fieldrow"><span class="k">Escalation branches</span><span class="v">All 7 covered</span></div>
+          <div class="fieldrow"><span class="k">Specialties</span><span class="v">14+ families</span></div>
+          <div class="fieldrow"><span class="k">Deny-class cases</span><span class="v">7 (target met)</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy" data-act="Act 3 · Two gates" data-dur="45" data-vo="Two gates guard every change — a per-case tripwire, and an accuracy bar for the whole set. Together they mean the system can't quietly degrade.">
+    <div class="stack" style="margin:auto;width:100%;align-items:center">
+      <div class="eyebrow rise">Two gates on every change</div>
+      <div class="cols rise">
+        <div class="gatecard"><h4>Per-case tripwire</h4><p>Flags any single case whose result gets worse — 100% sensitivity, at any dataset size.</p></div>
+        <div class="gatecard"><h4>Aggregate accuracy bar</h4><p>The whole set must clear an accuracy threshold before anything ships.</p></div>
+      </div>
+      <div class="lede rise center" style="max-width:40ch">It can't quietly degrade.</div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy" data-act="Act 3 · Honest claims" data-dur="55" data-vo="And PACCA is honest about what its evidence does and doesn't yet prove — an explicit ledger of what it can defend today, and what it cannot claim until the dataset grows.">
+    <div class="stack" style="margin:auto;width:100%;align-items:center">
+      <div class="eyebrow rise">The honest-claims ledger</div>
+      <table class="ledger rise">
+        <tr><td>Catches ≥10-point performance drops</td><td class="yes">defensible today</td></tr>
+        <tr><td>Every policy gate tested on both sides</td><td class="yes">defensible today</td></tr>
+        <tr><td>Catches subtle ≥5-point erosion</td><td class="no">not yet — larger set</td></tr>
+        <tr><td>SaMD-grade clinical validation</td><td class="no">not yet — the roadmap</td></tr>
+      </table>
+      <div class="lede rise center" style="max-width:42ch">For a clinical tool, that honesty isn't a weakness. It's the whole point.</div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy center" data-act="Act 3 · The board" data-dur="65" data-vo="As the dataset crosses production-pilot scale, PACCA convenes a board of credentialed clinicians to independently score its judgments — starting with pediatric cases. That board is forming now, through a charitable-foundation partnership.">
+    <div class="stack center" style="margin:auto">
+      <div class="eyebrow rise">Clinical Review Board · in formation</div>
+      <div class="d2 display rise">A panel of clinicians<br>to vouch for how it reasons.</div>
+      <div class="lede rise">Independently scoring the system's judgments — starting with the pediatric cases that matter most and are hardest to get right. Forming now, through a charitable-foundation partnership.</div>
+      <div class="eyebrow rise" style="color:var(--gold)">The bridge from prototype to a tool a clinician can stand behind</div>
+    </div>
+  </section>
+
+  <!-- ACT 4 — ops montage -->
+  <section class="scene scene--paper" data-act="Act 4 · Operations" data-dur="60" data-vo="Underneath, this is real engineering. Every prompt versioned. Operations measured. And every decision leaves an audit trail — built the way a regulated system has to be.">
+    <div class="app">
+      <div class="appbar"><span class="brand"><b>PACCA</b></span><span class="tag">Operations</span><span class="spacer"></span><span class="who mono">admin</span></div>
+      <div class="appbody">
+        <div class="montage">
+          <div class="mtile"><span class="mh">Prompt versions</span>
+            <div class="mline"><span>DecisionSupport</span><span class="mono">v2.6</span></div>
+            <div class="mline"><span>MedicalDirector</span><span class="mono">v2.2</span></div>
+            <div class="mline"><span>Change manifest</span><span class="mono">signed</span></div>
+          </div>
+          <div class="mtile"><span class="mh">Operations</span>
+            <div class="mline"><span>Median decision</span><span class="mono">24 s</span></div>
+            <div class="mline"><span>Escalation rate</span><span class="mono">tracked</span></div>
+            <div class="mline"><span>Test suite</span><span class="mono">590 pass</span></div>
+          </div>
+          <div class="mtile"><span class="mh">Audit trail</span>
+            <div class="mline"><span>Case A · approve</span><span class="mono">logged</span></div>
+            <div class="mline"><span>Case B · escalate</span><span class="mono">logged</span></div>
+            <div class="mline"><span>Correlation id</span><span class="mono">✓</span></div>
+          </div>
+        </div>
+        <p class="muted" style="font-size:.85rem;margin:1rem 0 0;text-align:center">Every prompt versioned · every decision on the record · HIPAA-conscious by construction</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACT 5 — close -->
+  <section class="scene scene--navy" data-act="Act 5 · Two threads" data-dur="18" data-vo="Two requests. The routine one cleared in seconds. The hard one — the child — went straight to a physician.">
+    <div class="split rise">
+      <div class="l"><span class="k kicker">Case A · routine</span><span class="big">Cleared in<br>23 seconds</span><span class="muted">Auto-approved · guideline-cited · auditable</span></div>
+      <div class="r"><span class="k kicker esc">Case B · the child</span><span class="big">Sent to a<br>physician</span><span class="muted">Escalated · reviewed · approved by a human</span></div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy center" data-act="Act 5 · Honesty" data-dur="15" data-vo="A word of honesty: PACCA today is a reference architecture, built and tested on synthetic data — not yet cleared for real patient information.">
+    <div class="stack center" style="margin:auto">
+      <div class="eyebrow rise">Where it stands, plainly</div>
+      <div class="d2 display rise">A reference architecture,<br>built on synthetic data.</div>
+      <div class="lede rise">Not yet cleared for real patient information — and the roadmap to get there is written down, not hand-waved.</div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy" data-act="Act 5 · The ask" data-dur="15" data-vo="For clinicians: your time back, without losing your judgment. For a foundation: the review board is forming now — and there's a seat at that table.">
+    <div class="stack" style="margin:auto;width:100%;align-items:center">
+      <div class="eyebrow rise">What it needs next is what this room can give</div>
+      <div class="ask rise">
+        <div><h5>For clinicians</h5><p>Your time back on the routine cases — without ever taking away your judgment on the hard ones.</p></div>
+        <div><h5>For the foundation</h5><p>A seat on the clinical review board — the clinicians who will vouch for how this reasons, starting with the children's cases.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene scene--navy center" data-act="Act 5 · Close" data-dur="22" data-vo="This was never about the software. It's about the one in three patients harmed by waiting. PACCA exists to shrink that number — carefully, with a human always in the loop.">
+    <div class="stack center" style="margin:auto">
+      <div class="statnum hot rise" style="font-size:clamp(3.5rem,12vw,8rem)">29% <span class="unit" style="color:var(--gold)">→ shrink it</span></div>
+      <div class="lede rise" style="max-width:40ch">This was never about the software. It's about the patients who are harmed by waiting.</div>
+      <div class="wordmark rise" style="font-size:clamp(2rem,5vw,3.4rem);margin-top:.6rem">PACCA<span class="dot">.</span></div>
+      <div class="eyebrow rise">Routine flies through &nbsp;·&nbsp; Hard cases get a human</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="cue" id="cue"><span class="lab">VO</span><span id="cueText">—</span><span class="dur" id="cueDur"></span></div>
+<div class="help">← → navigate · <b>Space</b> autoplay · <b>H</b> clean (recording) · <b>C</b> cue</div>
+
+<script>
+(function(){
+  var scenes=[].slice.call(document.querySelectorAll('.scene'));
+  var i=0, playing=false, timer=null;
+  var prog=document.getElementById('prog'), hudAct=document.getElementById('hudAct'),
+      hudIdx=document.getElementById('hudIdx'), cueText=document.getElementById('cueText'),
+      cueDur=document.getElementById('cueDur'), cue=document.getElementById('cue');
+  var pad=function(n){return (n<10?'0':'')+n;};
+  function show(n){
+    i=(n+scenes.length)%scenes.length;
+    scenes.forEach(function(s,k){s.classList.toggle('active',k===i);});
+    var s=scenes[i];
+    hudAct.textContent=s.dataset.act||'';
+    hudIdx.textContent=pad(i+1)+' / '+pad(scenes.length);
+    cueText.textContent=s.dataset.vo||'';
+    cueDur.textContent=(s.dataset.dur||'')+'s';
+    prog.style.width=((i+1)/scenes.length*100)+'%';
+    if(playing) queue();
+  }
+  function queue(){
+    clearTimeout(timer);
+    var dur=(parseFloat(scenes[i].dataset.dur)||6)*1000;
+    timer=setTimeout(function(){ if(i===scenes.length-1){stop();return;} show(i+1); },dur);
+  }
+  function play(){playing=true; queue();}
+  function stop(){playing=false; clearTimeout(timer);}
+  function toggle(){ playing?stop():play(); }
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'){stop();show(i+1);}
+    else if(e.key==='ArrowLeft'){stop();show(i-1);}
+    else if(e.key===' '){e.preventDefault();toggle();}
+    else if(e.key.toLowerCase()==='h'){document.body.classList.toggle('clean');}
+    else if(e.key.toLowerCase()==='c'){cue.style.display=(cue.style.display==='none'?'':'none');}
+  });
+  document.getElementById('stage').addEventListener('click',function(e){
+    var x=e.clientX-this.getBoundingClientRect().left;
+    stop(); show(x < this.clientWidth*0.3 ? i-1 : i+1);
+  });
+  show(0);
+})();
+</script>
