@@ -10,6 +10,8 @@
  * — theme.css owns it now.
  */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind v4: single import replaces the v3 @tailwind directives.
+   @config keeps the existing JS config (content globs, layout-only
+   scope) so scanning matches the pre-v4 behavior exactly. */
+@import "tailwindcss";
+@config "../tailwind.config.js";
