@@ -241,9 +241,11 @@ If the author is the SME (the maintainer who is themselves a clinician), they st
 
 In the absence of a credentialed SME for a specialty, the case lands with a `provisional` tag in `CASE_PROVENANCE.md` and is reviewed in the next clinical-review board sweep (per § 12).
 
-## 12. The clinical-review board gate (Phase 2 — post-100 cases, periodic)
+## 12. The clinical-review board gate (Phase 2 — two-stage: formation at 100, scored sweeps at 200)
 
-Once the dataset crosses 100 cases, a quarterly clinical-review board sweep is recommended:
+The Phase 2 board activates in two stages (see `PACCA_PRD_v2.5_Consolidated.md` § 16.7). **Formation** begins when the dataset crosses **100 cases**: recruit and charter the panel and agree the sampling protocol and κ target. **Operational scored sweeps** begin at **200 cases**. As of the 105-case state, the board is *in formation, not operational* — no scored sweep has run.
+
+Once scored sweeps begin, each quarterly clinical-review board sweep runs as:
 
 - A panel of 2–3 credentialed clinicians (covering the major specialties) scores a random 10% stratified sample.
 - Inter-rater agreement reported as Cohen's κ.

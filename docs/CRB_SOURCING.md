@@ -1,6 +1,6 @@
 # Clinical Review Board (CRB) — Sourcing Playbook
 
-> **Purpose.** Operational guide for sourcing the external Clinical Review Board specified in `CASE_AUTHORING_GUIDE.md` § 12 and `PACCA_PRD_v2.4_Consolidated.md` § 16.7. The CRB activates at the **200-case dataset milestone** — roughly week 6 of the 3-month push to 300 cases — and from that point forward provides quarterly inter-rater agreement (Cohen's κ) evidence that gates the SaMD-grade claim at 500.
+> **Purpose.** Operational guide for sourcing the external Clinical Review Board specified in `CASE_AUTHORING_GUIDE.md` § 12 and `PACCA_PRD_v2.5_Consolidated.md` § 16.7. The CRB has a **two-stage** activation: **formation** begins at the **100-case milestone** (crossed — 105 as-built; the board is currently being convened) and **operational scored sweeps** begin at the **200-case dataset milestone** — roughly week 6 of the 3-month push to 300 cases. From the 200-case operational stage forward the board provides quarterly inter-rater agreement (Cohen's κ) evidence that gates the SaMD-grade claim at 500.
 >
 > **Audience.** Project owner doing the recruiting. Companion to `REGULATORY_RFP.md` (consultant-sourcing) and `BAA_INVENTORY.md` (vendor tracker).
 >

@@ -1,9 +1,9 @@
 # Evaluation Coverage Matrix
 
-> **⚠️ Reconciliation note (2026-05-28).** The on-disk dataset is now **100 cases** (GC-001 through GC-100, across 17 case files — verified by `TestGoldenDatasetIntegrity`). The per-cell matrix below still reflects the **33-case state**; re-baselining the matrix to 100 (mapping GC-034→GC-100 into the dimension cells) is the immediate follow-up, tracked separately. Until then, trust the case files as the source of truth for *which* cases exist; trust this matrix only for the *shape* of the coverage methodology.
+> **⚠️ Reconciliation note (updated 2026-07-20).** The on-disk dataset is now **105 cases** (GC-001 through GC-105, across the `tests/clinical/*_cases.py` family files — verified by unique-ID count and `TestGoldenDatasetIntegrity`). The per-cell matrix below still reflects the **33-case state**; re-baselining the matrix to 105 (mapping GC-034→GC-105 into the dimension cells) is a tracked follow-up. Until then, trust the case files as the source of truth for *which* cases exist; trust this matrix only for the *shape* of the coverage methodology. PRD-level coverage claims at 105 are in [`PACCA_PRD_v2.5_Consolidated.md`](PACCA_PRD_v2.5_Consolidated.md) § 16.6.
 >
 > **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md) — this document grounds the coverage claims at the per-cell level.
-> **Status:** matrix at 33-case state; on-disk dataset at 100, re-baseline pending. Originally drafted at iter-6 open (8 expansion cases added per the iter-5 gap analysis); re-baseline when crossing 100 / 300 / 500.
+> **Status:** matrix at 33-case state; on-disk dataset at 105 (production-pilot milestone crossed); per-cell re-baseline pending. Originally drafted at iter-6 open (8 expansion cases added per the iter-5 gap analysis); re-baseline when crossing 300 / 500.
 
 ## How to read this document
 
