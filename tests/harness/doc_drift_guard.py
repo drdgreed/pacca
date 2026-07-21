@@ -172,7 +172,9 @@ def _iter_scanned_docs(
     return files
 
 
-def _dangling_in_line(line: str, md: Path, repo_root: Path, seen: set[str]) -> list[DanglingReference]:
+def _dangling_in_line(
+    line: str, md: Path, repo_root: Path, seen: set[str]
+) -> list[DanglingReference]:
     """Resolve the `src/….py` and `pacca.*` references on one (non-exempt) line."""
     out: list[DanglingReference] = []
     for path in _SRC_PATH_RE.findall(line):

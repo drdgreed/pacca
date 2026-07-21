@@ -14,6 +14,7 @@ planned "(roadmap)" paths, illustrative examples):
 If this test fails, a doc claims a code path that isn't there — fix the doc (or the
 path), or, if the reference is intentional, use one of the escape hatches above.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
