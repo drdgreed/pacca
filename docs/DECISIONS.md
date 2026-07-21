@@ -12,6 +12,7 @@
 
 ## Index
 
+- [iter-7 — Per-run IntentRecord (P-3 / T-16) (1 change)](#iter-7-intentrecord)
 - [iter-6 — Adult complexity pre-flight + first deny-class H2 entry + full structlog migration (4 changes)](#iter-6-adult-and-deny)
 - [iter-5 — Pediatric data + complexity-score model + third H2 entry + structlog cleanup (4 changes)](#iter-5-broad)
 - [iter-4 — Second H2 memory entry + decision_agent.py deletion (2 changes)](#iter-4-h2-second-entry)
@@ -22,6 +23,37 @@
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
 
 ---
+
+<a name="iter-7-intentrecord"></a>
+## iter-7 — Per-run IntentRecord (P-3 / T-16), 1 change
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-7` |
+| Date | 2026-07-21 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `audit_schema` (chg-7) |
+| Behavioral surface modified | NO — observability / audit only, no agent decision surface |
+| Changes | 1 |
+| Live clinical gate at iter-7 HEAD | **pending** (`make test-clinical`) — record-only audit change, no decision-path effect expected; deterministic suite 651 green |
+
+### chg-7 — Per-run IntentRecord as the first audit event
+
+| Field | Value |
+|---|---|
+| Type | `instrumentation` |
+| Constraint level | `audit_schema` |
+| Files | `src/pacca/models/intent.py`, `src/pacca/api/routes/authorizations.py`, `tests/unit/test_audit_trail.py` |
+| PHI impact | `indirect` (subject_ref = opaque patient_id into a log path) |
+| Audit relevant | yes |
+| Predicted fixes | — (observability, no fix) |
+| Risk cases | — (ordering regression guarded by the extended audit test) |
+| Verified live | **pending clinical gate** (`make test-clinical` at iter-7 HEAD) |
+
+Adds a typed `IntentRecord` (CausalGate's intent-contract pattern, scoped to PACCA) that the submission route appends as `action="intent.declared"` — the FIRST audit event of every run, before `authorization_submitted`. Record-only: it declares the run's `correlation_id` / `request_id` / `subject_ref` / `purpose` plus declared-constant `allowed_collections` / `allowed_actions` / `expected_effects` / `limits` into the existing `AuditLogModel.details` JSON, so no schema or migration change is needed. P-4 (minimum-necessary scope guard) and P-5 (evidence-grounding detector) will read and cite it.
+
+It lives in the **route**, not the orchestrator (a deviation from the plan's original framing): the route owns audit event #0 and holds the identifiers at pre-flight, and the acceptance criterion is that every trail *begins* with `intent.declared` — which the orchestrator, whose events all follow `authorization_submitted`, structurally cannot satisfy. `tests/unit/test_audit_trail.py` was extended (`intent.declared` is `[0]`, `authorization_submitted` is `[1]`) and a new invariant test added. Deterministic suite 651 passed; ruff + mypy clean.
 
 <a name="iter-6-adult-and-deny"></a>
 ## iter-6 — Adult complexity pre-flight + first deny-class H2 entry + full structlog migration (4 changes)

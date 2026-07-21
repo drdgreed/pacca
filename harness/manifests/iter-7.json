@@ -1,0 +1,41 @@
+{
+  "iteration": 7,
+  "iteration_tag": "harness-iter-7",
+  "iso_date": "2026-07-21",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-6",
+  "summary": "One change. chg-7: per-run IntentRecord (governance rollout P-3 / T-16). A typed, record-only intent contract emitted as the FIRST audit event (intent.declared) of every prior-auth run, so P-4 (scope guard) and P-5 (evidence-grounding detector) can read and cite it. Observability only -- no enforcement, no agent-decision surface touched.",
+  "changes": [
+    {
+      "id": "chg-7",
+      "type": "instrumentation",
+      "description": "Add IntentRecord (src/pacca/models/intent.py); emit it as action=intent.declared, the FIRST audit event of every run, from the submission route before authorization_submitted. Record-only: writes correlation_id, request_id, subject_ref(=patient_id), purpose, and declared-constant allowed_collections/actions/expected_effects/limits into the existing AuditLogModel.details JSON -- no migration. In the route (not orchestrator) since it owns event #0, so every trail begins with intent.declared.",
+      "files": [
+        "src/pacca/models/intent.py",
+        "src/pacca/api/routes/authorizations.py",
+        "tests/unit/test_audit_trail.py"
+      ],
+      "failure_pattern": "There is no first-class, typed record of what a run is permitted to touch or expected to do. P-4 (minimum-necessary scope guard) and P-5 (evidence-grounding detector) need a per-run intent to read, enforce against, and cite; without it intent is implicit -- scattered across request fields and orchestrator constants -- and unauditable at run start.",
+      "root_cause": "Intent was never modeled. The audit trail began with authorization_submitted (a receipt of what arrived), not a declaration of the run's scope and expected effect. CausalGate's typed intent contract supplies the pattern; PACCA needs the scope + expected-effects fields (the per-request purpose is fixed at prior-auth adjudication).",
+      "evidence": [
+        {
+          "source": "tests/unit/test_audit_trail.py",
+          "note": "New test_first_audit_record_is_intent_declared asserts every run begins with intent.declared and that details carry purpose / request_id / subject_ref / allowed_collections / allowed_actions, sharing the run correlation_id. Existing test_submission_audit_has_correct_action updated: intent.declared is event [0], authorization_submitted is [1]. 6/6 audit-trail tests pass; full deterministic suite 651 passed, 3 deselected; ruff + mypy clean."
+        },
+        {
+          "source": "src/pacca/models/intent.py",
+          "note": "IntentRecord Pydantic v2 model; allowed_* / expected_effects / limits declared as module-level constants (SSOT) since no runtime capability/RBAC source exists yet; for_prior_auth(correlation_id, request_id, subject_ref) factory keeps the route call-site thin."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "audit_schema",
+      "why_this_component": "The change's only surface is the audit trail's first event -- an observability / audit-schema concern, not an agent decision surface. No prompt, tool, escalation branch, or memory is touched, so it cannot alter a clinical outcome. The one risk (intent must precede state writes) is the pre-write-flush ordering invariant tests/unit/test_audit_trail.py already guards, here extended.",
+      "phi_impact": "indirect",
+      "audit_relevant": true,
+      "rollback_plan": "git revert the three commits. Removing intent.py + the route block + reverting the test restores authorization_submitted as event #0; no migration and no data change (the details JSON addition is purely additive)."
+    }
+  ],
+  "verdicts": []
+}
