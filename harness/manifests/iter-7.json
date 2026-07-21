@@ -37,5 +37,17 @@
       "rollback_plan": "git revert the three commits. Removing intent.py + the route block + reverting the test restores authorization_submitted as event #0; no migration and no data change (the details JSON addition is purely additive)."
     }
   ],
-  "verdicts": []
+  "verdicts": [
+    {
+      "change_id": "chg-7",
+      "previous_iteration_tag": "harness-iter-6",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "Record-only audit change; deterministic suite 652 passed, ruff/mypy/PHI-guard clean, manifest validates. Live clinical gate at iter-7 HEAD: golden-set accuracy threshold PASSED and zero-hallucination GC-018/019 PASSED -- the prior-auth adjudication path chg-7 touches is unaffected, as predicted (no agent decision surface changed). One unrelated clinical-suite failure, sme_authoring_smoke_test::test_sme_agent_smoke_round_trip, is PRE-EXISTING on origin/main: it hardcodes case_id 'GC-SMOKE', which the SME-authoring GC-NNN id validator (src/pacca/agents/sme_authoring/validators.py) rejects -- a subsystem chg-7 does not touch (diff = intent.py, authorizations.py, test_audit_trail.py, pyproject.toml, manifest, DECISIONS). Flagged for David separately; not a chg-7 regression."
+    }
+  ]
 }

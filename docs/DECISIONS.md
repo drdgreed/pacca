@@ -36,7 +36,7 @@
 | Constraint levels touched | `audit_schema` (chg-7) |
 | Behavioral surface modified | NO — observability / audit only, no agent decision surface |
 | Changes | 1 |
-| Live clinical gate at iter-7 HEAD | **pending** (`make test-clinical`) — record-only audit change, no decision-path effect expected; deterministic suite 651 green |
+| Live clinical gate at iter-7 HEAD | golden-set accuracy threshold **PASSED** + zero-hallucination GC-018/019 **PASSED** (record-only change; prior-auth path unaffected as predicted). One unrelated **pre-existing** failure — `sme_authoring_smoke_test::test_sme_agent_smoke_round_trip` (hardcoded `GC-SMOKE` id rejected by the SME-authoring validator; a subsystem chg-7 does not touch) — flagged separately |
 
 ### chg-7 — Per-run IntentRecord as the first audit event
 
@@ -49,7 +49,7 @@
 | Audit relevant | yes |
 | Predicted fixes | — (observability, no fix) |
 | Risk cases | — (ordering regression guarded by the extended audit test) |
-| Verified live | **pending clinical gate** (`make test-clinical` at iter-7 HEAD) |
+| Verified live | Clinical gate at iter-7 HEAD: golden-set accuracy **PASSED**, zero-hallucination GC-018/019 **PASSED** — prior-auth path unaffected, as predicted for a record-only change. (Unrelated pre-existing failure `sme_authoring_smoke_test::test_sme_agent_smoke_round_trip` — hardcoded `GC-SMOKE` id, SME-authoring subsystem untouched by chg-7.) |
 
 Adds a typed `IntentRecord` (CausalGate's intent-contract pattern, scoped to PACCA) that the submission route appends as `action="intent.declared"` — the FIRST audit event of every run, before `authorization_submitted`. Record-only: it declares the run's `correlation_id` / `request_id` / `subject_ref` / `purpose` plus declared-constant `allowed_collections` / `allowed_actions` / `expected_effects` / `limits` into the existing `AuditLogModel.details` JSON, so no schema or migration change is needed. P-4 (minimum-necessary scope guard) and P-5 (evidence-grounding detector) will read and cite it.
 
