@@ -2,6 +2,13 @@
 
 > **Audience:** engineers contributing to PACCA, reviewers auditing iteration discipline, and readers studying the codebase as a reference implementation of observability-driven agent harness engineering applied to a healthcare domain.
 
+> **Status (reconciled 2026-07-21): this document describes the _target_ harness
+> architecture.** Several component types and commands below are the intended design,
+> not the current build. As-built status and the authoritative limitations list live in
+> `CLAUDE.md` (§Limitations, §Target architecture). Items called out as **(roadmap)**
+> here are not yet implemented; do not assume a mount point, loader, or command exists
+> because it appears in a table below — check `CLAUDE.md` or the tree first.
+
 This document defines what the **harness** is in PACCA, the seven component types it contains, the file-level layout that makes each component independently editable, and the rules that govern how harness changes are proposed, recorded, and verified.
 
 The methodology is adapted from Lin et al., *Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses* (arXiv:2604.25850, April 2026). The paper's central engineering finding — that file-level component decoupling plus falsifiable change manifests turn agent iteration from prose tinkering into auditable engineering — applies with particular force in healthcare, where audit, dispute, and rollback are first-class operational requirements.
@@ -20,7 +27,15 @@ The base model (Claude Sonnet 4) is upgraded by Anthropic on Anthropic's schedul
 
 ## 2. The Seven Component Types
 
-PACCA's harness exposes seven orthogonal component types. Each is a separate file (or set of files) at a known mount point. Adding or modifying one component does not require editing any other.
+PACCA's harness is designed around seven orthogonal component types, each a separate
+file (or set of files) at a known mount point so that adding or modifying one component
+does not require editing any other.
+
+> **As built (roadmap gap):** only **system prompt** (2 of 5 agents) and **long-term
+> memory** (1 of 5 agents) exist on disk today. Tool descriptions (`*.tool.yaml`), tool
+> implementations, middleware, skills, and sub-agents — and the per-agent `agent.yaml`
+> loader — are **(roadmap)**. Agents are currently wired by direct Python import. The
+> table below is the target layout.
 
 | # | Component Type | PACCA Mount Point | Purpose |
 |---|---------------|--------------------|---------|
@@ -32,7 +47,11 @@ PACCA's harness exposes seven orthogonal component types. Each is a separate fil
 | 6 | Sub-agent | `src/pacca/agents/<agent>/sub_agents/<name>/agent.yaml` | Delegated specialized reasoning (e.g., Medical Director tier) |
 | 7 | Long-term memory | `src/pacca/agents/<agent>/long_term_memory.md` | Persistent, human-readable cross-session lessons |
 
-Each agent's wiring is declared in `src/pacca/agents/<agent>/agent.yaml`, which references the seven component types by file path. A change to any single component is a one-file diff with file-level rollback.
+**(roadmap)** In the target design each agent's wiring is declared in
+`src/pacca/agents/<agent>/agent.yaml`, which references the seven component types by file
+path, so a change to any single component is a one-file diff with file-level rollback. No
+`agent.yaml` loader exists yet; today the one-file-diff discipline is upheld by convention
+and review.
 
 ### 2.1 PACCA-Specific Harness Surfaces
 
@@ -41,7 +60,7 @@ Beyond the seven NexAU-style component types, PACCA's harness has four additiona
 | Surface | Location | Purpose |
 |---------|----------|---------|
 | Escalation branch | `src/pacca/agents/orchestrator.py` (class `Orchestrator`) | The 7-branch deterministic escalation tree (4 pre-flight, 3 post-agent) |
-| RAG collection | `src/pacca/rag/collections/{nccn_guidelines,case_precedents}/` | Dual-collection ChromaDB stores |
+| RAG collection | `src/pacca/rag/pipeline.py` (`GuidelineVectorStore`, single collection `clinical_guidelines`) | **(roadmap)** dual-collection (`nccn_guidelines` + `case_precedents`); the dual-collection code is not yet functional |
 | Prompt registry | `src/pacca/agents/prompts/templates.py` (PROMPT_REGISTRY) | Versioned prompt audit trail |
 | Audit schema | `src/pacca/db/models.py` (class `AuditLogModel`, table `audit_logs`) | HIPAA audit log structure |
 
@@ -113,7 +132,9 @@ The three rules above are made operational by three observability layers, each w
 
 *Goal:* every authorization request produces a structured trajectory that a reviewer can read in minutes, not hours.
 
-*PACCA implementation:* OpenTelemetry spans (one per agent call) flow to Langfuse, plus per-case analysis records stored alongside the request in PostgreSQL. The HIPAA audit log infrastructure required by 45 CFR 164.312(b) provides the primary persistence layer; the AHE-style trajectory extraction is built on top of it.
+*PACCA implementation:* OpenTelemetry spans (one per agent call) are emitted from
+`agents/base.py` + `config/tracing.py`; **(roadmap)** the Langfuse exporter target and
+per-case analysis records in PostgreSQL are intended but not yet verified end-to-end. The HIPAA audit log infrastructure required by 45 CFR 164.312(b) provides the primary persistence layer; the AHE-style trajectory extraction is built on top of it.
 
 ### 5.3 Decision Observability
 
@@ -147,8 +168,14 @@ The four-step pattern for adding a new component (whichever type) is:
 
 1. **Create the file.** Place at the correct mount point per §2.
 2. **Register in the agent's `agent.yaml`.** Without registration, the framework will not load the file.
-3. **Validate.** Run `python -m pacca.harness.validate src/pacca/agents/<agent>/agent.yaml` to confirm the YAML resolves and Python imports work.
-4. **Write the manifest entry.** Before merging, draft the entry in `harness/manifests/iter-N.json` per the schema. The PR template will block merge without a manifest entry on commits prefixed `chg-N:`.
+3. **Validate.** **(roadmap)** A validator (`python -m pacca.harness.validate …`) and the
+   `agent.yaml` loader it checks do not exist yet. A manifest validator
+   (`python -m pacca.harness.validate_manifest …`) lands as harness change P-2; until then,
+   validate manifests against `change_manifest.schema.json` by inspection.
+4. **Write the manifest entry.** Before merging, draft the entry in
+   `harness/manifests/iter-N.json` per the schema. The PR template *requires* the
+   Standard-vs-Behavioral choice and prompts for the manifest, but nothing **blocks**
+   merge today — CI enforcement (a `validate-manifests` job) is harness change P-6.
 
 ---
 

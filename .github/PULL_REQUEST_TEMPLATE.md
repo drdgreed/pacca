@@ -53,7 +53,12 @@ If this lands and something is wrong, what's the revert path? `git revert <sha>`
 Path to the manifest entry: `harness/manifests/iter-N.json`
 
 - **Iteration tag:** `harness-iter-N`
-- **Constraint level:** `<system_prompt | tool_description | tool_implementation | long_term_memory | middleware | orchestrator | eval_suite>`
+- **Constraint level:** `<system_prompt | long_term_memory | orchestrator | prompt_registry | audit_schema | eval_suite>`
+  <!-- These are the harness surfaces that actually exist today (see docs/HARNESS.md).
+       tool_description / tool_implementation / middleware / skill / sub_agent / rag_collection
+       are roadmap; a change that instantiates one of those component types for the first
+       time is itself notable — call it out explicitly here rather than picking a stand-in. -->
+
 - **Failure pattern targeted:** one sentence
 - **Predicted impact:** what should the next eval round show that the previous one did not?
 - **PHI impact:** `none | logged | persisted`
