@@ -158,7 +158,9 @@ def _module_resolves(dotted: str, repo_root: Path) -> bool:
     return (repo_root / rel.with_suffix(".py")).exists() or (repo_root / rel).is_dir()
 
 
-def _iter_scanned_docs(repo_root: Path, docs_dir: Path, root_docs, excluded) -> list[Path]:
+def _iter_scanned_docs(
+    repo_root: Path, docs_dir: Path, root_docs: tuple[str, ...], excluded: set[str]
+) -> list[Path]:
     files: list[Path] = []
     for md in sorted(docs_dir.rglob("*.md")):
         if md.name not in excluded:
@@ -170,6 +172,29 @@ def _iter_scanned_docs(repo_root: Path, docs_dir: Path, root_docs, excluded) -> 
     return files
 
 
+def _dangling_in_line(line: str, md: Path, repo_root: Path, seen: set[str]) -> list[DanglingReference]:
+    """Resolve the `src/….py` and `pacca.*` references on one (non-exempt) line."""
+    out: list[DanglingReference] = []
+    for path in _SRC_PATH_RE.findall(line):
+        key = f"src:{path}"
+        if key not in seen:
+            seen.add(key)
+            if not (repo_root / path).exists():
+                out.append(DanglingReference(str(md), path))
+    for dotted in _MODULE_RE.findall(line):
+        key = f"mod:{dotted}"
+        if key not in seen:
+            seen.add(key)
+            if not _module_resolves(dotted, repo_root):
+                out.append(DanglingReference(str(md), dotted))
+    return out
+
+
+def _line_is_exempt(line: str, prev: str) -> bool:
+    """Inline-marker escape hatch (this line or the one above)."""
+    return IGNORE_MARKER in line or IGNORE_MARKER in prev
+
+
 def scan_documentation(
     repo_root: str | Path,
     docs_dir: str | Path | None = None,
@@ -177,7 +202,7 @@ def scan_documentation(
     exclude_files: tuple[str, ...] | list[str] = DEFAULT_EXCLUDED_FILES,
 ) -> list[DanglingReference]:
     """v2 scan: `src/….py` and backticked `pacca.*` module refs across docs/** + root docs,
-    honoring the roadmap-section and inline-marker escape hatches.
+    honoring the fenced-code, roadmap-section, and inline-marker escape hatches.
     """
     repo_root = Path(repo_root)
     docs_dir = Path(docs_dir) if docs_dir is not None else repo_root / "docs"
@@ -190,34 +215,15 @@ def scan_documentation(
         in_code_fence = False
         seen: set[str] = set()
         for i, line in enumerate(lines):
-            # Fenced code blocks hold command/snippet examples (`git rm src/…`,
-            # `python -m …`), not claims that a path exists — skip them wholesale.
+            # Fenced code blocks hold command/snippet examples — skip them wholesale.
             if line.lstrip().startswith("```"):
                 in_code_fence = not in_code_fence
-                continue
-            if in_code_fence:
                 continue
             if _ANY_HEADING_RE.match(line):
                 exempt_section = bool(_EXEMPT_HEADING_RE.match(line))
                 continue
-            if exempt_section:
-                continue
             prev = lines[i - 1] if i > 0 else ""
-            if IGNORE_MARKER in line or IGNORE_MARKER in prev:
+            if in_code_fence or exempt_section or _line_is_exempt(line, prev):
                 continue
-            for path in _SRC_PATH_RE.findall(line):
-                # __pycache__ / compiled artifacts are never valid doc references.
-                key = f"src:{path}"
-                if key in seen:
-                    continue
-                seen.add(key)
-                if not (repo_root / path).exists():
-                    dangling.append(DanglingReference(str(md), path))
-            for dotted in _MODULE_RE.findall(line):
-                key = f"mod:{dotted}"
-                if key in seen:
-                    continue
-                seen.add(key)
-                if not _module_resolves(dotted, repo_root):
-                    dangling.append(DanglingReference(str(md), dotted))
+            dangling.extend(_dangling_in_line(line, md, repo_root, seen))
     return dangling
