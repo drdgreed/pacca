@@ -46,6 +46,9 @@ from ...integrations.vector_store import GuidelineRetriever
 # Our domain models (Pydantic schemas for request/response shapes)
 from ...models.authorization import AuthorizationDecision, AuthorizationRequest
 
+# The per-run intent contract (P-3 / chg-7): declared and audited at run start.
+from ...models.intent import IntentRecord
+
 router = APIRouter()
 
 # These are module-level singletons — created once when the server starts,
@@ -116,6 +119,27 @@ async def submit_authorization(
     # Record the wall-clock time so we can measure total processing time.
     # time.time() returns seconds as a float; multiplying by 1000 gives ms.
     start_time = time.time()
+
+    # ── AUDIT RECORD 0: Declare the run's intent (P-3 / chg-7) ───────────────
+    # A typed, record-only contract of what this run may touch and what effect it
+    # should have, appended as the FIRST audit event so every trail begins with
+    # `intent.declared`. P-4 (scope guard) and P-5 (evidence grounding) read it
+    # and cite it. Record-only — no enforcement here. It lives in the route, not
+    # the orchestrator, because the route owns event #0 and holds the
+    # correlation_id / request_id / patient_id at pre-flight.
+    intent = IntentRecord.for_prior_auth(
+        correlation_id=correlation_id,
+        request_id=request.request_id,
+        subject_ref=request.patient_id,
+    )
+    await audit.log(
+        action="intent.declared",
+        actor="orchestrator",
+        actor_type="system",
+        request_id=request.request_id,
+        correlation_id=correlation_id,
+        details=intent.model_dump(mode="json"),
+    )
 
     # ── AUDIT RECORD 1: Log the incoming submission ──────────────────────────
     # This creates a record BEFORE we do any AI processing, so if the system
