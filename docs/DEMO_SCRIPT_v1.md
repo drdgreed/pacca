@@ -124,7 +124,7 @@
 >
 > And PACCA is honest about what that evidence does and doesn't yet prove. It maintains an explicit ledger — what the system can defend today, and what it cannot claim until the dataset grows. That honesty isn't a weakness in the pitch. For a clinical tool, it's the whole point.
 >
-> This is also where a review board comes in. As the dataset crosses into production-pilot scale, PACCA convenes a panel of credentialed clinicians to independently score the system's judgments — starting with pediatric cases, the ones that matter most and are hardest to get right. That board is forming now, through a charitable-foundation partnership. It is the bridge between a promising prototype and a tool a clinician could one day stand behind.
+> This is also where a review board comes in. As the dataset crosses into production-pilot scale, PACCA convenes a panel of credentialed clinicians to independently score the system's judgments — starting with pediatric cases, the ones that matter most and are hardest to get right. That board is forming now, in partnership with a Chicago-based charitable foundation. It is the bridge between a promising prototype and a tool a clinician could one day stand behind.
 >
 > Every decision, meanwhile, is grounded in retrieved guideline text and checked against explicit safety rules — so the system reasons from sources, not from a hunch.
 
@@ -208,7 +208,7 @@
 | "105 … cases, authored and reviewed against real guidelines" | 105-case golden set (GC-001–105), SME-reviewed | verified current count |
 | "two gates … per-case tripwire … accuracy bar" | Dual evaluation gate: per-case regression (100% sensitivity) + aggregate ≥80% | |
 | "honest ledger … defend today vs. cannot claim" | Honest-claims matrix (PRD §16.9 / v2.5) | |
-| "review board … forming now … pediatric … charitable-foundation partnership" | Phase 2 CRB: **in formation** (100-case trigger crossed; operational scored sweeps at 200) | Say "forming," never "operational." Foundation is Chicago-based; name TBD |
+| "review board … forming now … pediatric … in partnership with a Chicago-based charitable foundation" | Phase 2 CRB: **in formation** (100-case trigger crossed; operational scored sweeps at 200) | Say "forming," never "operational." The partner is a Chicago-based charitable foundation — referred to in the PRD as **the Foundation Partner**; real name is **under NDA**, so do **not** name it on screen or in VO. Say "a Chicago-based charitable foundation." |
 | "reference architecture … synthetic data … not yet cleared for real patient information" | Repo portfolio disclaimer; not HIPAA-validated, no BAAs | Non-negotiable honesty line |
 
 **Do not** state SaMD clearance, HIPAA compliance, or that the review board is operational — none are true yet, and this audience is exactly who would (rightly) hold you to it.
