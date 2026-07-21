@@ -98,3 +98,126 @@ def format_report(dangling: list[DanglingReference]) -> str:
     for d in dangling:
         lines.append(f"    {d.doc_file} -> {d.referenced_path} (missing)")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# v2 — wider scope, more reference kinds, and escape hatches.
+#
+# The v1 scanner above catches `src/….py` references in docs/. v2 extends this:
+#   * scope:    docs/** PLUS repo-root CLAUDE.md / README.md / CONTRIBUTING.md
+#   * patterns: `src/….py` AND backticked dotted module paths like `pacca.rag.pipeline`
+#               (which must resolve to a module/package under src/) — this is the class
+#               that catches fictional commands such as `pacca.harness.validate_manifest`.
+#   * escape hatches (for legitimately-unresolvable references — historical incident
+#     notes, planned "(roadmap)" paths, illustrative examples):
+#       1. any line under a heading matching Roadmap | Target architecture | Limitations
+#          is exempt (gives the reconciled docs' roadmap sections a legal home);
+#       2. a line carrying the inline marker `<!-- drift-guard: ignore -->` (on the same
+#          line or the line immediately above) is exempt.
+#
+# v1 (find_dangling_references) is kept intact for tests/harness/test_iter2_hardening.py.
+# ---------------------------------------------------------------------------
+
+# Root-level docs to include beyond docs/. Kept explicit so the scanned surface is
+# obvious and grows via a reviewed edit.
+DEFAULT_ROOT_DOCS = ("CLAUDE.md", "README.md", "CONTRIBUTING.md")
+
+IGNORE_MARKER = "<!-- drift-guard: ignore -->"
+
+# Section headings whose bodies are exempt (aspirational / historical by construction).
+_EXEMPT_HEADING_RE = re.compile(
+    r"^#{1,6}\s+.*\b(roadmap|target architecture|limitations)\b", re.IGNORECASE
+)
+_ANY_HEADING_RE = re.compile(r"^#{1,6}\s+")
+
+# Backticked dotted module path, e.g. `pacca.rag.pipeline` or `pacca.harness.validate_manifest`.
+# Requires a leading `pacca` segment and at least one dot, inside backticks.
+_MODULE_RE = re.compile(r"`(pacca(?:\.[A-Za-z0-9_]+)+)`")
+
+# NOTE ON SCOPE: a broader "any backticked repo path (incl. directories) must exist"
+# pattern was evaluated and deliberately excluded. It produced ~27 hits dominated by
+# legitimate template placeholders (`harness/manifests/iter-N.json`, `iter-N` tags,
+# `…-YYYY-Q.md`), planned-doc cross-references, and intentional "this does NOT exist"
+# mentions in the reconciled docs — i.e. mostly false positives that would need
+# pervasive escape-hatch annotation across canonical docs. The two patterns kept here
+# (`src/….py` source files and backticked `pacca.*` modules) catch the high-value drift
+# class — a doc pointing at a specific source file or importable module that is not
+# there — with near-zero false positives. Broadening is a tracked follow-up if the
+# placeholder-noise problem is solved first.
+
+
+def _module_resolves(dotted: str, repo_root: Path) -> bool:
+    """A dotted `pacca.a.b` path resolves if src/pacca/a/b.py or src/pacca/a/b/ exists.
+
+    Trailing segments that are callables/attributes (e.g. `pacca.harness.validate_manifest`
+    where validate_manifest is a function) won't resolve as a file; we accept the ref only
+    if the FULL dotted path maps to a module file or package dir. That is deliberate — a
+    documented `python -m pacca.harness.validate_manifest` implies an importable module.
+    """
+    rel = Path("src") / Path(*dotted.split("."))
+    return (repo_root / rel.with_suffix(".py")).exists() or (repo_root / rel).is_dir()
+
+
+def _iter_scanned_docs(repo_root: Path, docs_dir: Path, root_docs, excluded) -> list[Path]:
+    files: list[Path] = []
+    for md in sorted(docs_dir.rglob("*.md")):
+        if md.name not in excluded:
+            files.append(md)
+    for name in root_docs:
+        p = repo_root / name
+        if p.exists() and p.name not in excluded:
+            files.append(p)
+    return files
+
+
+def scan_documentation(
+    repo_root: str | Path,
+    docs_dir: str | Path | None = None,
+    root_docs: tuple[str, ...] = DEFAULT_ROOT_DOCS,
+    exclude_files: tuple[str, ...] | list[str] = DEFAULT_EXCLUDED_FILES,
+) -> list[DanglingReference]:
+    """v2 scan: `src/….py` and backticked `pacca.*` module refs across docs/** + root docs,
+    honoring the roadmap-section and inline-marker escape hatches.
+    """
+    repo_root = Path(repo_root)
+    docs_dir = Path(docs_dir) if docs_dir is not None else repo_root / "docs"
+    excluded = set(exclude_files)
+    dangling: list[DanglingReference] = []
+
+    for md in _iter_scanned_docs(repo_root, docs_dir, root_docs, excluded):
+        lines = md.read_text(errors="ignore").splitlines()
+        exempt_section = False
+        in_code_fence = False
+        seen: set[str] = set()
+        for i, line in enumerate(lines):
+            # Fenced code blocks hold command/snippet examples (`git rm src/…`,
+            # `python -m …`), not claims that a path exists — skip them wholesale.
+            if line.lstrip().startswith("```"):
+                in_code_fence = not in_code_fence
+                continue
+            if in_code_fence:
+                continue
+            if _ANY_HEADING_RE.match(line):
+                exempt_section = bool(_EXEMPT_HEADING_RE.match(line))
+                continue
+            if exempt_section:
+                continue
+            prev = lines[i - 1] if i > 0 else ""
+            if IGNORE_MARKER in line or IGNORE_MARKER in prev:
+                continue
+            for path in _SRC_PATH_RE.findall(line):
+                # __pycache__ / compiled artifacts are never valid doc references.
+                key = f"src:{path}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                if not (repo_root / path).exists():
+                    dangling.append(DanglingReference(str(md), path))
+            for dotted in _MODULE_RE.findall(line):
+                key = f"mod:{dotted}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                if not _module_resolves(dotted, repo_root):
+                    dangling.append(DanglingReference(str(md), dotted))
+    return dangling

@@ -106,7 +106,7 @@ Run on a dev clone of production data first. Verify row counts match: `SELECT co
 
 ### Step 4 — Pgvector retriever implementation (~4 hours)
 
-`src/pacca/integrations/pg_vector_store.py`:
+`src/pacca/integrations/pg_vector_store.py`: <!-- drift-guard: ignore -->
 
 ```python
 class PgVectorRetriever:

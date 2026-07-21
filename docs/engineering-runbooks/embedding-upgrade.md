@@ -46,7 +46,7 @@ Path A (`text-embedding-3-large` via Azure) is the recommended default. If Azure
 
 ### Step 2 — Embedding function abstraction (~4 hours)
 
-In `src/pacca/integrations/embeddings.py` (new file), introduce an abstraction so the rest of the code doesn't depend on a specific provider:
+In `src/pacca/integrations/embeddings.py` (new file), introduce an abstraction so the rest of the code doesn't depend on a specific provider: <!-- drift-guard: ignore -->
 
 ```python
 class EmbeddingProvider(Protocol):
