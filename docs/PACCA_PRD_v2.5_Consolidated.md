@@ -300,7 +300,7 @@ The clinical-validation dataset and process are governed by:
 
 | Requirement | Policy | Document |
 |---|---|---|
-| Never log PHI | CLAUDE.md (project file) + structlog redaction in `src/pacca/instrumentation/tracing.py` | [`HIPAA_COMPLIANCE.md`](HIPAA_COMPLIANCE.md) |
+| Never log PHI | CLAUDE.md (project file) + structlog redaction in `src/pacca/config/tracing.py` | [`HIPAA_COMPLIANCE.md`](HIPAA_COMPLIANCE.md) |
 | Synthetic data only in fixtures | CLAUDE.md + CASE_AUTHORING_GUIDE.md § 4 | [`CASE_AUTHORING_GUIDE.md`](CASE_AUTHORING_GUIDE.md) |
 | Auth + input validation on every endpoint | CLAUDE.md | `HIPAA_COMPLIANCE.md` + `tests/test_api_security.py` |
 | Secrets in env only | CLAUDE.md | `HIPAA_COMPLIANCE.md` + `.env.example` pattern |

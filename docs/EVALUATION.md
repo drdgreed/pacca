@@ -10,7 +10,7 @@
 | **Integration suite** | [`tests/integration/`](../tests/integration) | Cross-component flows including the level-5 maturity flow (`tests/test_level5_flow.py`). |
 | **Clinical accuracy / LLM-as-judge** | [`tests/clinical/`](../tests/clinical) | 20-case clinical golden dataset scored 1–5 by Claude Haiku as judge. CI gate at ≥80% accuracy. Hallucinations score automatic 1 — no acceptable rate of inventing clinical data. |
 | **Hallucination zero-tolerance** | `GC-018`, `GC-019` in the unit suite | Sparse-notes traps that fail the build on any score-1 hallucination. |
-| **Schema validation** | Inline `jsonschema.validate(...)` against [`change_manifest.schema.json`](../harness/manifests/change_manifest.schema.json) | Every change manifest under `harness/manifests/` is validated before merge. A dedicated `pacca.harness.validate_manifest` CLI is a planned H5 deliverable; today the validation runs inline (see "Reproducing today's evaluation" below). |
+| **Schema validation** | Inline `jsonschema.validate(...)` against [`change_manifest.schema.json`](../harness/manifests/change_manifest.schema.json) | Every change manifest under `harness/manifests/` is validated before merge. A dedicated `pacca.harness.validate_manifest` CLI is a planned H5 deliverable; today the validation runs inline (see "Reproducing today's evaluation" below). | <!-- drift-guard: ignore -->
 
 ## What ships in Phase H5
 

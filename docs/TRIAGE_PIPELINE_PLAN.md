@@ -23,7 +23,7 @@
 | `src/pacca/agents/evidence_agent.py` | Rewrite `EvidenceAggregationAgent` | **Replace** |
 | `src/pacca/agents/classification_agent.py` | Rewrite `ClinicalClassificationAgent` | **Replace** |
 | `src/pacca/agents/orchestrator.py` | Instantiate + `_run_triage` + insertion | Modify |
-| `src/pacca/agents/types.py` | Delete if dead | **Delete** (verify) |
+| `src/pacca/agents/types.py` | Delete if dead | **Delete** (verify) | <!-- drift-guard: ignore -->
 | `tests/unit/test_triage_models.py` | Model tests | **Create** |
 | `tests/unit/test_evidence_agent.py` | Evidence agent tests | **Create** |
 | `tests/unit/test_classification_agent.py` | Classification agent tests | **Create** |
@@ -598,7 +598,7 @@ git commit -m "feat(orchestrator): run Evidence+Classification triage as advisor
 ### Task 5: `types.py` cleanup
 
 **Files:**
-- Delete (if dead): `src/pacca/agents/types.py`
+- Delete (if dead): `src/pacca/agents/types.py` <!-- drift-guard: ignore -->
 
 - [ ] **Step 1: Verify nothing imports it**
 
@@ -610,7 +610,7 @@ Expected: NO hits (after Tasks 2-3, the rewritten agents no longer import `Agent
 ```bash
 git rm src/pacca/agents/types.py
 ```
-Also delete its stale bytecode: `rm -f src/pacca/agents/__pycache__/types.cpython-311.pyc`.
+Also delete its stale bytecode: `rm -f src/pacca/agents/__pycache__/types.cpython-311.pyc`. <!-- drift-guard: ignore -->
 
 - [ ] **Step 3: Verify the suite still imports + passes**
 
@@ -622,7 +622,7 @@ Run: `python -m pytest tests/unit -q` → no new failures (nothing imported `typ
 git add -u src/pacca/agents/types.py
 git commit -m "chore(agents): delete dead types.py (PEP-695 syntax; unused after agent rewrites)"
 ```
-(If Step 1 found a live importer and you applied a `Generic[T]` fix instead, stage `src/pacca/agents/types.py` by explicit path and commit `fix(agents): make types.py import on Python 3.11 (Generic[T])`.)
+(If Step 1 found a live importer and you applied a `Generic[T]` fix instead, stage `src/pacca/agents/types.py` by explicit path and commit `fix(agents): make types.py import on Python 3.11 (Generic[T])`.) <!-- drift-guard: ignore -->
 
 ---
 

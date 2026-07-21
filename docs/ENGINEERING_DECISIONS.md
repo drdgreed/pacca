@@ -29,7 +29,7 @@ A few PACCA-specific terms used below, so this record stands on its own:
 ## Part I — ITER-6 asset shipping
 
 ### ADR-001 · Ship the iter-6 SVG assets via squash-merge; never `git add -A`
-**Context.** Four review-verified iter-6 SVGs sat on `docs/iter-6-assets` (PR #37). Three untracked files also sat in the tree (`docs/PRODUCTION_READINESS.md`, `docs/images/hero.png`, `src/pacca/_init_users.py`).
+**Context.** Four review-verified iter-6 SVGs sat on `docs/iter-6-assets` (PR #37). Three untracked files also sat in the tree (`docs/PRODUCTION_READINESS.md`, `docs/images/hero.png`, `src/pacca/_init_users.py`). <!-- drift-guard: ignore -->
 **Decision.** Squash-merge PR #37 to `main`; stage assets only; leave the three untracked files out.
 **Alternatives.** Merge commit (rejected — repo convention is single-commit squashes, e.g. `(#36)`); `git add -A` (rejected, see Why).
 **Why.** `RUNBOOK_iter6.md`'s "Untracked-file guard" marks all three as **NEVER commit**. `_init_users.py` is a self-described throwaday workaround carrying a dev DB credential (already public in `docker-compose.yml`, so not a new leak, but still a throwaway); `hero.png` is a placeholder (the real asset is a `dashboard-hero.png` screenshot per `docs/images/README.md`); `PRODUCTION_READINESS.md` is a draft. Squash matches the repo's PR-merge convention.
