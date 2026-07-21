@@ -178,10 +178,11 @@ class TestAuditTrailWiring:
         self, sample_request, mock_auto_approved_decision
     ):
         """
-        The first audit record must have action='authorization_submitted'.
-
-        This ensures we can query the audit log by action to find all
-        submissions, which is a common compliance reporting need.
+        The submission record (action='authorization_submitted') is logged
+        immediately after the run's intent (P-3 / chg-7 makes 'intent.declared'
+        event #0), i.e. it is the SECOND audit record, still BEFORE any AI
+        processing. This ensures we can query the audit log by action to find
+        all submissions, a common compliance reporting need.
         """
         audit_log_calls = []
 
@@ -211,12 +212,66 @@ class TestAuditTrailWiring:
             mock_session = AsyncMock()
             await submit_authorization(request=req, session=mock_session)
 
-        # The first call should always be the submission record
-        first_action = audit_log_calls[0]["action"]
-        assert first_action == "authorization_submitted", (
-            f"First audit record should be 'authorization_submitted', got '{first_action}'. "
+        # intent.declared is event #0; the submission record is #1 — both logged
+        # before any AI processing.
+        actions = [call["action"] for call in audit_log_calls]
+        assert actions[0] == "intent.declared", (
+            f"First audit record should be 'intent.declared', got '{actions[0]}'."
+        )
+        assert actions[1] == "authorization_submitted", (
+            f"Second audit record should be 'authorization_submitted', got '{actions[1]}'. "
             "Submission must be logged BEFORE processing in case of downstream failure."
         )
+
+    @pytest.mark.asyncio
+    async def test_first_audit_record_is_intent_declared(
+        self, sample_request, mock_auto_approved_decision
+    ):
+        """
+        Every run's audit trail BEGINS with action='intent.declared' (P-3 /
+        chg-7), and the record carries the run's declared scope — retrievable by
+        correlation_id — so P-4/P-5 can read and cite it. No PHI beyond the
+        opaque subject_ref (patient_id) enters the record.
+        """
+        audit_log_calls = []
+
+        async def capture_log(**kwargs):
+            audit_log_calls.append(kwargs)
+            return MagicMock()
+
+        with (
+            patch(
+                "pacca.api.routes.authorizations.orchestrator.process_decision",
+                new_callable=AsyncMock,
+                return_value=mock_auto_approved_decision,
+            ),
+            patch(
+                "pacca.api.routes.authorizations.rag_engine.query",
+                return_value="Mock guideline",
+            ),
+            patch(
+                "pacca.db.repository.AuditRepository.log",
+                side_effect=capture_log,
+            ),
+        ):
+            from pacca.api.routes.authorizations import submit_authorization
+            from pacca.models.authorization import AuthorizationRequest
+
+            req = AuthorizationRequest(**sample_request)
+            mock_session = AsyncMock()
+            await submit_authorization(request=req, session=mock_session)
+
+        first = audit_log_calls[0]
+        assert first["action"] == "intent.declared"
+        # Shares the run's correlation_id with every other record.
+        assert first["correlation_id"] == audit_log_calls[1]["correlation_id"]
+        # The declared intent is captured in details, retrievable/queryable.
+        details = first["details"]
+        assert details["purpose"] == "prior_auth_adjudication"
+        assert details["request_id"] == req.request_id
+        assert details["subject_ref"] == req.patient_id
+        assert "clinical_guidelines" in details["allowed_collections"]
+        assert "audit.append" in details["allowed_actions"]
 
     @pytest.mark.asyncio
     async def test_all_records_share_correlation_id(
