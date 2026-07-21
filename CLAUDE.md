@@ -67,6 +67,17 @@ every PR is one path or the other, never ambiguous.
 - `src/pacca/agents/orchestrator.py` (class `Orchestrator`) — the 7-branch escalation
   tree (4 pre-flight deterministic checks + 3 post-agent). This logic OVERRIDES model
   confidence. Treat it as a safety boundary, not a suggestion.
+- `src/pacca/models/intent.py` — the per-run **`IntentRecord`** (governance rollout P-3):
+  a typed, record-only contract (allowed collections/actions, opaque subject_ref,
+  expected effects) that the submit route emits as the FIRST audit event
+  (`intent.declared`). It is the SSOT for a run's declared scope; P-4/P-5 read it.
+- `src/pacca/agents/scope_guard.py` — the **minimum-necessary scope guard** (P-4):
+  `enforce_scope(intent, action, **call_args)`, a fail-closed call-site *wrapper*
+  (there is no middleware loader) that denies out-of-scope tool/DB/RAG calls against
+  the `IntentRecord` and raises `ScopeViolation` → `EscalationReason.SCOPE_VIOLATION`.
+  **As built:** the guard + deterministic probes exist, but it is **not yet wired into
+  the request path** — call-site enforcement is being promoted warn → enforce (chg-8 →
+  chg-9). Until wired, it changes no runtime behavior.
 - `src/pacca/rag/pipeline.py` — `GuidelineVectorStore`, a **single**-collection ChromaDB
   store (default `clinical_guidelines`). Dual-collection (`nccn_guidelines` +
   `case_precedents`) is roadmap. **Note:** `rag/pipeline.py` currently does not import
@@ -126,7 +137,10 @@ Use the Makefile targets (they encode the correct markers):
 ## Limitations (what the design intends but the code does not yet do)
 
 - **No middleware layer** and **no `agent.yaml` loader** — agents are wired by direct
-  Python import. The seven-component per-agent harness layout is roadmap.
+  Python import. The seven-component per-agent harness layout is roadmap. The P-4
+  scope guard (`agents/scope_guard.py`) is the first middleware-*pattern* component, but
+  it is a call-site wrapper, not a framework middleware, and is **not yet wired into the
+  request path** (guard core + probes only; warn→enforce call-site wiring is landing).
 - **Single RAG collection.** The dual-collection design (`nccn_guidelines` /
   `case_precedents`) is not built; the existing `rag/pipeline.py` does not import cleanly
   and is effectively dead code (stale `uuid7` / missing-enum references in
