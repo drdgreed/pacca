@@ -118,9 +118,10 @@ Use the Makefile targets (they encode the correct markers):
 > **Do not infer clinical accuracy from `make test`.** The deterministic suite deselects
 > the live LLM tests — they cover different things (see `docs/AGENT_LESSONS.md` P-008).
 >
-> A manifest-validation CLI (`python -m pacca.harness.validate_manifest …`) is referenced
-> by the harness workflow but **not yet implemented** — it lands as harness change P-2.
-> Until then there is no manifest-lint command; validate against the schema by inspection.
+> **Manifest validation:** `python -m pacca.harness.validate_manifest harness/manifests/iter-N.json`
+> (or `--all`) validates a change manifest against `change_manifest.schema.json` plus the
+> `GC-\d{3}` case-id convention; exit 0 = valid, 1 = errors (per-error report on stderr).
+> CI does not yet run it as a gate — that is harness change P-6.
 
 ## Limitations (what the design intends but the code does not yet do)
 
