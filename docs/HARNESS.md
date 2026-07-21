@@ -168,10 +168,10 @@ The four-step pattern for adding a new component (whichever type) is:
 
 1. **Create the file.** Place at the correct mount point per §2.
 2. **Register in the agent's `agent.yaml`.** Without registration, the framework will not load the file.
-3. **Validate.** **(roadmap)** A validator (`python -m pacca.harness.validate …`) and the
-   `agent.yaml` loader it checks do not exist yet. A manifest validator
-   (`python -m pacca.harness.validate_manifest …`) lands as harness change P-2; until then,
-   validate manifests against `change_manifest.schema.json` by inspection.
+3. **Validate the manifest.** `python -m pacca.harness.validate_manifest harness/manifests/iter-N.json`
+   (or `--all`) checks it against `change_manifest.schema.json` plus the `GC-\d{3}` case-id
+   convention (exit 0 = valid). **(roadmap)** The `agent.yaml` loader and its
+   `python -m pacca.harness.validate …` component checker do not exist yet.
 4. **Write the manifest entry.** Before merging, draft the entry in
    `harness/manifests/iter-N.json` per the schema. The PR template *requires* the
    Standard-vs-Behavioral choice and prompts for the manifest, but nothing **blocks**
