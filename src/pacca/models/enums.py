@@ -136,3 +136,13 @@ class EscalationReason(StrEnum):
     LLM-self-assessed complexity flag remains advisory; this pre-flight is
     authoritative and reproducible.
     """
+
+    SCOPE_VIOLATION = "scope_violation"
+    """
+    The minimum-necessary scope guard (P-4 / chg-8) denied a tool/DB/RAG call
+    whose target fell outside the run's declared IntentRecord scope — an action
+    not in `allowed_actions`, a case identifier that did not match the run's
+    intent (cross-case leak), or a RAG query against a collection the run was
+    not permitted to touch. Fail-closed: the run is routed to human review
+    rather than silently continuing.
+    """
