@@ -311,11 +311,25 @@ The v2.4 release commits PACCA to a six-phase cycle over 10–12 weeks. Each pha
 | **H0** | Baseline Crystallization | Instrumentation only | ✅ Delivered (iter-0) |
 | **H1** | Component Decoupling | system_prompt, tool_description, tool_implementation | ✅ Delivered (iter-1: prompt extraction to file-level mounts) |
 | **H2** | Institutional Memory Layer | long_term_memory | ✅ Delivered & compounding (four memory entries across iters 3–6, incl. the first deny-class entry) |
-| **H3** | Cross-Step Middleware Tier | middleware | ⏳ Not started |
+| **H3** | Cross-Step Middleware Tier | middleware | 🔄 Started — the P-4 minimum-necessary scope guard is the first middleware-pattern component (a call-site wrapper; core built, wiring landing). See [Governance rollout](#governance-rollout). |
 | **H4** | Change Manifest Discipline | Process layer | ✅ Active on every change since iter-1 |
 | **H5** | Evaluation Harness Expansion | Eval infrastructure | 🔄 In progress — dataset 20 → 105 cases, k=2 rollouts on the golden core; unified benchmark + load/adversarial testing pending |
 
 Full phase specifications, exit criteria, expected impact, and AHE paper citations are in **[the consolidated PRD §15](docs/PACCA_PRD_v2.4_Consolidated.md)**.
+
+### Governance rollout
+
+A focused sequence layering **runtime governance** onto the harness discipline. Each step is either a governed change (manifest + verdict) or a documentation-truth pass:
+
+| Step | What it adds | Status |
+|------|--------------|--------|
+| **P-0 / P-1 / P-2** | Doc-truth reconciliation of `CLAUDE.md` + `HARNESS.md`; a doc-drift guard wired into CI; a real `pacca.harness.validate_manifest` CLI | ✅ Merged |
+| **P-3 — IntentRecord** | Per-run typed intent contract, emitted as the **first** audit event (`intent.declared`); record-only, read by P-4/P-5 | ✅ In review (chg-7 / iter-7) |
+| **P-4 — Minimum-necessary scope guard** | Fail-closed `enforce_scope` against the `IntentRecord` (unknown action / cross-case identifier / non-allowed collection → human review), promoted **warn → enforce** | 🔄 In progress — guard core + deterministic probes built; call-site wiring + eval rounds landing (chg-8 → chg-9) |
+| **P-5 — Evidence-grounding detector** | Runtime check that a finding's rationale cites evidence IDs actually present in the submission; ungrounded citations route to human review | ⏳ Planned |
+| **P-6 — CI enforcement** | Makes manifest validation and the GC-018/019 clinical gate **build-blocking** (`validate-manifests` + `clinical-gate` jobs) | ⏳ Planned |
+
+Honest-architecture note: the scope guard is a call-site **wrapper**, not a framework middleware file — PACCA has no middleware loader yet (see [`CLAUDE.md`](CLAUDE.md) Limitations). It is the first concrete instance of the H3 middleware tier.
 
 ---
 
@@ -347,7 +361,8 @@ Full phase specifications, exit criteria, expected impact, and AHE paper citatio
 - **Hallucination zero-tolerance tests** (GC-018, GC-019) — sparse-notes traps that fail the build on any score-1 hallucination
 - **Tool-use API forced** for structured output — eliminates the most common agentic failure mode
 - **Pre-write audit trail** — correlation-ID-linked event pairs flushed before any state change
-- **JWT + bcrypt + fail-fast SECRET_KEY validation** — server refuses to start with weak or missing keys
+- **Per-run intent contract (`IntentRecord`)** — every prior-authorization run declares its scope (allowed collections + actions, opaque subject reference, expected effects) as the **first** audit event (`intent.declared`), so the whole trail begins with what the run was permitted to do
+- **Minimum-necessary scope guard** *(landing incrementally — see below)* — a fail-closed `enforce_scope` wrapper that expresses the HIPAA minimum-necessary standard in code: it denies any tool / DB / RAG call outside the run's `IntentRecord` scope (unknown action, cross-case identifier mismatch, non-allowed collection) and routes a violation to human review (`EscalationReason.SCOPE_VIOLATION`). **Status:** guard core + deterministic cross-case probes built; call-site enforcement is promoted **warn → enforce** across two governed changes (P-4). It is *not yet wired into the request path* — see [Governance rollout](#governance-rollout) below.
 - **Append-only PolicyChangeLogEntry** — immutable record of every guideline amendment, mapped to FDA SaMD Action Plan change-control requirements
 
 ### 🔧 Production-Ready Architecture
