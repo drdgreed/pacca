@@ -224,6 +224,44 @@ class TestAuditTrailWiring:
         )
 
     @pytest.mark.asyncio
+    async def test_rag_query_is_scope_guarded(
+        self, sample_request, mock_auto_approved_decision
+    ):
+        """The RAG query passes through the minimum-necessary scope guard (P-4 /
+        chg-8): a legitimate query against the allowed `clinical_guidelines`
+        collection logs a `scope.allow` audit event naming the guarded action."""
+        audit_log_calls = []
+
+        async def capture_log(**kwargs):
+            audit_log_calls.append(kwargs)
+            return MagicMock()
+
+        with (
+            patch(
+                "pacca.api.routes.authorizations.orchestrator.process_decision",
+                new_callable=AsyncMock,
+                return_value=mock_auto_approved_decision,
+            ),
+            patch(
+                "pacca.api.routes.authorizations.rag_engine.query",
+                return_value="Mock guideline",
+            ),
+            patch(
+                "pacca.db.repository.AuditRepository.log",
+                side_effect=capture_log,
+            ),
+        ):
+            from pacca.api.routes.authorizations import submit_authorization
+            from pacca.models.authorization import AuthorizationRequest
+
+            req = AuthorizationRequest(**sample_request)
+            await submit_authorization(request=req, session=AsyncMock())
+
+        scope_calls = [c for c in audit_log_calls if c["action"] == "scope.allow"]
+        assert scope_calls, "expected a scope.allow audit event for the guarded RAG query"
+        assert scope_calls[0]["details"]["guarded_action"] == "rag.query"
+
+    @pytest.mark.asyncio
     async def test_first_audit_record_is_intent_declared(
         self, sample_request, mock_auto_approved_decision
     ):
