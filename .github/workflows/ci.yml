@@ -10,6 +10,10 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  schedule:
+    # Nightly clinical-gate run for main (11:00 UTC). Other jobs are cheap.
+    - cron: "0 11 * * *"
+  workflow_dispatch:
 
 env:
   PYTHON_VERSION: "3.12"
@@ -145,3 +149,96 @@ jobs:
           pip install -e .
           safety check
         continue-on-error: true
+
+  # ---------------------------------------------------------------------------
+  # Manifest validation (P-6) — every behavioral change ships a valid manifest
+  # ---------------------------------------------------------------------------
+  validate-manifests:
+    name: Validate change manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Validate all manifests against the schema
+        run: python -m pacca.harness.validate_manifest --all
+
+  # ---------------------------------------------------------------------------
+  # Clinical gate (P-6) — GC-018/019 + golden-set accuracy. Real Anthropic
+  # calls, so it runs only when it matters: the nightly schedule, or a PR that
+  # touches agent/rag code or carries a chg- commit. Opt-in by secret (inert
+  # until ANTHROPIC_API_KEY is set), so it never blocks doc-only PRs.
+  # ---------------------------------------------------------------------------
+  clinical-gate:
+    name: Clinical gate (GC-018/019 + accuracy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to run
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          base="${BASE_SHA:-origin/main}"
+          # Commit subjects and file names are only piped to grep, never executed.
+          if git diff --name-only "$base"...HEAD | grep -qE '^src/pacca/(agents|rag)/'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::clinical-gate: PR touches agent/rag code"; exit 0
+          fi
+          if git log --format='%s' "$base"...HEAD | grep -qE '^chg-'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::clinical-gate: PR carries a chg- (behavioral) commit"; exit 0
+          fi
+          echo "run=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::clinical-gate skipped — no agent/rag change or chg- commit"
+
+      - name: Check for API key (opt-in by secret)
+        id: key
+        if: steps.gate.outputs.run == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ANTHROPIC_API_KEY not set — clinical-gate is inert until it is added"
+          fi
+
+      - name: Set up Python
+        if: steps.gate.outputs.run == 'true' && steps.key.outputs.present == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true' && steps.key.outputs.present == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run clinical gate (GC-018/019 + accuracy threshold)
+        if: steps.gate.outputs.run == 'true' && steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: make test-clinical
