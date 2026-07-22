@@ -12,6 +12,7 @@
 
 ## Index
 
+- [iter-8 — Minimum-necessary scope guard (P-4 / T-17), warn mode (1 change)](#iter-8-scope-guard)
 - [iter-7 — Per-run IntentRecord (P-3 / T-16) (1 change)](#iter-7-intentrecord)
 - [iter-6 — Adult complexity pre-flight + first deny-class H2 entry + full structlog migration (4 changes)](#iter-6-adult-and-deny)
 - [iter-5 — Pediatric data + complexity-score model + third H2 entry + structlog cleanup (4 changes)](#iter-5-broad)
@@ -23,6 +24,37 @@
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
 
 ---
+
+<a name="iter-8-scope-guard"></a>
+## iter-8 — Minimum-necessary scope guard (P-4 / T-17), warn mode, 1 change
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-8` |
+| Date | 2026-07-22 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `middleware` (chg-8) — PACCA's first middleware-tier component (H3), as a call-site wrapper |
+| Behavioral surface modified | YES (new guard + escalation path) — but see the no-op note below |
+| Changes | 1 |
+| Live clinical gate at iter-8 HEAD | **not run — not informative.** Warn mode never blocks, and the single-collection route always targets the one allowed collection, so the guard cannot alter any decision. Deterministic suite **664 passed**; the golden set is unchanged by construction |
+
+### chg-8 — Minimum-necessary scope guard wired at the RAG query (warn mode)
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `middleware` (first instance of the H3 tier; a wrapper, no middleware loader exists) |
+| Files | `agents/scope_guard.py`, `models/enums.py`, `models/intent.py`, `config/settings.py`, `api/routes/authorizations.py`, `tests/unit/test_scope_guard.py`, `tests/unit/test_audit_trail.py` |
+| PHI impact | `indirect` (scope checks read run identifiers) |
+| Audit relevant | yes |
+| Predicted fixes | — (observability + guard machinery; no golden case flips) |
+| Risk cases | — (warn mode: no run blocked) |
+| Verified live | Deterministic only: 664 passed, ruff + mypy + PHI-guard clean, manifest validates. Clinical gate deliberately not run (change cannot alter a decision — warn mode + always-allow). Verdict **keep** |
+
+`enforce_scope(intent, action, **call_args)` reads the P-3 `IntentRecord` and fail-closes on a disallowed action, a cross-case identifier mismatch, or a non-allowed/absent RAG collection, logging `scope.allow`/`scope.deny` (arg **names**, never values). It is wired at the one live call site — the RAG query — and a `ScopeViolation` routes to human review (`EscalationReason.SCOPE_VIOLATION`), never a silent continue or 500.
+
+**Honest scope (important).** In the current **single-collection** flow the route always targets the one allowed collection (`clinical_guidelines`), so the guard **cannot deny** even in enforce mode — its deny→human-review path is unreachable. The live effect today is `scope.allow` audit events plus a dormant enforcement path. Real enforcement value needs **deny-capable call sites** (cross-case identifiers on persisted request/decision writes), which in turn need the **broken `AuthorizationRepository.create` / `DecisionRepository.create`** methods repaired — they reference fields the current models don't have and are never called. That persistence repair is a **separate change** (deliberately not bundled into P-4). `chg-9` will flip `settings.scope_guard_mode` to `enforce` once such sites exist.
 
 <a name="iter-7-intentrecord"></a>
 ## iter-7 — Per-run IntentRecord (P-3 / T-16), 1 change
