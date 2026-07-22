@@ -175,6 +175,13 @@ These are the intended end-states, moved here so they are not mistaken for curre
 - **Dual-collection RAG:** separate `nccn_guidelines` (authoritative) and
   `case_precedents` (institutional memory) stores, kept apart for their different trust
   levels.
+- **RAG chunk-id grounding (P-5 follow-up):** thread stable chunk ids from
+  `retrieve_relevant_guidelines` through into the agent-visible context and expose the
+  retrieved-id set to the orchestrator, so the P-5 evidence-grounding detector
+  (`agents/evidence_grounding.py`) can also verify citations against *retrieved RAG
+  chunks*. Today the retriever hands the agent concatenated text with no ids, so P-5
+  grounds only against submission `EvidenceItem` ids. Pairs naturally with the
+  dual-collection RAG work above.
 - **CI enforcement (P-6):** `validate-manifests` + `clinical-gate` jobs that make the
   manifest and GC-018/019 gates build-blocking.
 
