@@ -93,6 +93,21 @@ The goal of the discipline is *attribution*: when a behavioral metric moves, the
 - Use a descriptive prefix: `feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`.
 - Example: `feat/streaming-decisions`, `fix/auth-token-expiry`.
 
+## Branch protection (required checks)
+
+CI (`.github/workflows/ci.yml`) runs the jobs below. **Enable branch protection on
+`main` to require them** — this is a GitHub repository setting an admin applies; CI
+cannot self-impose it. Until it is set, these checks run and report but a red check can
+still be merged past.
+
+- **`test`** — the deterministic unit suite.
+- **`validate-manifests`** — `pacca.harness.validate_manifest --all`; a malformed or
+  missing behavioral manifest fails here.
+- **`clinical-gate`** — GC-018/019 anti-hallucination + golden-set accuracy
+  (`make test-clinical`), on `chg-` / agent-rag PRs and on the nightly schedule.
+  **Requires the `ANTHROPIC_API_KEY` repository secret** — without it the job is inert
+  and never blocks. Add the secret before relying on this gate.
+
 ## Commits
 
 - Imperative mood, present tense: "Add streaming decision endpoint" not "Added".

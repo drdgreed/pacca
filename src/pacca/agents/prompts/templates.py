@@ -49,9 +49,13 @@ from typing import Any
 
 PROMPT_REGISTRY: dict[str, dict[str, str]] = {
     "DecisionSupportAgent": {
-        "version": "v2.6",
-        "description": "Frontline UM Nurse — guideline alignment + confidence scoring + institutional memory (H2, 4 entries)",
-        "changed_in": "v2.6 (iter-6 chg-4): H2 memory — FIRST deny-pattern entry "
+        "version": "v2.7",
+        "description": "Frontline UM Nurse — guideline alignment + confidence scoring + institutional memory (H2, 4 entries) + evidence-id citation",
+        "changed_in": "v2.7 (iter-10 chg-10): evidence grounding — the decision must "
+        "populate cited_evidence_ids with the submission evidence ids it relied on, "
+        "using only ids present in the case (never invented). The P-5 orchestrator "
+        "detector forces human review on any cited id that does not resolve. "
+        "v2.6 (iter-6 chg-4): H2 memory — FIRST deny-pattern entry "
         "(outpatient benefit-cap exhaustion without a documented exception; "
         "GC-035 anchor) with over-denial guards (any documented exception "
         "criterion / acute exacerbation / pending appeal / incomplete "

@@ -460,9 +460,10 @@ class TestBenefitCapDenyMemoryInjection:
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
         assert "Outpatient benefit-cap exhaustion without a documented exception" in rendered
 
-    def test_decision_support_prompt_version_bumped_to_v26(self) -> None:
+    def test_decision_support_prompt_version_bumped_to_v27(self) -> None:
+        # v2.7 (iter-10 chg-10): evidence-id citation added to the decision prompt.
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")
-        assert "Prompt version: v2.6" in rendered
+        assert "Prompt version: v2.7" in rendered
 
     def test_all_four_h2_entries_present(self) -> None:
         rendered = load_agent_prompt("decision_support", "DecisionSupportAgent")

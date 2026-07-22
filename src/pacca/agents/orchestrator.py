@@ -59,6 +59,7 @@ from .classification_agent import ClinicalClassificationAgent
 from .clinical_risk_detector import ClinicalRiskDetector, EscalationFlags
 from .decision import DecisionAgent, DecisionContext, MedicalDirectorAgent
 from .evidence_agent import EvidenceAggregationAgent
+from .evidence_grounding import unresolved_cited_evidence
 
 
 def select_confidence_branch(
@@ -207,6 +208,35 @@ class Orchestrator:
                     "review_tier": decision.review_tier_used.value,
                 },
             )
+
+        # ── P-5 evidence-grounding detector (chg-10) ───────────────────────────
+        # Deterministic safety short-circuit BEFORE confidence routing: if the
+        # decision cited an evidence id absent from the submission, it may rest on
+        # fabricated or misattributed evidence — force human review regardless of
+        # confidence. This is the production-path equivalent of the GC-018/019
+        # anti-hallucination eval gate. Grounds against submission evidence ids
+        # only (RAG chunks carry no agent-visible ids — see evidence_grounding.py).
+        unresolved = unresolved_cited_evidence(decision, context.case)
+        if unresolved:
+            decision.status = AuthorizationStatus.IN_REVIEW
+            decision.review_tier_used = ReviewTier.HUMAN
+            if audit:
+                await audit.log(
+                    action="finding.ungrounded_evidence",
+                    actor="orchestrator",
+                    actor_type="system",
+                    correlation_id=correlation_id,
+                    output_summary=(
+                        f"{len(unresolved)} cited evidence id(s) did not resolve to the "
+                        "submission — routed to human review"
+                    ),
+                    details={
+                        "escalation_reason": EscalationReason.UNGROUNDED_EVIDENCE.value,
+                        "unresolved_ids": unresolved,
+                        "branch": "evidence_grounding",
+                    },
+                )
+            return decision
 
         # ── Tier-1 confidence routing (PRD §5.4 Branches 1-3) ──────────────────
         s = effective_settings()

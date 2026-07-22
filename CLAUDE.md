@@ -42,12 +42,15 @@ Before a behavioral change:
    `audit_relevant` fields — they are required for healthcare governance.
 5. Record a verdict in `docs/DECISIONS.md` at the next evaluation round.
 
-> **Enforcement status (interim).** The manifest discipline is currently enforced by
-> **convention and review** (the PR template forces the Standard-vs-Behavioral choice),
-> validated **locally**. Automated CI enforcement — a `validate-manifests` job and a
-> `clinical-gate` job — is a planned change (harness change P-6), not yet wired. Until
-> then, "CI validates the manifest and runs the benchmark" is **not** true; do not rely
-> on CI to catch a missing manifest or a clinical regression.
+> **Enforcement status (P-6 landed).** CI now runs a **`validate-manifests`** job
+> (`python -m pacca.harness.validate_manifest --all`, every PR) and a **`clinical-gate`**
+> job (GC-018/019 + golden-set accuracy via `make test-clinical`, on `chg-`/agent-rag PRs
+> and nightly). The PR template still forces the Standard-vs-Behavioral choice. **Two
+> things remain David's manual steps (CI cannot self-impose them):** (1) add the
+> `ANTHROPIC_API_KEY` repo secret — the clinical-gate is inert until then; (2) enable
+> branch protection requiring `validate-manifests` + `test` + `clinical-gate`, which is
+> what makes these checks *blocking* rather than advisory. Until both are done, a missing
+> manifest fails its job but can still be merged past.
 
 Non-behavioral changes (refactors, docs, test additions that don't change behavior)
 follow the standard PR flow and skip the manifest. The PR template forces the choice —
@@ -100,9 +103,11 @@ every PR is one path or the other, never ambiguous.
 
 - **Anti-hallucination guards.** Agents may only reference clinical evidence explicitly
   present in the submission. Golden cases **GC-018** and **GC-019** (in
-  `tests/clinical/golden_cases.py`) assert zero score-1 hallucination. **Caveat:** the
-  clinical suite is not in CI yet (see Limitations), so today these fail a *local
-  clinical run* (`make test-clinical`), not the build. Making them build-blocking is P-6.
+  `tests/clinical/golden_cases.py`) assert zero score-1 hallucination. As of P-6 the
+  `clinical-gate` CI job runs these (on `chg-`/agent-rag PRs and nightly) — so they fail
+  the *job*; making a job failure *block merge* is David's branch-protection step. P-5
+  (chg-10) also promotes this guard to a **runtime** detector (`evidence_grounding.py`):
+  a decision citing an evidence id absent from the submission is forced to human review.
 - **Tool-use forced** for structured output. Don't switch an agent to free-text parsing.
 - **Pre-write audit trail.** Correlation-ID-linked event pairs (`AuditLogModel` carries
   `correlation_id`) are flushed BEFORE any state change; `tests/unit/test_audit_trail.py`
@@ -147,9 +152,11 @@ Use the Makefile targets (they encode the correct markers):
   `case_precedents`) is not built; the existing `rag/pipeline.py` does not import cleanly
   and is effectively dead code (stale `uuid7` / missing-enum references in
   `models/guidelines.py`). Reviving or removing it is a tracked follow-up.
-- **Clinical suite not in CI.** `ci.yml` runs ruff, mypy, `pytest tests/unit`, coverage,
-  Docker build, bandit/safety — **no** manifest validation, benchmark, or doc-drift step.
-  Those are harness change P-6.
+- **Clinical gate in CI, blocking pending David.** As of P-6 `ci.yml` adds
+  `validate-manifests` (every PR) and `clinical-gate` (GC-018/019 + accuracy, on
+  `chg-`/agent-rag PRs and nightly). They run and can fail, but *blocking merge* on them
+  requires David's branch-protection setting + the `ANTHROPIC_API_KEY` repo secret (the
+  clinical-gate is inert without it). Doc-drift already runs inside `tests/unit` (P-1).
 - **No SECRET_KEY fail-fast.** `config/settings.py` ships a weak default `secret_key`
   (and a placeholder `anthropic_api_key`) with **no** startup validator rejecting weak or
   missing values. The server will start with insecure defaults. Add a fail-fast validator

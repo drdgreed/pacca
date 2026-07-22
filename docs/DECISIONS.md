@@ -12,6 +12,7 @@
 
 ## Index
 
+- [iter-10 — Runtime evidence-grounding detector (P-5 / T-18) (1 change)](#iter-10-evidence-grounding)
 - [iter-9 — Scope guard warn→enforce + persistence-guarded DB writes (P-4 / T-17) (1 change)](#iter-9-enforce)
 - [iter-8 — Minimum-necessary scope guard (P-4 / T-17), warn mode (1 change)](#iter-8-scope-guard)
 - [iter-7 — Per-run IntentRecord (P-3 / T-16) (1 change)](#iter-7-intentrecord)
@@ -25,6 +26,37 @@
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
 
 ---
+
+<a name="iter-10-evidence-grounding"></a>
+## iter-10 — Runtime evidence-grounding detector (P-5 / T-18), 1 change
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-10` |
+| Date | 2026-07-22 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `escalation_branch` (chg-10) — a deterministic safety short-circuit; paired `system_prompt` v2.7 |
+| Behavioral surface modified | YES — new escalation path + DecisionAgent prompt |
+| Changes | 1 |
+| Live clinical gate at iter-10 HEAD | golden-set accuracy **PASSED** + zero-hallucination GC-018/019 **PASSED** (v2.7 citation prompt did not degrade quality). One unrelated **pre-existing** failure — `sme_authoring_smoke_test::test_sme_agent_smoke_round_trip` (`GC-SMOKE` id, a subsystem chg-10 does not touch), same as flagged at T-16 |
+
+### chg-10 — Evidence-grounding detector + evidence-id citation
+
+| Field | Value |
+|---|---|
+| Type | `new` |
+| Constraint level | `escalation_branch` (paired `system_prompt` v2.6→v2.7 per the AHE prompt-pairing rule) |
+| Files | `agents/evidence_grounding.py`, `agents/orchestrator.py`, `models/authorization.py`, `models/enums.py`, `agents/decision_support/system_prompt.md`, `agents/prompts/templates.py`, `tests/unit/test_evidence_grounding.py`, `tests/unit/test_h2_memory_criterion_preservation.py` |
+| PHI impact | `indirect` |
+| Audit relevant | yes |
+| Predicted fixes | — (runtime equivalents of the GC-018/019 hallucination scenarios) |
+| Risk cases | — (over-escalation from ID drift; declared bound ≤2pp) |
+| Verified live | accuracy + GC-018/019 **PASSED** with v2.7; deterministic detector tests green. Verdict **keep** |
+
+A deterministic post-agent check in the orchestrator (before confidence routing): every `cited_evidence_ids` entry must resolve to a submission `EvidenceItem`, else the run is forced to `IN_REVIEW` with a `finding.ungrounded_evidence` audit event and `EscalationReason.UNGROUNDED_EVIDENCE` — the production-path equivalent of the GC-018/019 anti-hallucination eval gate. The paired DecisionAgent prompt (v2.7) instructs the model to populate `cited_evidence_ids` using only ids present in the case.
+
+**Honest scope.** Grounding is against **submission evidence ids only** — RAG chunks carry no agent-visible ids (the retriever hands the agent concatenated text), so a citation cannot name a retrieved chunk; threading RAG chunk ids is a separate future change. The **≤2pp escalation-delta** bound was declared but not directly measured: the accuracy eval runs cases through `ClinicalRiskDetector` + `DecisionAgent` directly, not the orchestrator, so it does not exercise the detector's escalation path — that path is covered by the deterministic orchestrator tests and bounded by id-based (not text) matching. This completes P-5; the CI enforcement (P-6) ships alongside as a non-behavioral change.
 
 <a name="iter-9-enforce"></a>
 ## iter-9 — Scope guard warn→enforce + persistence-guarded DB writes (P-4 / T-17), 1 change

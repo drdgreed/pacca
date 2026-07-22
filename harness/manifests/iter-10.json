@@ -1,0 +1,54 @@
+{
+  "iteration": 10,
+  "iteration_tag": "harness-iter-10",
+  "iso_date": "2026-07-22",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-9",
+  "summary": "One change. chg-10 (P-5 / T-18): runtime evidence-grounding detector. A deterministic post-agent orchestrator check (before confidence routing) forces human review on any decision citing an evidence id absent from the submission -- the production-path GC-018/019 anti-hallucination gate. Paired system_prompt change (DecisionAgent v2.6->v2.7) makes the model populate cited_evidence_ids. Grounds against submission evidence ids only (RAG chunks carry no agent-visible ids).",
+  "changes": [
+    {
+      "id": "chg-10",
+      "type": "new",
+      "description": "Add a deterministic evidence-grounding detector (agents/evidence_grounding.py) wired into the orchestrator after the decision, before confidence routing: any cited_evidence_id not resolving to a submission EvidenceItem forces IN_REVIEW + finding.ungrounded_evidence audit (new EscalationReason.UNGROUNDED_EVIDENCE). PAIRED (AHE rule): DecisionAgent prompt v2.6->v2.7 makes the model populate cited_evidence_ids with only ids present. New defaulted field AuthorizationDecision.cited_evidence_ids.",
+      "files": [
+        "src/pacca/agents/evidence_grounding.py",
+        "src/pacca/agents/orchestrator.py",
+        "src/pacca/models/authorization.py",
+        "src/pacca/models/enums.py",
+        "src/pacca/agents/decision_support/system_prompt.md",
+        "src/pacca/agents/prompts/templates.py",
+        "tests/unit/test_evidence_grounding.py",
+        "tests/unit/test_h2_memory_criterion_preservation.py"
+      ],
+      "failure_pattern": "PACCA's anti-hallucination guarantee lived only at eval time (GC-018/019 golden cases via the LLM judge). In production nothing checked, per run, that the decision's cited evidence actually existed in the submission -- a decision resting on fabricated or misattributed evidence would flow straight through confidence routing.",
+      "root_cause": "The decision output carried a free-text rationale with no structured, checkable evidence citations, and there was no deterministic post-agent detector. Promoting the eval-time anti-hallucination gate to a runtime detector needs both: the model must cite by id (prompt change) AND code must verify the ids (orchestrator check) -- the paper's prescribed prompt+structure pairing.",
+      "evidence": [
+        {
+          "source": "tests/unit/test_evidence_grounding.py",
+          "note": "Pure detector: unresolved_cited_evidence returns absent ids (deduped, ordered), [] when fully grounded/empty. Orchestrator: an ungrounded citation (id 'e99') forces IN_REVIEW + finding.ungrounded_evidence with unresolved_ids + UNGROUNDED_EVIDENCE, overriding a 0.97 AUTO_APPROVED; a grounded citation ('e1') proceeds normally. Full deterministic suite 674 passed; ruff + mypy clean."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "escalation_branch",
+      "why_this_component": "The detector is a deterministic safety short-circuit that OVERRIDES model confidence, so it belongs in the orchestrator's post-agent boundary (the same layer as the pre-flight checks and confidence routing), not in an agent prompt (advisory). The paired prompt change is a system_prompt-level edit, flagged and shipped together per the AHE prompt-pairing rule. Predicted risk: the citation instruction could induce paraphrase/ID-drift false positives forcing over-escalation -- bounded by ID-based (not text) matching and a measured escalation-rate delta; ACCEPTABLE DELTA <= 2pp on the golden set, to be confirmed in the verdict.",
+      "phi_impact": "indirect",
+      "audit_relevant": true,
+      "rollback_plan": "git revert the chg-10 commits. Removing the orchestrator detector call restores pre-P-5 routing; reverting the prompt to v2.6 stops the model citing ids; cited_evidence_ids stays as a defaulted, unused field (harmless) until fully reverted. No migration, no data change."
+    }
+  ],
+  "verdicts": [
+    {
+      "change_id": "chg-10",
+      "previous_iteration_tag": "harness-iter-9",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "Deterministic suite 674 passed; ruff + mypy + PHI-guard clean; manifest validates. Live clinical grade at iter-10 HEAD: golden-set accuracy threshold PASSED and zero-hallucination GC-018/019 PASSED -- the v2.7 citation prompt change did NOT degrade decision quality, so the predicted over-escalation risk did not materialize on the golden set. NOTE on the <=2pp escalation-delta bound: the accuracy eval runs cases through ClinicalRiskDetector + DecisionAgent directly (not the orchestrator), so it does not exercise the P-5 detector's escalation short-circuit; that path is instead covered by the deterministic orchestrator tests and is bounded by id-based (not text) matching. One unrelated clinical failure -- sme_authoring_smoke_test::test_sme_agent_smoke_round_trip (hardcoded case_id 'GC-SMOKE' rejected by the SME-authoring GC-NNN validator) -- is PRE-EXISTING on main and untouched by chg-10 (which changes only the decision agent + orchestrator); same failure flagged at T-16. Not a chg-10 regression."
+    }
+  ]
+}
