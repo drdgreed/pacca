@@ -68,8 +68,10 @@ class EscalationReason(StrEnum):
         escalated due to experimental treatment this quarter?")
       - New reasons require a code change + review, not an accidental typo
 
-    PRD SS5.4 specifies these 7 triggers. Each enum member maps to one
-    branch of the escalation decision tree in orchestrator.py.
+    PRD SS5.4 specified the original 7 triggers; the set has since grown as
+    governance layers were added (e.g. ADULT_COMPLEX, and the P-4/P-5 safety
+    reasons SCOPE_VIOLATION and UNGROUNDED_EVIDENCE). Each member maps to a
+    branch or a deterministic safety short-circuit in orchestrator.py.
     """
 
     # ── Confidence-based escalation (original 3 branches) ────────────────────
@@ -145,4 +147,13 @@ class EscalationReason(StrEnum):
     intent (cross-case leak), or a RAG query against a collection the run was
     not permitted to touch. Fail-closed: the run is routed to human review
     rather than silently continuing.
+    """
+
+    UNGROUNDED_EVIDENCE = "ungrounded_evidence"
+    """
+    The evidence-grounding detector (P-5 / chg-10) found a decision that cited an
+    evidence id which did not resolve to an EvidenceItem present in the
+    submission. The decision may be relying on fabricated or misattributed
+    evidence, so it is routed to human review regardless of confidence — the
+    production-path equivalent of the GC-018/019 anti-hallucination gate.
     """
