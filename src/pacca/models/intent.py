@@ -28,10 +28,13 @@ from pydantic import BaseModel, Field
 # `clinical_guidelines` is the single ChromaDB collection PACCA queries today
 # (dual-collection RAG is roadmap — see CLAUDE.md Limitations).
 PRIOR_AUTH_ALLOWED_COLLECTIONS: list[str] = ["clinical_guidelines"]
-# Abstract capabilities a prior-auth run legitimately exercises.
+# Abstract capabilities a prior-auth run legitimately exercises. The submit flow
+# CREATES a request and persists its decision, so the DB actions are writes
+# (P-4 wires + guards these): db.write_request (persist the incoming request)
+# and db.write_decision (persist the adjudication outcome).
 PRIOR_AUTH_ALLOWED_ACTIONS: list[str] = [
     "rag.query",
-    "db.read_request",
+    "db.write_request",
     "db.write_decision",
     "audit.append",
 ]

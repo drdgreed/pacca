@@ -26,11 +26,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # The agents that do the clinical reasoning
 from ...agents.orchestrator import DecisionContext, Orchestrator
 
+# Minimum-necessary scope guard (P-4 / chg-8) + the fail-closed escalation path.
+from ...agents.scope_guard import ScopeViolation, enforce_scope
+from ...config.settings import get_settings
+
 # The repository that writes audit records.
 # A "repository" is a design pattern that wraps all database operations
 # for one type of data. AuditRepository handles everything related to
 # the audit_logs table. You call audit.log(...) and it handles the SQL.
-from ...db.repository import AuditRepository
+from ...db.repository import AuditRepository, AuthorizationRepository, DecisionRepository
 
 # The proper async database session — this replaces the sync api/database.py session.
 # Teaching note: get_session is a FastAPI "dependency". When you write
@@ -45,6 +49,7 @@ from ...integrations.vector_store import GuidelineRetriever
 
 # Our domain models (Pydantic schemas for request/response shapes)
 from ...models.authorization import AuthorizationDecision, AuthorizationRequest
+from ...models.enums import AuthorizationStatus, EscalationReason, ReviewTier
 
 # The per-run intent contract (P-3 / chg-7): declared and audited at run start.
 from ...models.intent import IntentRecord
@@ -164,6 +169,22 @@ async def submit_authorization(
     )
 
     try:
+        # ── PERSIST + SCOPE GUARD: write the incoming request (P-4 / chg-9) ────
+        # This is a db.write_request. Guard it against the run's declared intent
+        # first — the request_id / patient_ref MUST match the IntentRecord, so a
+        # cross-case leak fail-closes to human review — then persist. Now that the
+        # persistence layer is repaired, this is a REAL deny-capable call site
+        # (unlike the always-allow single-collection RAG guard below).
+        await enforce_scope(
+            intent,
+            "db.write_request",
+            audit=audit,
+            mode=get_settings().scope_guard_mode,
+            request_id=request.request_id,
+            patient_ref=request.patient_id,
+        )
+        await AuthorizationRepository(session).create(request)
+
         # ── RAG: Retrieve relevant guidelines from ChromaDB ───────────────────
         # Teaching note: RAG = Retrieval-Augmented Generation.
         # Instead of asking the LLM to rely on its training data for clinical
@@ -174,6 +195,21 @@ async def submit_authorization(
         # This grounds the AI's reasoning in real, up-to-date guidelines.
         case = request.clinical_case
         query = f"Guidelines for {case.primary_diagnosis_code} and {case.procedure_code}"
+
+        # ── SCOPE GUARD: RAG query (P-4 / chg-8) ─────────────────────────────
+        # Minimum-necessary check against the run's declared IntentRecord. In the
+        # current single-collection flow this always ALLOWS (the route targets the
+        # one allowed collection `clinical_guidelines`) — its enforcement value is
+        # defensive (it would fail-closed if a future change queried a non-allowed
+        # collection). The deny-capable sites are the identifier-checked DB writes
+        # above and below.
+        await enforce_scope(
+            intent,
+            "rag.query",
+            audit=audit,
+            mode=get_settings().scope_guard_mode,
+            collection_name="clinical_guidelines",
+        )
         context_text = rag_engine.query(query)
 
         # ── ORCHESTRATOR: Run the AI decision pipeline ────────────────────────
@@ -221,7 +257,55 @@ async def submit_authorization(
             },
         )
 
+        # ── PERSIST + SCOPE GUARD: write the decision (P-4 / chg-9) ────────────
+        # db.write_decision, guarded against the run's intent, then persisted.
+        await enforce_scope(
+            intent,
+            "db.write_decision",
+            audit=audit,
+            mode=get_settings().scope_guard_mode,
+            request_id=request.request_id,
+        )
+        await DecisionRepository(session).create(
+            decision, request_id=request.request_id, processing_time_ms=duration_ms
+        )
+
         return decision
+
+    except ScopeViolation as sv:
+        # ── FAIL-CLOSED: minimum-necessary scope violation → human review ─────
+        # An out-of-scope operation never continues silently and never 500s: it
+        # routes to human review (EscalationReason.SCOPE_VIOLATION). In warn mode
+        # enforce_scope does not raise; enforce mode (chg-9, now the default)
+        # activates this path. It becomes reachable via the identifier-checked DB
+        # writes above if a cross-case leak ever occurs (correct operation always
+        # passes the run's own identifiers, so it does not fire in normal flow).
+        duration_ms = int((time.time() - start_time) * 1000)
+        await audit.log(
+            action="escalation_human_review_required",
+            actor="scope_guard",
+            actor_type="system",
+            request_id=request.request_id,
+            correlation_id=correlation_id,
+            duration_ms=duration_ms,
+            success=False,
+            output_summary=f"Scope violation on '{sv.action}'; routed to human review",
+            details={
+                "escalation_reason": EscalationReason.SCOPE_VIOLATION.value,
+                "guarded_action": sv.action,
+                "violations": sv.violations,
+            },
+        )
+        return AuthorizationDecision(
+            decision_id=f"SCOPE-{request.request_id}-{int(time.time())}",
+            status=AuthorizationStatus.IN_REVIEW,
+            confidence_score=0.0,
+            rationale=(
+                "Minimum-necessary scope guard denied an out-of-scope operation; "
+                "case routed to human review without a completed AI decision."
+            ),
+            review_tier_used=ReviewTier.HUMAN,
+        )
 
     except Exception as e:
         # ── AUDIT RECORD 3: Log failures ─────────────────────────────────────

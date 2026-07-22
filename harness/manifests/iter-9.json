@@ -1,0 +1,49 @@
+{
+  "iteration": 9,
+  "iteration_tag": "harness-iter-9",
+  "iso_date": "2026-07-22",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-8",
+  "summary": "One change. chg-9 (P-4 / T-17): promote the scope guard warn->enforce and wire the repaired persistence. The submit route now writes the request (db.write_request) and decision (db.write_decision), each guarded against the run's IntentRecord -- the first identifier-checked, deny-capable sites. A cross-case leak fail-closes to human review (SCOPE_VIOLATION). Correct operation passes the run's own scope, so enforce does not fire in normal flow.",
+  "changes": [
+    {
+      "id": "chg-9",
+      "type": "improvement",
+      "description": "Wire AuthorizationRepository.create (db.write_request, before RAG) and DecisionRepository.create (db.write_decision, after the decision) into the submit route, each preceded by enforce_scope against the IntentRecord (identifiers must match). Flip settings.scope_guard_mode default warn->enforce. A ScopeViolation routes to IN_REVIEW (already handled). Depends on the persistence repair (create() methods fixed + columns nullable) landing first.",
+      "files": [
+        "src/pacca/api/routes/authorizations.py",
+        "src/pacca/config/settings.py",
+        "tests/unit/test_audit_trail.py"
+      ],
+      "failure_pattern": "chg-8 shipped the guard in WARN mode and, in the single-collection flow, had no deny-capable call site (the RAG collection is always the one allowed) -- minimum-necessary was audited but never enforceable. The two natural deny-capable sites (identifier-checked request/decision writes) did not exist because the persistence create() methods were broken dead code.",
+      "root_cause": "Enforcement needs real, identifier-checked call sites. Those are the DB writes, which required repairing AuthorizationRepository.create / DecisionRepository.create against the current models first (done as a separate prerequisite change). Only then can the guard both raise (enforce) and have something to raise on.",
+      "evidence": [
+        {
+          "source": "tests/unit/test_audit_trail.py",
+          "note": "test_run_sites_are_scope_guarded: all three sites (db.write_request, rag.query, db.write_decision) log scope.allow in order, no scope.deny. test_enforce_mode_denies_cross_case_leak_and_routes_to_review: a forced subject_ref mismatch is DENIED at the first DB write -> IN_REVIEW + scope.deny + escalation, orchestrator never runs. Full deterministic suite 668 passed."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "middleware",
+      "why_this_component": "Same middleware-tier component as chg-8 (the scope guard wrapper) -- chg-9 promotes it warn->enforce and gives it real deny-capable sites. The clinical golden set is UNAFFECTED by construction: the accuracy eval (tests/clinical/test_clinical_accuracy.py) runs cases through ClinicalRiskDetector + DecisionAgent directly and never calls the route, so route-level persistence + guard changes cannot alter a golden-case decision. Verification is therefore deterministic; a live clinical run is not informative for this change.",
+      "phi_impact": "indirect",
+      "audit_relevant": true,
+      "rollback_plan": "git revert the chg-9 commits. Removing the two DB-write guard/persist blocks restores the pre-persistence route; setting scope_guard_mode back to warn restores audit-only behavior. No migration or data change (the persistence repair is a separate, independently-revertable change)."
+    }
+  ],
+  "verdicts": [
+    {
+      "change_id": "chg-9",
+      "previous_iteration_tag": "harness-iter-8",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "Deterministic suite 668 passed; ruff + mypy + PHI-guard clean; manifest validates. Enforce mode proven end-to-end: a cross-case leak is denied at the first guarded DB write and routed to IN_REVIEW (orchestrator never runs). Clinical gate not run and not informative -- the accuracy eval never calls the route, so the golden set is unchanged by construction. Meaningful in-flow denials do not occur in correct operation (the run always passes its own scope); the guard's value is fail-closed defense against a future leak/bug, now active in enforce mode."
+    }
+  ]
+}

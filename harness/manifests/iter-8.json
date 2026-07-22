@@ -1,0 +1,57 @@
+{
+  "iteration": 8,
+  "iteration_tag": "harness-iter-8",
+  "iso_date": "2026-07-22",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-7",
+  "summary": "One change. chg-8: minimum-necessary scope guard (P-4 / T-17), warn mode. Fail-closed enforce_scope reads the P-3 IntentRecord, wired at the live RAG query; a ScopeViolation routes to human review (SCOPE_VIOLATION). In the current single-collection flow the guard always ALLOWS -- live effect is scope.allow audits + a dormant deny path; real enforcement awaits a separate persistence repair (broken create() methods).",
+  "changes": [
+    {
+      "id": "chg-8",
+      "type": "new",
+      "description": "Add src/pacca/agents/scope_guard.py: enforce_scope(intent, action, **call_args), fail-closed (disallowed action / cross-case identifier mismatch / non-allowed|absent RAG collection), scope.allow|deny audit (NAMES, no PHI), warn|enforce modes. Add EscalationReason.SCOPE_VIOLATION; correct allowed_actions to the create-flow writes; settings.scope_guard_mode. Wire the guard at the route RAG query + a ScopeViolation->IN_REVIEW handler.",
+      "files": [
+        "src/pacca/agents/scope_guard.py",
+        "src/pacca/models/enums.py",
+        "src/pacca/models/intent.py",
+        "src/pacca/config/settings.py",
+        "src/pacca/api/routes/authorizations.py",
+        "tests/unit/test_scope_guard.py",
+        "tests/unit/test_audit_trail.py"
+      ],
+      "failure_pattern": "No minimum-necessary enforcement existed: a run could touch any collection or action with nothing checking it against the run's declared intent. The P-3 IntentRecord was record-only -- it declared scope but nothing read it. HIPAA minimum-necessary was documented, not enforced.",
+      "root_cause": "There was no intent-based authorization layer (CausalGate's 'can this action, for this purpose, on this resource, in this run?'). PACCA has no middleware loader, so the enforcement point had to be a call-site wrapper, and there was no such wrapper.",
+      "evidence": [
+        {
+          "source": "tests/unit/test_scope_guard.py",
+          "note": "11 deterministic (LLM-free) cross-case probes: fail-closed denials (unknown action, cross-case request_id/patient_ref, disallowed/absent collection), in-scope passes, warn-mode-no-block, and scope.deny audits NAMES not values. In make test."
+        },
+        {
+          "source": "tests/unit/test_audit_trail.py",
+          "note": "test_rag_query_is_scope_guarded asserts the wired route logs scope.allow for the guarded rag.query. Full deterministic suite 664 passed, 3 deselected; ruff + mypy + PHI-guard clean."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "middleware",
+      "why_this_component": "This is PACCA's first instance of the H3 middleware tier (previously roadmap). Honest to the no-middleware-loader architecture, it is a call-site WRAPPER, not a framework middleware file -- the correct layer for a cross-cutting minimum-necessary check (not an agent prompt, which is advisory, nor the orchestrator's decision logic). LIMITATION: warn mode audits a would-be denial but never blocks; and in the current SINGLE-collection flow the route always targets the one allowed collection, so the guard cannot deny even in enforce mode -- its deny->human-review path is unreachable until deny-capable call sites (cross-case identifiers, persisted request/decision writes) land. Those need the broken AuthorizationRepository.create / DecisionRepository.create repaired first (a separate change, see DECISIONS iter-8). chg-9 flips scope_guard_mode to enforce once such sites exist.",
+      "phi_impact": "indirect",
+      "audit_relevant": true,
+      "rollback_plan": "git revert the chg-8 commits. Removing the route guard call + ScopeViolation handler + settings field restores the pre-guard route; scope_guard.py and the enum member become dead code (no caller), harmless. No migration, no data change."
+    }
+  ],
+  "verdicts": [
+    {
+      "change_id": "chg-8",
+      "previous_iteration_tag": "harness-iter-7",
+      "outcome": "keep",
+      "verified_fixes": [],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "Deterministic suite 664 passed, 3 deselected; ruff + mypy + PHI-guard clean; manifest validates. Live clinical gate NOT run and not informative for this change: in warn mode enforce_scope never blocks, and in the current single-collection flow the guard always ALLOWS (route targets the one allowed collection), so the change cannot alter any clinical decision -- it only adds scope.allow audit events and a dormant, unreachable deny->human-review path. The golden set is therefore unchanged by construction. Meaningful warn/enforce eval rounds (and the chg-9 enforce promotion) await the separate persistence repair that adds deny-capable call sites."
+    }
+  ]
+}

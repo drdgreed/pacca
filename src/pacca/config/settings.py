@@ -46,6 +46,17 @@ class Settings(BaseSettings):
         default="development", description="Environment"
     )
     debug: bool = Field(default=True, description="Debug mode")
+    scope_guard_mode: Literal["warn", "enforce"] = Field(
+        default="enforce",
+        description=(
+            "Minimum-necessary scope guard (P-4) mode. 'warn' audits a would-be "
+            "denial but lets the call proceed; 'enforce' raises ScopeViolation "
+            "(→ human review). Promoted warn→enforce at chg-9 once the repaired "
+            "persistence writes provided real, identifier-checked deny-capable "
+            "call sites. Correct operation always passes the run's own scope, so "
+            "enforce does not fire in normal flow; it fails-closed on a leak/bug."
+        ),
+    )
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO", description="Logging level"
     )
