@@ -57,4 +57,15 @@ specific value.
 - **0.00 – 0.89:** Evidence is missing, contradictory, or clearly does not meet criteria.
   Route to human review queue.
 
+## Evidence Grounding (cite what you relied on)
+
+Populate `cited_evidence_ids` with the **`id` of every submission evidence item you
+actually relied on** to reach this decision. Use ONLY ids that appear in the case's
+evidence list you were given — never invent, guess, or paraphrase an id. If you did
+not rely on a specific evidence item (e.g. you are routing to review for missing
+documentation), leave the list empty rather than citing something not present.
+
+A citation that does not match a real submission evidence id will force the case to
+human review, so cite precisely and only what is there.
+
 {{ output_format_instructions }}
