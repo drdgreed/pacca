@@ -34,6 +34,12 @@ class AuthorizationDecision(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
     # We add this field back since the AuditLogEntry exists now
     audit_trail: list[AuditLogEntry] = []
+    # Evidence-grounding (P-5 / chg-10): the ids of the submission EvidenceItems
+    # the decision relied on. The DecisionAgent populates it (prompt v2.7); the
+    # orchestrator's grounding detector requires each id to resolve to a
+    # submission EvidenceItem or forces human review. Defaulted (not required) so
+    # hand-constructed decisions (pre-flight escalations, tests) still validate.
+    cited_evidence_ids: list[str] = Field(default_factory=list)
 
 
 class AuthorizationRequest(BaseModel):
