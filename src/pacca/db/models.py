@@ -51,26 +51,30 @@ class AuthorizationRequestModel(Base):
 
     # Patient info (de-identified for storage)
     patient_id: Mapped[str] = mapped_column(String(50), index=True)
-    patient_age: Mapped[int] = mapped_column(Integer)
-    patient_gender: Mapped[str] = mapped_column(String(10))
+    # Nullable: the minimal submission API (AuthorizationRequest + ClinicalCase)
+    # does not collect gender, or descriptions/category/provider-name/payer fields.
+    # Honest NULL beats fabricated audit data — see the P-4 persistence repair /
+    # migration 002. Populate as upstream systems provide these fields.
+    patient_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    patient_gender: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     # Clinical info
     primary_diagnosis_code: Mapped[str] = mapped_column(String(20), index=True)
-    primary_diagnosis_description: Mapped[str] = mapped_column(Text)
+    primary_diagnosis_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     secondary_diagnoses: Mapped[dict[str, Any] | None] = mapped_column(_JSON_VARIANT, nullable=True)
 
     # Treatment info
     treatment_code: Mapped[str] = mapped_column(String(20), index=True)
-    treatment_description: Mapped[str] = mapped_column(Text)
-    treatment_category: Mapped[str] = mapped_column(String(30))
+    treatment_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    treatment_category: Mapped[str | None] = mapped_column(String(30), nullable=True)
     estimated_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Provider and payer
     provider_id: Mapped[str] = mapped_column(String(50))
-    provider_name: Mapped[str] = mapped_column(String(200))
-    payer_id: Mapped[str] = mapped_column(String(50), index=True)
-    payer_name: Mapped[str] = mapped_column(String(200))
-    member_id: Mapped[str] = mapped_column(String(50))
+    provider_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    payer_id: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
+    payer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    member_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Clinical context
     clinical_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
