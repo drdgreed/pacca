@@ -224,12 +224,11 @@ class TestAuditTrailWiring:
         )
 
     @pytest.mark.asyncio
-    async def test_rag_query_is_scope_guarded(
-        self, sample_request, mock_auto_approved_decision
-    ):
-        """The RAG query passes through the minimum-necessary scope guard (P-4 /
-        chg-8): a legitimate query against the allowed `clinical_guidelines`
-        collection logs a `scope.allow` audit event naming the guarded action."""
+    async def test_run_sites_are_scope_guarded(self, sample_request, mock_auto_approved_decision):
+        """Every guarded run site passes the minimum-necessary scope guard (P-4):
+        the two DB writes (db.write_request, db.write_decision) and the RAG query
+        each log a `scope.allow` for a legitimate in-scope call (enforce mode does
+        not fire, since the run passes its own identifiers + allowed collection)."""
         audit_log_calls = []
 
         async def capture_log(**kwargs):
@@ -257,9 +256,65 @@ class TestAuditTrailWiring:
             req = AuthorizationRequest(**sample_request)
             await submit_authorization(request=req, session=AsyncMock())
 
-        scope_calls = [c for c in audit_log_calls if c["action"] == "scope.allow"]
-        assert scope_calls, "expected a scope.allow audit event for the guarded RAG query"
-        assert scope_calls[0]["details"]["guarded_action"] == "rag.query"
+        guarded = [
+            c["details"]["guarded_action"] for c in audit_log_calls if c["action"] == "scope.allow"
+        ]
+        # All three guarded sites allowed (no scope.deny), in run order.
+        assert guarded == ["db.write_request", "rag.query", "db.write_decision"]
+        assert not [c for c in audit_log_calls if c["action"] == "scope.deny"]
+
+    @pytest.mark.asyncio
+    async def test_enforce_mode_denies_cross_case_leak_and_routes_to_review(
+        self, sample_request, mock_auto_approved_decision, monkeypatch
+    ):
+        """In enforce mode (chg-9 default), a scope violation on a guarded DB
+        write fail-closes to human review. Simulate a cross-case leak by forcing
+        the run's IntentRecord subject_ref to not match the request's patient_id,
+        so the db.write_request guard denies and raises ScopeViolation."""
+        from pacca.models.intent import IntentRecord
+
+        def _leaky(*, correlation_id, request_id, subject_ref):
+            # A bug/leak: the declared subject does not match the actual request.
+            return IntentRecord(
+                correlation_id=correlation_id, request_id=request_id, subject_ref="OTHER-PATIENT"
+            )
+
+        monkeypatch.setattr(IntentRecord, "for_prior_auth", staticmethod(_leaky))
+
+        audit_log_calls = []
+
+        async def capture_log(**kwargs):
+            audit_log_calls.append(kwargs)
+            return MagicMock()
+
+        with (
+            patch(
+                "pacca.api.routes.authorizations.orchestrator.process_decision",
+                new_callable=AsyncMock,
+                return_value=mock_auto_approved_decision,
+            ),
+            patch(
+                "pacca.api.routes.authorizations.rag_engine.query",
+                return_value="Mock guideline",
+            ),
+            patch(
+                "pacca.db.repository.AuditRepository.log",
+                side_effect=capture_log,
+            ),
+        ):
+            from pacca.api.routes.authorizations import submit_authorization
+            from pacca.models.authorization import AuthorizationRequest
+
+            req = AuthorizationRequest(**sample_request)
+            result = await submit_authorization(request=req, session=AsyncMock())
+
+        # Fail-closed: routed to human review, not a silent continue or 500.
+        assert result.status == AuthorizationStatus.IN_REVIEW
+        assert result.review_tier_used == ReviewTier.HUMAN
+        assert any(c["action"] == "scope.deny" for c in audit_log_calls)
+        assert any(c["action"] == "escalation_human_review_required" for c in audit_log_calls)
+        # The orchestrator never ran — denial happened at the first guarded write.
+        assert not any(c["action"] == "authorization_decision_made" for c in audit_log_calls)
 
     @pytest.mark.asyncio
     async def test_first_audit_record_is_intent_declared(
