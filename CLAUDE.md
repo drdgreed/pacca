@@ -75,9 +75,11 @@ every PR is one path or the other, never ambiguous.
   `enforce_scope(intent, action, **call_args)`, a fail-closed call-site *wrapper*
   (there is no middleware loader) that denies out-of-scope tool/DB/RAG calls against
   the `IntentRecord` and raises `ScopeViolation` → `EscalationReason.SCOPE_VIOLATION`.
-  **As built:** the guard + deterministic probes exist, but it is **not yet wired into
-  the request path** — call-site enforcement is being promoted warn → enforce (chg-8 →
-  chg-9). Until wired, it changes no runtime behavior.
+  **As built (chg-8 → chg-9):** wired into the submit route in **enforce** mode at three
+  sites — the two identifier-checked DB writes (`db.write_request`, `db.write_decision`)
+  and the RAG query. A cross-case leak fail-closes to human review. In correct operation
+  the run always passes its own scope, so it does not deny in normal flow — its value is
+  fail-closed defense against a leak/bug. Mode is `settings.scope_guard_mode`.
 - `src/pacca/rag/pipeline.py` — `GuidelineVectorStore`, a **single**-collection ChromaDB
   store (default `clinical_guidelines`). Dual-collection (`nccn_guidelines` +
   `case_precedents`) is roadmap. **Note:** `rag/pipeline.py` currently does not import
@@ -138,9 +140,9 @@ Use the Makefile targets (they encode the correct markers):
 
 - **No middleware layer** and **no `agent.yaml` loader** — agents are wired by direct
   Python import. The seven-component per-agent harness layout is roadmap. The P-4
-  scope guard (`agents/scope_guard.py`) is the first middleware-*pattern* component, but
-  it is a call-site wrapper, not a framework middleware, and is **not yet wired into the
-  request path** (guard core + probes only; warn→enforce call-site wiring is landing).
+  scope guard (`agents/scope_guard.py`) is the first middleware-*pattern* component — a
+  call-site wrapper, not a framework middleware — now wired into the submit route in
+  enforce mode (chg-9). A true middleware loader remains roadmap.
 - **Single RAG collection.** The dual-collection design (`nccn_guidelines` /
   `case_precedents`) is not built; the existing `rag/pipeline.py` does not import cleanly
   and is effectively dead code (stale `uuid7` / missing-enum references in

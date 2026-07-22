@@ -311,7 +311,7 @@ The v2.4 release commits PACCA to a six-phase cycle over 10–12 weeks. Each pha
 | **H0** | Baseline Crystallization | Instrumentation only | ✅ Delivered (iter-0) |
 | **H1** | Component Decoupling | system_prompt, tool_description, tool_implementation | ✅ Delivered (iter-1: prompt extraction to file-level mounts) |
 | **H2** | Institutional Memory Layer | long_term_memory | ✅ Delivered & compounding (four memory entries across iters 3–6, incl. the first deny-class entry) |
-| **H3** | Cross-Step Middleware Tier | middleware | 🔄 Started — the P-4 minimum-necessary scope guard is the first middleware-pattern component (a call-site wrapper; core built, wiring landing). See [Governance rollout](#governance-rollout). |
+| **H3** | Cross-Step Middleware Tier | middleware | 🔄 Started — the P-4 minimum-necessary scope guard (first middleware-pattern component, a call-site wrapper) is **wired into the submit route in enforce mode**. See [Governance rollout](#governance-rollout). |
 | **H4** | Change Manifest Discipline | Process layer | ✅ Active on every change since iter-1 |
 | **H5** | Evaluation Harness Expansion | Eval infrastructure | 🔄 In progress — dataset 20 → 105 cases, k=2 rollouts on the golden core; unified benchmark + load/adversarial testing pending |
 
@@ -325,7 +325,7 @@ A focused sequence layering **runtime governance** onto the harness discipline. 
 |------|--------------|--------|
 | **P-0 / P-1 / P-2** | Doc-truth reconciliation of `CLAUDE.md` + `HARNESS.md`; a doc-drift guard wired into CI; a real `pacca.harness.validate_manifest` CLI | ✅ Merged |
 | **P-3 — IntentRecord** | Per-run typed intent contract, emitted as the **first** audit event (`intent.declared`); record-only, read by P-4/P-5 | ✅ In review (chg-7 / iter-7) |
-| **P-4 — Minimum-necessary scope guard** | Fail-closed `enforce_scope` against the `IntentRecord` (unknown action / cross-case identifier / non-allowed collection → human review), promoted **warn → enforce** | 🔄 In progress — guard core + deterministic probes built; call-site wiring + eval rounds landing (chg-8 → chg-9) |
+| **P-4 — Minimum-necessary scope guard** | Fail-closed `enforce_scope` against the `IntentRecord` (unknown action / cross-case identifier / non-allowed collection → human review), promoted **warn → enforce** | ✅ chg-8 → chg-9 — wired into the submit route in **enforce** mode at the RAG + two identifier-checked DB-write sites; a cross-case leak fail-closes to human review |
 | **P-5 — Evidence-grounding detector** | Runtime check that a finding's rationale cites evidence IDs actually present in the submission; ungrounded citations route to human review | ⏳ Planned |
 | **P-6 — CI enforcement** | Makes manifest validation and the GC-018/019 clinical gate **build-blocking** (`validate-manifests` + `clinical-gate` jobs) | ⏳ Planned |
 
@@ -362,7 +362,7 @@ Honest-architecture note: the scope guard is a call-site **wrapper**, not a fram
 - **Tool-use API forced** for structured output — eliminates the most common agentic failure mode
 - **Pre-write audit trail** — correlation-ID-linked event pairs flushed before any state change
 - **Per-run intent contract (`IntentRecord`)** — every prior-authorization run declares its scope (allowed collections + actions, opaque subject reference, expected effects) as the **first** audit event (`intent.declared`), so the whole trail begins with what the run was permitted to do
-- **Minimum-necessary scope guard** *(landing incrementally — see below)* — a fail-closed `enforce_scope` wrapper that expresses the HIPAA minimum-necessary standard in code: it denies any tool / DB / RAG call outside the run's `IntentRecord` scope (unknown action, cross-case identifier mismatch, non-allowed collection) and routes a violation to human review (`EscalationReason.SCOPE_VIOLATION`). **Status:** guard core + deterministic cross-case probes built; call-site enforcement is promoted **warn → enforce** across two governed changes (P-4). It is *not yet wired into the request path* — see [Governance rollout](#governance-rollout) below.
+- **Minimum-necessary scope guard** *(landing incrementally — see below)* — a fail-closed `enforce_scope` wrapper that expresses the HIPAA minimum-necessary standard in code: it denies any tool / DB / RAG call outside the run's `IntentRecord` scope (unknown action, cross-case identifier mismatch, non-allowed collection) and routes a violation to human review (`EscalationReason.SCOPE_VIOLATION`). **Status:** wired into the submit route in **enforce** mode (chg-8 → chg-9) at three sites — the two identifier-checked DB writes (`db.write_request`, `db.write_decision`) and the RAG query. Correct operation always passes the run's own scope, so it does not deny in normal flow; its value is fail-closed defense against a leak/bug. See [Governance rollout](#governance-rollout).
 - **Append-only PolicyChangeLogEntry** — immutable record of every guideline amendment, mapped to FDA SaMD Action Plan change-control requirements
 
 ### 🔧 Production-Ready Architecture
