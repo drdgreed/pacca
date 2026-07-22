@@ -12,6 +12,7 @@
 
 ## Index
 
+- [iter-9 — Scope guard warn→enforce + persistence-guarded DB writes (P-4 / T-17) (1 change)](#iter-9-enforce)
 - [iter-8 — Minimum-necessary scope guard (P-4 / T-17), warn mode (1 change)](#iter-8-scope-guard)
 - [iter-7 — Per-run IntentRecord (P-3 / T-16) (1 change)](#iter-7-intentrecord)
 - [iter-6 — Adult complexity pre-flight + first deny-class H2 entry + full structlog migration (4 changes)](#iter-6-adult-and-deny)
@@ -24,6 +25,37 @@
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
 
 ---
+
+<a name="iter-9-enforce"></a>
+## iter-9 — Scope guard warn→enforce + persistence-guarded DB writes (P-4 / T-17), 1 change
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-9` |
+| Date | 2026-07-22 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `middleware` (chg-9) — promotes the chg-8 guard |
+| Behavioral surface modified | YES — route now persists request + decision, guard is fail-closed |
+| Changes | 1 |
+| Live clinical gate at iter-9 HEAD | **not run — not informative.** The accuracy eval runs cases through `ClinicalRiskDetector` + `DecisionAgent` directly and never calls the route, so route-level persistence + guard changes cannot alter a golden-case decision. Deterministic suite **668 passed** |
+
+### chg-9 — Enforce mode + guarded persistence writes
+
+| Field | Value |
+|---|---|
+| Type | `improvement` (promotes the chg-8 guard; adds deny-capable sites) |
+| Constraint level | `middleware` |
+| Files | `api/routes/authorizations.py`, `config/settings.py`, `tests/unit/test_audit_trail.py` |
+| PHI impact | `indirect` |
+| Audit relevant | yes |
+| Predicted fixes | — |
+| Risk cases | — (correct operation never denies; enforce is fail-closed defense) |
+| Verified live | Deterministic only: 668 passed, ruff + mypy + PHI-guard clean, manifest validates. Enforce proven end-to-end via a forced cross-case leak → IN_REVIEW. Verdict **keep** |
+
+The submit route now writes the request (`db.write_request`, before RAG) and the decision (`db.write_decision`, after adjudication), each guarded by `enforce_scope` against the run's `IntentRecord` (identifiers must match). `settings.scope_guard_mode` flips **warn → enforce**. These are the first **identifier-checked, deny-capable** call sites — a cross-case leak now fail-closes to human review instead of merely logging.
+
+**Depends on the persistence repair** (the `create()` methods were broken dead code; fixed + columns made nullable + migration 002, as a separate change) landing first. **Honest note:** correct operation always passes the run's own identifiers + the one allowed collection, so the guard **does not deny in normal flow** — its value is fail-closed defense against a future leak/bug, now active in enforce mode. This completes P-4.
 
 <a name="iter-8-scope-guard"></a>
 ## iter-8 — Minimum-necessary scope guard (P-4 / T-17), warn mode, 1 change
