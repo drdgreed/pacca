@@ -26,6 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # The agents that do the clinical reasoning
 from ...agents.orchestrator import DecisionContext, Orchestrator
 
+# Minimum-necessary scope guard (P-4 / chg-8) + the fail-closed escalation path.
+from ...agents.scope_guard import ScopeViolation, enforce_scope
+from ...config.settings import get_settings
+
 # The repository that writes audit records.
 # A "repository" is a design pattern that wraps all database operations
 # for one type of data. AuditRepository handles everything related to
@@ -45,6 +49,7 @@ from ...integrations.vector_store import GuidelineRetriever
 
 # Our domain models (Pydantic schemas for request/response shapes)
 from ...models.authorization import AuthorizationDecision, AuthorizationRequest
+from ...models.enums import AuthorizationStatus, EscalationReason, ReviewTier
 
 # The per-run intent contract (P-3 / chg-7): declared and audited at run start.
 from ...models.intent import IntentRecord
@@ -174,6 +179,22 @@ async def submit_authorization(
         # This grounds the AI's reasoning in real, up-to-date guidelines.
         case = request.clinical_case
         query = f"Guidelines for {case.primary_diagnosis_code} and {case.procedure_code}"
+
+        # ── SCOPE GUARD: RAG query (P-4 / chg-8) ─────────────────────────────
+        # Minimum-necessary check against the run's declared IntentRecord. In the
+        # current single-collection flow this always ALLOWS (the route targets the
+        # one allowed collection `clinical_guidelines`), so the live effect is a
+        # scope.allow audit event plus a dormant deny→human-review path. Real
+        # enforcement value arrives when the persistence / cross-case call sites
+        # land — that repair is a separate change (the DB create() methods are
+        # currently broken against the request/decision models).
+        await enforce_scope(
+            intent,
+            "rag.query",
+            audit=audit,
+            mode=get_settings().scope_guard_mode,
+            collection_name="clinical_guidelines",
+        )
         context_text = rag_engine.query(query)
 
         # ── ORCHESTRATOR: Run the AI decision pipeline ────────────────────────
@@ -222,6 +243,40 @@ async def submit_authorization(
         )
 
         return decision
+
+    except ScopeViolation as sv:
+        # ── FAIL-CLOSED: minimum-necessary scope violation → human review ─────
+        # An out-of-scope operation never continues silently and never 500s: it
+        # routes to human review (EscalationReason.SCOPE_VIOLATION). In warn mode
+        # enforce_scope does not raise, so this path is dormant; enforce mode
+        # (chg-9) activates it. (In the current single-collection flow it stays
+        # unreachable until cross-case call sites land — see the guard call above.)
+        duration_ms = int((time.time() - start_time) * 1000)
+        await audit.log(
+            action="escalation_human_review_required",
+            actor="scope_guard",
+            actor_type="system",
+            request_id=request.request_id,
+            correlation_id=correlation_id,
+            duration_ms=duration_ms,
+            success=False,
+            output_summary=f"Scope violation on '{sv.action}'; routed to human review",
+            details={
+                "escalation_reason": EscalationReason.SCOPE_VIOLATION.value,
+                "guarded_action": sv.action,
+                "violations": sv.violations,
+            },
+        )
+        return AuthorizationDecision(
+            decision_id=f"SCOPE-{request.request_id}-{int(time.time())}",
+            status=AuthorizationStatus.IN_REVIEW,
+            confidence_score=0.0,
+            rationale=(
+                "Minimum-necessary scope guard denied an out-of-scope operation; "
+                "case routed to human review without a completed AI decision."
+            ),
+            review_tier_used=ReviewTier.HUMAN,
+        )
 
     except Exception as e:
         # ── AUDIT RECORD 3: Log failures ─────────────────────────────────────
