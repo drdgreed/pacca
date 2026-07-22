@@ -42,7 +42,7 @@ from pacca.models.authorization import (
     AuthorizationDecision,
     AuthorizationRequest,
 )
-from pacca.models.enums import AuthorizationStatus
+from pacca.models.enums import AuthorizationStatus, ReviewTier
 
 logger = get_logger(__name__)
 
@@ -63,37 +63,27 @@ class AuthorizationRepository:
         Returns:
             The created database model
         """
+        # Map the minimal submission API (AuthorizationRequest + its ClinicalCase)
+        # onto the storage model. Fields the API does not collect (gender,
+        # descriptions, treatment category, provider name, payer/member) are stored
+        # as NULL, never fabricated — honest data for a healthcare audit store. The
+        # richer columns are populated when upstream systems provide them.
+        case = request.clinical_case
         db_request = AuthorizationRequestModel(
             request_id=request.request_id,
-            external_reference=request.external_reference,
-            status=request.status.value,
-            patient_id=request.patient.patient_id,
-            patient_age=request.patient.age,
-            patient_gender=request.patient.gender,
-            primary_diagnosis_code=request.primary_diagnosis.code,
-            primary_diagnosis_description=request.primary_diagnosis.description,
-            secondary_diagnoses=[d.model_dump() for d in request.secondary_diagnoses]
-            if request.secondary_diagnoses
+            patient_id=request.patient_id,
+            patient_age=case.patient_age,
+            primary_diagnosis_code=case.primary_diagnosis_code,
+            treatment_code=case.procedure_code,
+            estimated_cost=case.estimated_annual_cost,
+            provider_id=request.provider_npi,
+            complexity=case.complexity_score,
+            # Retain the submitted evidence as JSON for audit traceability.
+            evidence_data={"evidence": [e.model_dump(mode="json") for e in case.evidence]}
+            if case.evidence
             else None,
-            treatment_code=request.requested_treatment.code,
-            treatment_description=request.requested_treatment.description,
-            treatment_category=request.requested_treatment.category.value,
-            estimated_cost=request.requested_treatment.estimated_cost,
-            provider_id=request.requesting_provider.provider_id,
-            provider_name=request.requesting_provider.provider_name,
-            payer_id=request.payer.payer_id,
-            payer_name=request.payer.payer_name,
-            member_id=request.payer.member_id,
-            clinical_notes=request.clinical_notes,
-            urgency=request.urgency.value,
-            complexity=request.complexity.value if request.complexity else None,
-            assigned_specialty=request.assigned_specialty.value
-            if request.assigned_specialty
-            else None,
-            evidence_data=request.evidence.model_dump() if request.evidence else None,
-            narrative_data=request.narrative.model_dump() if request.narrative else None,
-            submitted_at=request.submitted_at,
-            updated_at=request.updated_at,
+            # status defaults to "submitted"; urgency defaults to "routine";
+            # submitted_at/updated_at default to now(). Everything else is NULL.
         )
 
         self.session.add(db_request)
@@ -229,14 +219,23 @@ class DecisionRepository:
     async def create(
         self,
         decision: AuthorizationDecision,
+        request_id: str,
         processing_time_ms: int | None = None,
         total_tokens: int | None = None,
     ) -> AuthorizationDecisionModel:
         """
-        Create a new authorization decision.
+        Persist an authorization decision.
+
+        The domain AuthorizationDecision carries no request_id, so the caller
+        passes the run's request_id. `outcome` stores the decision status;
+        `rationale` (free text) is wrapped into the rationale_data JSON column.
+        `is_autonomous` / `was_escalated` are derived from the review tier and
+        status. The other columns (conditions, dates, quantities) are not part of
+        the current decision model and stay NULL.
 
         Args:
-            decision: The domain model to persist
+            decision: The domain decision to persist
+            request_id: The run's request identifier (decision has none)
             processing_time_ms: Time taken to process
             total_tokens: Total LLM tokens used
 
@@ -245,23 +244,14 @@ class DecisionRepository:
         """
         db_decision = AuthorizationDecisionModel(
             decision_id=decision.decision_id,
-            request_id=decision.request_id,
-            outcome=decision.outcome.value,
+            request_id=request_id,
+            outcome=decision.status.value,
             confidence_score=decision.confidence_score,
-            rationale_data=decision.rationale.model_dump() if decision.rationale else None,
-            conditions=decision.conditions if decision.conditions else None,
-            required_actions=decision.required_actions if decision.required_actions else None,
-            effective_date=decision.effective_date,
-            expiration_date=decision.expiration_date,
-            authorized_quantity=decision.authorized_quantity,
-            authorized_duration_days=decision.authorized_duration_days,
-            decided_at=decision.decided_at,
-            decided_by=decision.decided_by,
-            is_autonomous=decision.is_autonomous,
-            was_escalated=decision.was_escalated,
-            escalation_reasons=[r.value for r in decision.escalation_reasons]
-            if decision.escalation_reasons
-            else None,
+            rationale_data={"text": decision.rationale} if decision.rationale else None,
+            decided_at=decision.timestamp,
+            decided_by=decision.review_tier_used.value,
+            is_autonomous=decision.review_tier_used == ReviewTier.AUTOMATED,
+            was_escalated=decision.status == AuthorizationStatus.IN_REVIEW,
             processing_time_ms=processing_time_ms,
             total_tokens_used=total_tokens,
         )
@@ -272,8 +262,8 @@ class DecisionRepository:
         logger.info(
             "authorization_decision_created",
             decision_id=decision.decision_id,
-            request_id=decision.request_id,
-            outcome=decision.outcome.value,
+            request_id=request_id,
+            outcome=decision.status.value,
         )
 
         return db_decision
