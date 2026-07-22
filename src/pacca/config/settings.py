@@ -46,6 +46,14 @@ class Settings(BaseSettings):
         default="development", description="Environment"
     )
     debug: bool = Field(default=True, description="Debug mode")
+    scope_guard_mode: Literal["warn", "enforce"] = Field(
+        default="warn",
+        description=(
+            "Minimum-necessary scope guard (P-4) mode. 'warn' audits a would-be "
+            "denial but lets the call proceed; 'enforce' raises ScopeViolation "
+            "(→ human review). Promoted warn→enforce across governed changes."
+        ),
+    )
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO", description="Logging level"
     )
