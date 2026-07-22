@@ -34,7 +34,7 @@ from ...config.settings import get_settings
 # A "repository" is a design pattern that wraps all database operations
 # for one type of data. AuditRepository handles everything related to
 # the audit_logs table. You call audit.log(...) and it handles the SQL.
-from ...db.repository import AuditRepository
+from ...db.repository import AuditRepository, AuthorizationRepository, DecisionRepository
 
 # The proper async database session — this replaces the sync api/database.py session.
 # Teaching note: get_session is a FastAPI "dependency". When you write
@@ -169,6 +169,22 @@ async def submit_authorization(
     )
 
     try:
+        # ── PERSIST + SCOPE GUARD: write the incoming request (P-4 / chg-9) ────
+        # This is a db.write_request. Guard it against the run's declared intent
+        # first — the request_id / patient_ref MUST match the IntentRecord, so a
+        # cross-case leak fail-closes to human review — then persist. Now that the
+        # persistence layer is repaired, this is a REAL deny-capable call site
+        # (unlike the always-allow single-collection RAG guard below).
+        await enforce_scope(
+            intent,
+            "db.write_request",
+            audit=audit,
+            mode=get_settings().scope_guard_mode,
+            request_id=request.request_id,
+            patient_ref=request.patient_id,
+        )
+        await AuthorizationRepository(session).create(request)
+
         # ── RAG: Retrieve relevant guidelines from ChromaDB ───────────────────
         # Teaching note: RAG = Retrieval-Augmented Generation.
         # Instead of asking the LLM to rely on its training data for clinical
@@ -183,11 +199,10 @@ async def submit_authorization(
         # ── SCOPE GUARD: RAG query (P-4 / chg-8) ─────────────────────────────
         # Minimum-necessary check against the run's declared IntentRecord. In the
         # current single-collection flow this always ALLOWS (the route targets the
-        # one allowed collection `clinical_guidelines`), so the live effect is a
-        # scope.allow audit event plus a dormant deny→human-review path. Real
-        # enforcement value arrives when the persistence / cross-case call sites
-        # land — that repair is a separate change (the DB create() methods are
-        # currently broken against the request/decision models).
+        # one allowed collection `clinical_guidelines`) — its enforcement value is
+        # defensive (it would fail-closed if a future change queried a non-allowed
+        # collection). The deny-capable sites are the identifier-checked DB writes
+        # above and below.
         await enforce_scope(
             intent,
             "rag.query",
@@ -242,15 +257,29 @@ async def submit_authorization(
             },
         )
 
+        # ── PERSIST + SCOPE GUARD: write the decision (P-4 / chg-9) ────────────
+        # db.write_decision, guarded against the run's intent, then persisted.
+        await enforce_scope(
+            intent,
+            "db.write_decision",
+            audit=audit,
+            mode=get_settings().scope_guard_mode,
+            request_id=request.request_id,
+        )
+        await DecisionRepository(session).create(
+            decision, request_id=request.request_id, processing_time_ms=duration_ms
+        )
+
         return decision
 
     except ScopeViolation as sv:
         # ── FAIL-CLOSED: minimum-necessary scope violation → human review ─────
         # An out-of-scope operation never continues silently and never 500s: it
         # routes to human review (EscalationReason.SCOPE_VIOLATION). In warn mode
-        # enforce_scope does not raise, so this path is dormant; enforce mode
-        # (chg-9) activates it. (In the current single-collection flow it stays
-        # unreachable until cross-case call sites land — see the guard call above.)
+        # enforce_scope does not raise; enforce mode (chg-9, now the default)
+        # activates this path. It becomes reachable via the identifier-checked DB
+        # writes above if a cross-case leak ever occurs (correct operation always
+        # passes the run's own identifiers, so it does not fire in normal flow).
         duration_ms = int((time.time() - start_time) * 1000)
         await audit.log(
             action="escalation_human_review_required",
