@@ -84,5 +84,37 @@
       "rollback_plan": "git revert the chg-12 commit. Removing the try/except restores the bare flush; behaviour returns to masking-on-failure. No migration, no data change."
     }
   ],
-  "verdicts": []
+  "verdicts": [
+    {
+      "change_id": "chg-11",
+      "previous_iteration_tag": "harness-iter-10",
+      "outcome": "keep",
+      "verified_fixes": [
+        "Identical clinical case submitted twice against the running app returned 200 both times with distinct server-minted ids (PA-6f8905bf9b8a4f18, PA-038e4eb1c2334b92), two rows persisted, zero 500s. Before the fix the second submission 500'd on a UNIQUE violation.",
+        "decision_id is absent from AuthorizationDecision's response schema path: the running app's OpenAPI shows DecisionDraft carries no decision_id and it is no longer in AuthorizationDecision.required.",
+        "A model emitting decision_id has it discarded (test_a_model_supplied_decision_id_is_ignored)."
+      ],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [
+        "GC-018/019 anti-hallucination gate PASSED at iter-11 HEAD; golden-set accuracy PASSED \u2014 the tool-schema change did not degrade clinical output (test_zero_hallucinations_on_sparse_cases, test_full_pipeline_meets_accuracy_threshold)."
+      ],
+      "unforeseen_regressions": [],
+      "notes": "Deterministic suite 684 passed, 3 deselected; ruff + mypy (pre-existing vector_store namespace note only) + PHI-guard clean. Live clinical gate: 5 passed in 473s incl. golden accuracy + GC-018/019. The sme_authoring smoke test, a pre-existing failure flagged at iter-10, passed here (fresh worktree)."
+    },
+    {
+      "change_id": "chg-12",
+      "previous_iteration_tag": "harness-iter-10",
+      "outcome": "keep",
+      "verified_fixes": [
+        "An IntegrityError on the decision write now propagates as IntegrityError, not PendingRollbackError (test_the_original_integrity_error_is_what_propagates).",
+        "The session is rolled back exactly once on failure and never on the success path (test_integrity_error_rolls_the_session_back, test_a_successful_write_does_not_roll_back)."
+      ],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [],
+      "unforeseen_regressions": [],
+      "notes": "Covered by 3 unit tests; no live-path change beyond error legibility."
+    }
+  ]
 }

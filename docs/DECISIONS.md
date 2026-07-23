@@ -40,7 +40,8 @@
 | Constraint levels touched | `tool_implementation` (chg-11, chg-12) — the agent output contract and the write path. No prompt change: no prompt references `decision_id`, so `PROMPT_REGISTRY` stays at v2.7 |
 | Behavioral surface modified | YES — the forced tool schema handed to both agent tiers changed shape |
 | Changes | 2 |
-| Live clinical gate at iter-11 HEAD | see verdict below |
+| Live clinical gate at iter-11 HEAD | golden-set accuracy **PASSED** + zero-hallucination GC-018/019 **PASSED** (5 clinical tests, 473s of real Claude calls) — the tool-schema change did not degrade clinical output |
+| Verdict | **KEEP** (both changes). Deterministic suite 684 passed. Live: the identical case submitted twice returned 200 twice with distinct ids (`PA-6f8905bf9b8a4f18`, `PA-038e4eb1c2334b92`), where the second submission previously 500'd |
 
 ### chg-11 — `decision_id` moves out of the model's hands
 
