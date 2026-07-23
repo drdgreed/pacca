@@ -184,6 +184,14 @@ These are the intended end-states, moved here so they are not mistaken for curre
   dual-collection RAG work above.
 - **CI enforcement (P-6):** `validate-manifests` + `clinical-gate` jobs that make the
   manifest and GC-018/019 gates build-blocking.
+- **Integration test tier:** `tests/integration/` exists but is **empty** (an
+  `__init__.py` and nothing else) — `pytest tests/integration` collects 0 items. The
+  intent is a tier that exercises the submit route end-to-end across real component
+  boundaries (API → orchestrator → scope guard → repository → audit log) against a
+  live test DB, rather than the unit tier's mocked seams. Until it holds tests, do
+  **not** list it as a test tier in user-facing docs — the README project-structure
+  tree drops it, and it comes back to the tree when it has coverage. Current real
+  tiers: `tests/unit` (652), `tests/clinical` (28), `tests/harness` (27).
 
 ## Canonical repo
 
