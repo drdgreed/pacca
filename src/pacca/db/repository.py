@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import and_, desc, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -257,7 +258,22 @@ class DecisionRepository:
         )
 
         self.session.add(db_decision)
-        await self.session.flush()
+        # chg-12 (B6): roll back before the exception leaves this method. Without
+        # it the session stays poisoned, and the caller's next statement — the
+        # audit write — raises PendingRollbackError, masking the real cause. This
+        # is not error recovery: the write failed and the error still propagates.
+        # It only ensures the failure is legible in the log.
+        try:
+            await self.session.flush()
+        except IntegrityError:
+            await self.session.rollback()
+            logger.error(
+                "authorization_decision_write_failed",
+                decision_id=decision.decision_id,
+                request_id=request_id,
+                reason="integrity_error",
+            )
+            raise
 
         logger.info(
             "authorization_decision_created",
