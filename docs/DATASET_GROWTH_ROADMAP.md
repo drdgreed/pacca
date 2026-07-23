@@ -1,6 +1,6 @@
 # Dataset Growth Roadmap — Building and Validating Toward 100, 300, and 500 Cases
 
-> **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md), [`EVALUATION_COVERAGE.md`](./EVALUATION_COVERAGE.md), [`STATISTICAL_POWER.md`](./STATISTICAL_POWER.md), [`CASE_PROVENANCE.md`](./CASE_PROVENANCE.md), [`CASE_AUTHORING_GUIDE.md`](./CASE_AUTHORING_GUIDE.md), [`PACCA_PRD_v2.4_Consolidated.md`](./PACCA_PRD_v2.4_Consolidated.md) §16.
+> **Companion to:** [`DATASET_SUFFICIENCY.md`](./DATASET_SUFFICIENCY.md), [`EVALUATION_COVERAGE.md`](./EVALUATION_COVERAGE.md), [`STATISTICAL_POWER.md`](./STATISTICAL_POWER.md), [`CASE_PROVENANCE.md`](./CASE_PROVENANCE.md), [`CASE_AUTHORING_GUIDE.md`](./CASE_AUTHORING_GUIDE.md), [`PACCA_PRD_v2.5_Consolidated.md`](./PACCA_PRD_v2.5_Consolidated.md) §16.
 > **Audience:** maintainer + future contributors + SaMD reviewers asking "show me your plan."
 > **Status:** v1.0, drafted 2026-05-25 at iter-6 mid (33-case state with 67 cases queued to reach 100).
 
@@ -503,4 +503,4 @@ The 100/300/500 milestones map to iter-6, iter-N (where N corresponds to the 300
 
 ---
 
-*This document is part of the PACCA v2.4+ harness-engineering cycle documentation set. Last updated: 2026-05-25 (iter-6 mid). Update sequence as batches land and milestones are hit.*
+*This document is part of the PACCA v2.5+ harness-engineering cycle documentation set. Last updated: 2026-05-25 (iter-6 mid). Update sequence as batches land and milestones are hit.*

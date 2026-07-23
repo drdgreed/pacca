@@ -1,6 +1,6 @@
 # Regulatory Consultant RFP — Selection Kit
 
-> **Purpose.** Operational guide for selecting an FDA SaMD (Software as a Medical Device) regulatory consultant. The consultant supports the 510(k) or De Novo submission required for SaMD-grade deployment per `PACCA_PRD_v2.4_Consolidated.md` § 16.
+> **Purpose.** Operational guide for selecting an FDA SaMD (Software as a Medical Device) regulatory consultant. The consultant supports the 510(k) or De Novo submission required for SaMD-grade deployment per `PACCA_PRD_v2.5_Consolidated.md` § 16.
 >
 > **When to engage.** **6 months before the 500-case dataset milestone.** At the 3-month-to-300-case pace, that puts consultant engagement at roughly month 9-12 of the push (after 300 is hit). Don't engage earlier — you don't yet have the clinical-validation evidence package the consultant needs to scope the work.
 >
@@ -23,7 +23,7 @@ You're ready when you have:
 
 - [ ] **Dataset at 300+ cases.** Pre-Sub meetings benefit from a concrete artifact, not a roadmap.
 - [ ] **CRB κ data from at least one quarter.** Per `CRB_SOURCING.md`, the κ evidence is the FDA's "how do you know your labels are right" answer.
-- [ ] **`docs/PACCA_PRD_v2.4_Consolidated.md` updated** to v2.5 or v2.6 reflecting the production state.
+- [ ] **`docs/PACCA_PRD_v2.5_Consolidated.md` updated** to v2.6+ reflecting the production state.
 - [ ] **A target deployment partner.** Even a non-binding LOI from a payer pilot dramatically helps FDA scope. The consultant will ask "who is the intended user?" — having a real answer matters.
 - [ ] **Budget approved** for at least the Pre-Sub phase ($30K-50K range).
 

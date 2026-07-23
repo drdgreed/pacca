@@ -2,7 +2,7 @@
 
 > **Audience:** the author + collaborators considering what to write next.
 > **Status:** v1.0, drafted 2026-05-25 at iter-6 open. A living idea-bank, not a commitment to write every entry.
-> **Companion documents:** [`HARNESS.md`](HARNESS.md), [`DATASET_SUFFICIENCY.md`](DATASET_SUFFICIENCY.md), [`findings/H2-memory-iteration-1.md`](findings/H2-memory-iteration-1.md), [`PACCA_PRD_v2.4_Consolidated.md`](PACCA_PRD_v2.4_Consolidated.md).
+> **Companion documents:** [`HARNESS.md`](HARNESS.md), [`DATASET_SUFFICIENCY.md`](DATASET_SUFFICIENCY.md), [`findings/H2-memory-iteration-1.md`](findings/H2-memory-iteration-1.md), [`PACCA_PRD_v2.5_Consolidated.md`](PACCA_PRD_v2.5_Consolidated.md).
 
 ## Why this document exists
 
@@ -90,7 +90,7 @@ These are shorter (3–6 pages), customer-facing, and lower-bar than peer-review
 - **Venue:** Project blog / customer-facing PDF.
 - **Length:** 1,500–2,500 words.
 - **Thesis:** Most healthcare-AI vendors at portfolio stage either claim SaMD-grade validation without the evidence (intellectually dishonest) or refuse to talk about clinical validation at all (dodging the question). PACCA's middle path: state clearly what the 33-case dataset can defend, state clearly what it can't, publish the roadmap to SaMD-grade with effort estimates. The post argues that this honesty is a competitive advantage when customers do due diligence.
-- **Evidence in repo:** `docs/PACCA_PRD_v2.4_Consolidated.md` § 16.9 (honest claims matrix), `docs/DATASET_SUFFICIENCY.md`.
+- **Evidence in repo:** `docs/PACCA_PRD_v2.5_Consolidated.md` § 16.9 (honest claims matrix), `docs/DATASET_SUFFICIENCY.md`.
 - **Why it matters:** SaMD literacy is rising; customers are starting to ask the right questions. Vendors who answered honestly first will win the comparison.
 
 ### 2.3 — "Branch-and-PR discipline for AI feature work: lessons from PACCA's harness cycle"
@@ -133,7 +133,7 @@ The author has been publishing per-iteration LinkedIn posts (iter-1 through iter
 
 ### 3.3 — Honest claims matrix post
 
-- **Topic:** the v2.4 PRD § 16.9 "honest claims" table. Frame as "here's what we can defend, here's what we can't, here's our roadmap."
+- **Topic:** the v2.5 PRD § 16.9 "honest claims" table. Frame as "here's what we can defend, here's what we can't, here's our roadmap."
 - **Graphic:** the table itself, with green ✓ / red ✗ formatting.
 
 ### 3.4 — Cycle-retrospective post
@@ -203,7 +203,7 @@ These would expand the addressable audience for the writing in §§ 1–4 by giv
 
 If the author has limited writing bandwidth, the recommended order is:
 
-1. **Post 2.2 — "Why we don't claim SaMD-grade validation (yet)"** — highest immediate-value differentiation against competitors; sized as a long blog post; uses material already drafted in the v2.4 PRD.
+1. **Post 2.2 — "Why we don't claim SaMD-grade validation (yet)"** — highest immediate-value differentiation against competitors; sized as a long blog post; uses material already drafted in the v2.5 PRD.
 2. **Post 3.1 — Iter-6 closure LinkedIn post** — preserves the per-iteration cadence the author has established.
 3. **Paper 1.5 — Dataset sufficiency JAMIA paper** — highest academic-citation potential; document is already drafted as `DATASET_SUFFICIENCY.md`.
 4. **Post 2.1 — "The wording fix that saved an iteration"** — narrative-driven; broad practitioner appeal; cross-pollinates into the paper 1.1 academic version.
@@ -222,4 +222,4 @@ Some things look writable but probably aren't worth the bandwidth:
 
 ---
 
-*This document is part of the PACCA v2.4 cycle documentation set. Last updated: 2026-05-25 (iter-6 open). Update sequence recommendations as the publishing landscape and the project's state evolve.*
+*This document is part of the PACCA v2.5 cycle documentation set. Last updated: 2026-05-25 (iter-6 open). Update sequence recommendations as the publishing landscape and the project's state evolve.*
