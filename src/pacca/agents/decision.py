@@ -21,13 +21,31 @@ Prompt versions are tracked in PROMPT_REGISTRY for audit trail purposes.
 
 from pydantic import BaseModel
 
-from ..models.authorization import AuthorizationDecision, ReviewTier
+from ..models.authorization import AuthorizationDecision, DecisionDraft, ReviewTier
 from ..models.clinical import ClinicalCase
 from ._prompt_loader import load_agent_prompt
 from .base import BaseAgent
 from .prompts.templates import (
     get_prompt_version,
 )
+
+
+def _decision_from(draft: DecisionDraft, tier: ReviewTier) -> AuthorizationDecision:
+    """
+    Join the model's clinical judgement to the server-owned facts about the run.
+
+    chg-11 (B6): the agents ask Claude for a DecisionDraft — status, confidence,
+    rationale, cited evidence — and nothing else. ``decision_id`` is minted here
+    (via AuthorizationDecision's default_factory) and ``review_tier_used`` is set
+    by whichever tier produced the draft. Neither is negotiable by the model.
+    """
+    return AuthorizationDecision(
+        status=draft.status,
+        confidence_score=draft.confidence_score,
+        rationale=draft.rationale,
+        cited_evidence_ids=list(draft.cited_evidence_ids),
+        review_tier_used=tier,
+    )
 
 
 class DecisionContext(BaseModel):
@@ -102,12 +120,11 @@ class DecisionAgent(BaseAgent):
             f"{context.relevant_guidelines}"
         )
 
-        decision = await self.execute(
+        draft = await self.execute(
             user_input=user_input,
-            response_model=AuthorizationDecision,
+            response_model=DecisionDraft,
         )
-        decision.review_tier_used = ReviewTier.AUTOMATED
-        return decision
+        return _decision_from(draft, ReviewTier.AUTOMATED)
 
 
 class MedicalDirectorAgent(BaseAgent):
@@ -190,9 +207,8 @@ class MedicalDirectorAgent(BaseAgent):
             f"{context.relevant_guidelines}"
         )
 
-        decision = await self.execute(
+        draft = await self.execute(
             user_input=user_input,
-            response_model=AuthorizationDecision,
+            response_model=DecisionDraft,
         )
-        decision.review_tier_used = ReviewTier.MEDICAL_DIRECTOR_AGENT
-        return decision
+        return _decision_from(draft, ReviewTier.MEDICAL_DIRECTOR_AGENT)
