@@ -1,0 +1,88 @@
+{
+  "iteration": 11,
+  "iteration_tag": "harness-iter-11",
+  "iso_date": "2026-07-23",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-10",
+  "summary": "Closes PRODUCTION_READINESS B6. chg-11: decision_id was in the agents' forced tool schema, so the model minted a unique-constrained key; it is now server-side and absent from the schema (new DecisionDraft response model). chg-12: the decision INSERT rolls back on IntegrityError so the real error propagates instead of a masking PendingRollbackError. Verified live: the same case submitted twice now returns 200 twice with distinct ids; the second previously 500'd.",
+  "changes": [
+    {
+      "id": "chg-11",
+      "type": "improvement",
+      "description": "Introduce DecisionDraft as the response_model for both agent tiers (status, confidence_score, rationale, cited_evidence_ids only) and mint decision_id server-side via AuthorizationDecision's default_factory. The model is no longer asked for an identifier, so it cannot supply one. Explicit ids are still honoured for the deterministic escape hatches (PREESC-, SCOPE-).",
+      "files": [
+        "src/pacca/models/authorization.py",
+        "src/pacca/agents/decision.py",
+        "tests/unit/test_decision_id_provenance.py"
+      ],
+      "failure_pattern": "Resubmitting an already-decided clinical case returned HTTP 500. Observed 2026-07-22 while capturing a README screenshot: the first submission of the provider demo case succeeded and every subsequent one failed with 'UNIQUE constraint failed: authorization_decisions.decision_id'.",
+      "root_cause": "DecisionAgent.run() and MedicalDirectorAgent.run() passed response_model=AuthorizationDecision to BaseAgent.execute(), which builds the forced tool schema from response_model.model_json_schema(). decision_id is a field on AuthorizationDecision, so it was in the tool schema and the model populated it. That value was written to authorization_decisions.decision_id, declared String(50), unique=True, index=True. The model is deterministic for identical input, so the same case reproduced the same id. No code in src/ ever constructed a decision id for the normal path \u2014 grepping the observed prefixes (PA-, dec_) returned no matches in the codebase.",
+      "evidence": [
+        {
+          "source": "backend log, 2026-07-22 B6 reproduction",
+          "note": "sqlite3.IntegrityError: UNIQUE constraint failed: authorization_decisions.decision_id, parameters ('dec_p_demo_72148', 'demo_1784780627924', 'AUTO_APPROVED', 0.98, ...). request_id was unique per submission; only the model-supplied decision_id collided."
+        },
+        {
+          "source": "docs/PRODUCTION_READINESS.md B6",
+          "note": "Three runs produced three different id shapes (PA-SYN-2048-001, PA-SYN-3117-72148, dec_p_demo_72148), confirming the format was model-chosen. Grepping PA-/dec_ across src/ returns no matches: nothing in the codebase ever built one."
+        },
+        {
+          "source": "tests/unit/test_decision_id_provenance.py",
+          "note": "Pre-fix, 5 of 6 fail: decision_id present in the tool schema; two runs of the same case both return 'dec_p_demo_72148'. Post-fix all 6 pass. Live verification: identical case submitted twice returned PA-6f8905bf9b8a4f18 and PA-038e4eb1c2334b92, both AUTO_APPROVED at 0.96, two rows persisted, zero 500s."
+        }
+      ],
+      "predicted_fixes": [
+        "Submitting the identical clinical case twice returns 200 both times with two distinct decision_id values and two persisted rows.",
+        "decision_id is absent from the tool schema handed to Claude, so no model output can influence it.",
+        "A model that emits decision_id anyway has that value discarded rather than persisted.",
+        "Pre-flight (PREESC-) and scope-violation (SCOPE-) decisions keep their explicit deterministic ids.",
+        "No change to clinical outcomes: status, confidence and rationale are still entirely model-produced, so the golden-set accuracy gate is unaffected."
+      ],
+      "risk_cases": [
+        "GC-018 / GC-019 (anti-hallucination): the tool schema changed shape, so a malformed structured output would surface here first.",
+        "Any test or caller constructing AuthorizationDecision positionally, or asserting on a specific decision_id format.",
+        "The P-5 evidence-grounding detector reads cited_evidence_ids, which now round-trips through DecisionDraft \u2014 a dropped field would silently disable grounding."
+      ],
+      "constraint_level": "tool_implementation",
+      "why_this_component": "The defect is in the agent's output contract, not its reasoning. Narrowing the response_model is the smallest surface that makes the failure impossible: an identifier the model is never asked for cannot be supplied, colliding or otherwise. Changing the prompt would have been advisory; changing the schema is structural. No prompt references decision_id, so PROMPT_REGISTRY stays at v2.7.",
+      "phi_impact": "indirect",
+      "audit_relevant": true,
+      "rollback_plan": "git revert the chg-11 commit. Restoring response_model=AuthorizationDecision returns the model-supplied id; the default_factory on decision_id is harmless if left in place (an explicit model-supplied value overrides it). No migration, no data change. Rows already written with PA-<uuid> ids remain valid \u2014 the column has no format constraint."
+    },
+    {
+      "id": "chg-12",
+      "type": "improvement",
+      "description": "Roll the async session back when the decision INSERT raises IntegrityError, log authorization_decision_write_failed, and re-raise. Not error recovery \u2014 the write genuinely failed \u2014 but it stops a poisoned session turning the next statement into a PendingRollbackError that hides the real cause.",
+      "files": [
+        "src/pacca/db/repository.py",
+        "tests/unit/test_persistence_rollback.py"
+      ],
+      "failure_pattern": "The B6 traceback surfaced 'PendingRollbackError: This Session's transaction has been rolled back due to a previous exception during flush' rather than the IntegrityError that actually caused it. An operator reading the log learns the session is broken, not why.",
+      "root_cause": "DecisionRepository.create() called session.flush() without handling failure. After the IntegrityError the session stays in a rolled-back-pending state, so the caller's next statement \u2014 the audit write in the submit route \u2014 raises PendingRollbackError and masks the original exception.",
+      "evidence": [
+        {
+          "source": "backend log, 2026-07-22 B6 reproduction",
+          "note": "PendingRollbackError raised from the audit write masked the IntegrityError, which appeared only in the '(Background on this error...)' tail."
+        },
+        {
+          "source": "tests/unit/test_persistence_rollback.py",
+          "note": "Pre-fix, the rollback assertion fails ('Expected rollback to have been awaited once. Awaited 0 times'). Post-fix all 3 pass, including that the success path never rolls back."
+        }
+      ],
+      "predicted_fixes": [
+        "An IntegrityError on the decision write propagates as an IntegrityError, not a PendingRollbackError.",
+        "The session is rolled back exactly once on the failure path and never on the success path."
+      ],
+      "risk_cases": [
+        "Rolling back inside the repository discards any uncommitted work the caller had staged in the same transaction \u2014 acceptable here because the submit route's audit records are flushed pre-write by design, but it would matter if a future caller batched writes."
+      ],
+      "constraint_level": "tool_implementation",
+      "why_this_component": "The masking happens at the point of failure, so the handler belongs there. Putting it in the route would leave every other caller of DecisionRepository.create() exposed to the same masking.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert the chg-12 commit. Removing the try/except restores the bare flush; behaviour returns to masking-on-failure. No migration, no data change."
+    }
+  ],
+  "verdicts": []
+}
