@@ -78,7 +78,11 @@ async def test_sme_agent_smoke_round_trip() -> None:
             intended_outcome="AUTO_APPROVED",
             failure_mode_label="Coverage",
         ),
-        allocated_case_id="GC-SMOKE",
+        # GC-999: a reserved smoke sentinel that satisfies the id validator's
+        # ^GC-\d{3,}$ pattern (a non-numeric sentinel like "GC-SMOKE" fails
+        # SCHEMA_COMPLETENESS). 999 is far above the real allocated range, so it
+        # never collides — and this smoke draft is validated, not persisted.
+        allocated_case_id="GC-999",
         recommended_file="oncology_depth_cases.py",
     )
 
@@ -86,7 +90,7 @@ async def test_sme_agent_smoke_round_trip() -> None:
     draft = await agent.run(request)
 
     # Sentinel ID was preserved (the agent's defensive overwrite)
-    assert draft.case_id == "GC-SMOKE"
+    assert draft.case_id == "GC-999"
 
     # Required fields populated
     assert draft.title
