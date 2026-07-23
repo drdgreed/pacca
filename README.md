@@ -206,8 +206,6 @@ Security findings should follow [`SECURITY.md`](SECURITY.md) — please don't op
 
 ---
 
-
-<!-- ci: no-op probe to verify clinical-gate skips on doc-only PRs (branch-protection stage 2b). Safe to close. -->
 ## Citation
 
 ```
