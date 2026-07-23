@@ -1,5 +1,5 @@
 <svg width="1000" height="852" viewBox="0 0 1000 852" xmlns="http://www.w3.org/2000/svg">
-<rect x="0" y="0" width="1000" height="852" rx="14" fill="#111318"/>
+<rect x="0" y="0" width="1000" height="852" rx="14" fill="#111318" stroke="#2c3444" stroke-width="1"/>
 <text x="36" y="46" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#e8edf5">PACCA Decision Trace</text>
 <text x="37" y="70" text-anchor="start" font-family="Arial, sans-serif" font-size="12.5" font-weight="400" fill="#9aa6b8">One authorization request, end-to-end — every step keyed to a single correlation_id.</text>
 <rect x="37" y="82" width="372" height="22" rx="11" fill="#13202b" stroke="#7fd4cf" stroke-width="1"/>

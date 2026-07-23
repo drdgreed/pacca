@@ -4,7 +4,7 @@
 >
 > **Update cadence.** When adding, changing, or removing any vendor. Quarterly review of all existing BAA expiration dates.
 >
-> **Owner.** Privacy Officer (currently: project owner). Assigned formally per `PACCA_PRD_v2.4_Consolidated.md` § 16.
+> **Owner.** Privacy Officer (currently: project owner). Assigned formally per `PACCA_PRD_v2.5_Consolidated.md` § 16.
 
 ## Status legend
 

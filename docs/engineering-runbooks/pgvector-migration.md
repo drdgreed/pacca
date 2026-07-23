@@ -160,7 +160,7 @@ Change `DualWriteRetriever.query()` to read from pgvector instead of Chroma. Kee
 ### Step 9 — Documentation (~2 hours)
 
 - Update `README.md` "Technology Stack" table: ChromaDB → Postgres (pgvector)
-- Update `docs/PACCA_PRD_v2.4_Consolidated.md` architecture section
+- Update `docs/PACCA_PRD_v2.5_Consolidated.md` architecture section
 - Add note to `DECISIONS.md`: this is a real iteration change with a falsifiable prediction (retrieval quality ≥ baseline)
 
 ## Acceptance criteria
