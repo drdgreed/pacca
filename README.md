@@ -753,6 +753,8 @@ By contributing you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
+
+<!-- ci: no-op probe to verify clinical-gate skips on doc-only PRs (branch-protection stage 2b). Safe to close. -->
 ## Citation
 
 If you reference PACCA's harness engineering implementation in academic work or production case studies, please cite:
