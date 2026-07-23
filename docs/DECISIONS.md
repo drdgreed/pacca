@@ -12,6 +12,7 @@
 
 ## Index
 
+- [iter-11 — chg-11/chg-12: server-side decision_id + legible integrity failures (B6)](#iter-11-server-side-decision-id)
 - [iter-10 — Runtime evidence-grounding detector (P-5 / T-18) (1 change)](#iter-10-evidence-grounding)
 - [iter-9 — Scope guard warn→enforce + persistence-guarded DB writes (P-4 / T-17) (1 change)](#iter-9-enforce)
 - [iter-8 — Minimum-necessary scope guard (P-4 / T-17), warn mode (1 change)](#iter-8-scope-guard)
@@ -24,6 +25,43 @@
 - [Correction (2026-05-22) — iter-0 trajectory instrumentation record](#correction-iter0-trajectory)
 - [iter-1 — chg-1: Decision Support and Medical Director prompt extraction (Phase H1)](#chg-1-iter-1)
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-11-server-side-decision-id"></a>
+## iter-11 — Server-side `decision_id` + legible integrity failures (B6), 2 changes
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-11` |
+| Date | 2026-07-23 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `tool_implementation` (chg-11, chg-12) — the agent output contract and the write path. No prompt change: no prompt references `decision_id`, so `PROMPT_REGISTRY` stays at v2.7 |
+| Behavioral surface modified | YES — the forced tool schema handed to both agent tiers changed shape |
+| Changes | 2 |
+| Live clinical gate at iter-11 HEAD | golden-set accuracy **PASSED** + zero-hallucination GC-018/019 **PASSED** (5 clinical tests, 473s of real Claude calls) — the tool-schema change did not degrade clinical output |
+| Verdict | **KEEP** (both changes). Deterministic suite 684 passed. Live: the identical case submitted twice returned 200 twice with distinct ids (`PA-6f8905bf9b8a4f18`, `PA-038e4eb1c2334b92`), where the second submission previously 500'd |
+
+### chg-11 — `decision_id` moves out of the model's hands
+
+**Failure pattern.** Resubmitting an already-decided case returned HTTP 500. Found on 2026-07-22 while capturing a README screenshot: the first submission of the provider demo case succeeded, every subsequent one failed with `UNIQUE constraint failed: authorization_decisions.decision_id`.
+
+**Root cause.** Both agent tiers passed `response_model=AuthorizationDecision` to `BaseAgent.execute()`, which builds the forced tool schema from `response_model.model_json_schema()`. `decision_id` is a field on that model, so it was in the schema and **the model populated it** — and that value was written to a `unique=True, index=True` column. The model is deterministic for identical input, so the same case reproduced the same id. Grepping the observed prefixes (`PA-`, `dec_`) across `src/` returns **no matches**: nothing in the codebase ever constructed one.
+
+**Why this is more than a crash.** `audit_logs.decision_id` and the `human_reviews` FK both reference this value. A model that repeats an id silently cross-links two decisions' audit trails — which defeats the correlation-id guarantee the audit design rests on. Hence P0 rather than cosmetic.
+
+**The change.** A new `DecisionDraft` model becomes the `response_model` for both tiers: `status`, `confidence_score`, `rationale`, `cited_evidence_ids` — and nothing else. `decision_id` is minted server-side by `mint_decision_id()` via `AuthorizationDecision`'s `default_factory`. Because the field is absent from `DecisionDraft`, it is absent from the tool schema, so the model **cannot** supply it — this is structural, not advisory. Explicit ids are still honoured for the deterministic escape hatches (`PREESC-`, `SCOPE-`).
+
+**Standing rule adopted:** no LLM-supplied value may land in a unique, indexed, or foreign-keyed column.
+
+### chg-12 — Integrity failures report themselves
+
+**Failure pattern.** The B6 traceback surfaced `PendingRollbackError` rather than the `IntegrityError` that caused it. An operator reading that log learns the session is broken, not why.
+
+**Root cause.** `DecisionRepository.create()` called `session.flush()` with no failure handling. After the `IntegrityError` the session stays poisoned, so the caller's next statement — the audit write — raises `PendingRollbackError` and masks the original.
+
+**The change.** Roll back, log `authorization_decision_write_failed`, re-raise. This is not error recovery: the write genuinely failed and the exception still propagates. It exists so the failure is legible.
 
 ---
 
