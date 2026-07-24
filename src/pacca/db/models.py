@@ -211,7 +211,17 @@ class AuditLogModel(Base):
     # Context
     request_id: Mapped[str | None] = mapped_column(
         String(50),
-        ForeignKey("authorization_requests.request_id"),
+        # B3: DEFERRABLE INITIALLY DEFERRED so Postgres checks this FK at COMMIT,
+        # not per-statement. The submit route writes two request_id-bearing audit
+        # rows (intent.declared, authorization_submitted) BEFORE the parent
+        # authorization_requests row — because intent.declared must be the first
+        # audit event (pre-write-audit invariant). Deferring the check to commit
+        # keeps both invariants: audit-first ordering AND referential integrity.
+        ForeignKey(
+            "authorization_requests.request_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=True,
         index=True,
     )
