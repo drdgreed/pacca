@@ -152,6 +152,10 @@ select = [
 ignore = [
     "E501",    # line too long (handled by formatter)
     "PLR0913", # too many arguments
+    "PLR0917", # too many positional arguments (sibling of PLR0913; ruff 0.16.0
+               # promoted it out of preview. audit.log / repository create() /
+               # prompt builders legitimately take many params — same rationale
+               # as the PLR0913 ignore above)
     "PLR2004", # magic value comparison
     # Noise suppressions: rules that fire frequently on intentional PACCA patterns
     "PLC0415", # imports inside functions — intentional lazy imports for circular-dep avoidance

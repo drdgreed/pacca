@@ -108,10 +108,17 @@ class GuidelineRetriever:
       case_precedents  — human override decisions (institutional memory)
     """
 
-    def __init__(self) -> None:
-        db_path = os.path.join(os.getcwd(), "pacca_db")
+    def __init__(
+        self,
+        db_path: str | None = None,
+        embedding_function: object | None = None,
+    ) -> None:
+        # B4: db_path and embedding_function are injectable so the store can be
+        # pointed at a temp dir and seeded with a fake embedder in tests, without
+        # the ~80MB default-model download. Both default to production behaviour.
+        db_path = db_path or os.path.join(os.getcwd(), "pacca_db")
         self._client = chromadb.PersistentClient(path=db_path)
-        self._embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        self._embedding_fn = embedding_function or embedding_functions.DefaultEmbeddingFunction()
 
         # Collection 1: Official guidelines (NCCN, CMS, AHA, etc.)
         self._guidelines = self._client.get_or_create_collection(
@@ -124,6 +131,14 @@ class GuidelineRetriever:
             name="case_precedents",
             embedding_function=self._embedding_fn,
         )
+
+    def guideline_count(self) -> int:
+        """Number of official guidelines in the store. 0 means unseeded (B4)."""
+        return self._guidelines.count()
+
+    def precedent_count(self) -> int:
+        """Number of institutional-memory precedents in the store."""
+        return self._precedents.count()
 
     def add_guideline(
         self,

@@ -12,6 +12,7 @@
 
 ## Index
 
+- [iter-12 — chg-13: deferrable audit FK, fixes Postgres FK violation (B3)](#iter-12-deferrable-audit-fk)
 - [iter-11 — chg-11/chg-12: server-side decision_id + legible integrity failures (B6)](#iter-11-server-side-decision-id)
 - [iter-10 — Runtime evidence-grounding detector (P-5 / T-18) (1 change)](#iter-10-evidence-grounding)
 - [iter-9 — Scope guard warn→enforce + persistence-guarded DB writes (P-4 / T-17) (1 change)](#iter-9-enforce)
@@ -25,6 +26,37 @@
 - [Correction (2026-05-22) — iter-0 trajectory instrumentation record](#correction-iter0-trajectory)
 - [iter-1 — chg-1: Decision Support and Medical Director prompt extraction (Phase H1)](#chg-1-iter-1)
 - [iter-0 — Baseline Crystallization (seed)](#iter-0-baseline-crystallization)
+
+---
+
+<a name="iter-12-deferrable-audit-fk"></a>
+## iter-12 — Deferrable audit FK (B3), 1 change
+
+| Field | Value |
+|-------|-------|
+| Iteration tag | `harness-iter-12` |
+| Date | 2026-07-23 |
+| Author | David Reed |
+| Base model | `claude-sonnet-4-5-20250929` |
+| Constraint levels touched | `audit_schema` (chg-13) — a constraint on the `audit_logs` table |
+| Behavioral surface modified | YES — audit-trail persistence: whether a submission's audit writes commit on Postgres |
+| Changes | 1 |
+| Verdict | **KEEP**. Verified on real Postgres 16 — see below |
+
+### chg-13 — `audit_logs.request_id` FK becomes `DEFERRABLE INITIALLY DEFERRED`
+
+**Failure pattern.** Submitting an authorization on Postgres raised `ForeignKeyViolationError: audit_logs_request_id_fkey` at ~the first audit write, before any AI call. Dev/CI never saw it because SQLite does not enforce foreign keys.
+
+**Root cause.** The submit route flushes audit rows immediately, and the pre-write-audit invariant requires `intent.declared` (`authorizations.py:140`) and `authorization_submitted` (`:152`) — both carrying `request_id` — to be written *before* the parent `authorization_requests` row (`:186`). The FK on `audit_logs.request_id` was non-deferrable, so Postgres checked it at statement time and rejected the first audit flush, whose `request_id` had no parent yet. (The doc's original "never inserts parent rows" cause was already fixed by PR #66; this is the residual ordering-vs-FK conflict. `audit_logs.decision_id` has no FK, so that half of the original report is moot.)
+
+**Why deferral, not reorder.** Moving the parent insert ahead of the audits would satisfy the FK but violate the pre-write-audit invariant (`intent.declared` would no longer be event #0). Making the FK `DEFERRABLE INITIALLY DEFERRED` defers the check to the single per-request COMMIT, by which point the parent row — flushed mid-transaction — exists. Both invariants hold.
+
+**Verification (real Postgres 16, throwaway container).**
+- Non-deferrable schema, submit-route write order in one transaction → `FK VIOLATION at statement time`, 0 rows committed. Deferrable schema, same order → **COMMITTED OK, 2 audit rows, 0 orphan rows**.
+- `alembic upgrade head` (001→002→003) applied cleanly; `pg_constraint` shows `condeferrable=t, condeferred=t`; `downgrade -1` reverts to `condeferrable=f`.
+- `tests/unit/test_audit_fk_deferrable.py` compiles the `audit_logs` DDL under the Postgres dialect and asserts the deferral — the CI-runnable guard the SQLite suite cannot provide.
+
+**Still manual:** the "dropped-FK local hack" the B3 report mentions is live Postgres DB state; re-adding the constraint (via migration 003) is what makes B3 stop throwing. Check with `SELECT conname FROM pg_constraint WHERE conrelid='audit_logs'::regclass AND contype='f';`.
 
 ---
 

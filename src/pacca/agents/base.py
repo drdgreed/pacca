@@ -71,7 +71,6 @@ Teaching note — OpenTelemetry span attributes
   retried requests — you want to know how often that happens).
 """
 
-import logging
 import os
 import time
 from abc import ABC, abstractmethod
@@ -94,10 +93,13 @@ from tenacity import (
     wait_exponential,
 )
 
+from ..config import get_logger
 from ..config.settings import effective_settings, get_settings
 from ..config.tracing import get_tracer, record_span_error
 
-logger = logging.getLogger(__name__)
+# structlog-backed, per the repo convention (AGENT_LESSONS P-002). B5: a stdlib
+# logger here would TypeError on the structured-kwarg calls below.
+logger = get_logger(__name__)
 
 # Generic type variable: T must be a Pydantic BaseModel.
 # This is how we tell Python: "execute() returns whatever Pydantic model
@@ -135,10 +137,10 @@ def _log_retry_attempt(retry_state: RetryCallState) -> None:
     wait = retry_state.next_action.sleep if retry_state.next_action else 0
 
     logger.warning(
-        "llm_api_retry attempt=%s wait_seconds=%s error_type=%s",
-        attempt,
-        round(wait, 2),
-        type(exc).__name__ if exc else "unknown",
+        "llm_api_retry",
+        attempt=attempt,
+        wait_seconds=round(wait, 2),
+        error_type=type(exc).__name__ if exc else "unknown",
     )
 
 
@@ -304,9 +306,9 @@ class BaseAgent(ABC):
             except Exception as exc:
                 record_span_error(span, exc)
                 logger.error(
-                    "agent_call_failed: agent=%s error_type=%s",
-                    self.name,
-                    type(exc).__name__,
+                    "agent_call_failed",
+                    agent=self.name,
+                    error_type=type(exc).__name__,
                 )
                 raise
 
