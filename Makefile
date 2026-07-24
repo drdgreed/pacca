@@ -30,6 +30,13 @@ install:
 	pip install uuid7 pytest-asyncio pytest-cov --quiet
 	@echo "Install complete. Run 'make test' to verify."
 
+# ── Data ──────────────────────────────────────────────────────────────────────
+
+seed:
+	@echo "Seeding ChromaDB guideline collection (idempotent)..."
+	python -m pacca.api.seed_db
+	@echo "Seed complete. A fresh store now serves grounded guideline context (B4)."
+
 # ── Testing ───────────────────────────────────────────────────────────────────
 
 test:
