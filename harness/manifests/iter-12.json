@@ -1,0 +1,71 @@
+{
+  "iteration": 12,
+  "iteration_tag": "harness-iter-12",
+  "iso_date": "2026-07-23",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-11",
+  "summary": "Closes B3. The submit route flushes two request_id audit rows (intent.declared, authorization_submitted) before the parent authorization_requests row, since intent.declared must be event #0. A non-deferrable FK is checked per-statement, so on Postgres the first flush raised ForeignKeyViolationError; SQLite masked it. chg-13 makes audit_logs.request_id FK DEFERRABLE INITIALLY DEFERRED (checked at COMMIT), keeping both audit-first ordering and integrity. Verified on Postgres 16.",
+  "changes": [
+    {
+      "id": "chg-13",
+      "type": "improvement",
+      "description": "Make audit_logs.request_id FK DEFERRABLE INITIALLY DEFERRED in the model and via Alembic migration 003 (Postgres-only; SQLite builds from models and ignores the clause). Keeps intent.declared as the first audit event AND keeps the FK, by deferring the check to the single per-request commit, by which point the parent row (flushed mid-transaction) exists.",
+      "files": [
+        "src/pacca/db/models.py",
+        "src/pacca/db/migrations/versions/003_deferrable_audit_fk.py",
+        "tests/unit/test_audit_fk_deferrable.py"
+      ],
+      "failure_pattern": "Submitting an authorization on Postgres raised ForeignKeyViolationError: audit_logs_request_id_fkey at ~the first audit write, before any AI call. Hidden in dev/CI because SQLite does not enforce foreign keys.",
+      "root_cause": "authorizations.py flushes audit rows immediately (repository audit.log ends in session.flush). The pre-write-audit invariant requires intent.declared (line 140) and authorization_submitted (line 152) \u2014 both carrying request_id \u2014 to be written BEFORE the parent authorization_requests row (created line 186). audit_logs.request_id had a non-deferrable ForeignKey (models.py:212), which Postgres checks at statement time, so the first flush referenced a not-yet-existing parent and was rejected. The doc's original 'never inserts parent rows' cause was already fixed by PR #66; this is the residual ordering-vs-FK conflict. audit_logs.decision_id has no FK, so that half of the original report is moot.",
+      "evidence": [
+        {
+          "source": "real Postgres 16 reproduction (throwaway container, asyncpg)",
+          "note": "Non-deferrable schema, submit-route write order (2 audit rows referencing REQ-1, then the parent, one transaction): FK VIOLATION at statement time on audit_logs_request_id_fkey, 0 rows committed. Deferrable schema, same order: COMMITTED OK, 2 audit rows, 0 orphan rows."
+        },
+        {
+          "source": "alembic upgrade head on real Postgres 16",
+          "note": "001->002->003 applied cleanly; pg_constraint shows audit_logs_request_id_fkey condeferrable=t condeferred=t. downgrade -1 reverts to condeferrable=f. Migration is reversible."
+        },
+        {
+          "source": "tests/unit/test_audit_fk_deferrable.py",
+          "note": "Compiles audit_logs DDL under the postgresql dialect and asserts the request_id FK is DEFERRABLE INITIALLY DEFERRED \u2014 CI-runnable proof without a live Postgres, which the SQLite suite structurally cannot provide. RED before the model change, GREEN after."
+        }
+      ],
+      "predicted_fixes": [
+        "A full submit on Postgres commits with zero orphaned audit rows (the pre-flight audit rows and the parent request row all persist).",
+        "intent.declared remains the first audit event \u2014 no write reordering.",
+        "The FK is still enforced (at commit), so a genuinely orphaned audit row is still rejected."
+      ],
+      "risk_cases": [
+        "The 'dropped FK local hack' the doc mentions is live Postgres DB state, not code \u2014 re-adding the FK as deferrable (this migration) is what makes B3 stop throwing; a DB where the constraint was manually dropped must run migration 003 to pick it up.",
+        "Any code path that relied on the FK failing early per-statement (none found) would now see the failure only at commit.",
+        "SQLite dev/test cannot exercise this at all (no FK enforcement); the DDL-compile test is the CI guard."
+      ],
+      "constraint_level": "audit_schema",
+      "why_this_component": "The conflict is between two invariants that both live in the audit-trail persistence layer: pre-write-audit ordering (intent.declared first) and referential integrity (audit rows reference a real request). Deferring the FK to commit is the only reconciliation that keeps both; reordering the writes would sacrifice the audit-first ordering. The change is a property of the audit_logs schema, hence audit_schema.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert the chg-13 commit and run alembic downgrade -1 on Postgres (reverts the constraint to non-deferrable, verified). No data change; existing rows are unaffected. Reverting reintroduces B3 on Postgres, so only roll back together with a reorder-based alternative if ever needed."
+    }
+  ],
+  "verdicts": [
+    {
+      "change_id": "chg-13",
+      "previous_iteration_tag": "harness-iter-11",
+      "outcome": "keep",
+      "verified_fixes": [
+        "Real Postgres 16: the submit-route write order (audit-before-parent, one transaction) COMMITS with the deferrable FK and 0 orphan rows, where the non-deferrable schema raised ForeignKeyViolationError and committed nothing.",
+        "alembic 001->002->003 applies on Postgres; pg_constraint confirms condeferrable=t condeferred=t; downgrade reverts cleanly.",
+        "DDL-compile test (CI-runnable) asserts the request_id FK is DEFERRABLE INITIALLY DEFERRED."
+      ],
+      "missed_fixes": [],
+      "false_predicted_fixes": [],
+      "verified_risks": [
+        "No unit regression: tests/unit 670 passed (SQLite ignores the deferrable clause, so create_all-based tests are unaffected). ruff + mypy + PHI-guard clean."
+      ],
+      "unforeseen_regressions": [],
+      "notes": "The 'dropped FK local hack' remains manual DB state to reconcile on the user's local Postgres (re-add the constraint via migration 003). No production Postgres was available in CI; verification used a throwaway Postgres 16 container matching the deployment target."
+    }
+  ]
+}
