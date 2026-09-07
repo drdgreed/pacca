@@ -45,6 +45,7 @@ from pacca.models.authorization import (
     AuthorizationRequest,
 )
 from pacca.models.enums import AuthorizationStatus, ReviewTier
+from pacca.utils.audit_durability import record_audit_write_failure
 
 logger = get_logger(__name__)
 
@@ -632,6 +633,13 @@ class AuditRepository:
         """
         bind = getattr(self.session, "bind", None)
         if not isinstance(bind, AsyncEngine):
+            # Counted too. This branch REFUSES the write rather than attempting
+            # a doomed one, so from the caller's perspective the outcome is
+            # identical to a failed write: no audit row. Counting only the
+            # except-branch would have made an unsupported bind the one way to
+            # lose an audit row silently -- the exact shape of failure this
+            # whole path exists to avoid.
+            record_audit_write_failure(entry.action)
             logger.error(
                 "audit_independent_session_unsupported_bind",
                 action=entry.action,
@@ -662,6 +670,11 @@ class AuditRepository:
                 audit_session.add(db_entry)
                 await audit_session.commit()
         except Exception as exc:
+            # Still does not raise -- see AuditRepository.log's durability note.
+            # The counter makes the failure visible in aggregate on
+            # /api/v1/metrics and /health, so a decision returned without an
+            # audit row behind it is detectable without log archaeology.
+            record_audit_write_failure(entry.action)
             logger.error(
                 "audit_write_failed",
                 action=entry.action,

@@ -77,7 +77,12 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health/live || exit 1
+    # /health, not /health/live. api/routes/health.py defines /health/live but its
+    # router is never mounted, so that path 404s -- curl -f exits non-zero on 404,
+    # so this healthcheck could only ever fail, marking every container unhealthy
+    # after 3 retries. /health is defined directly on the app in api/main.py and is
+    # what docker-compose.yml already probes.
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Entrypoint runs `alembic upgrade head`, then execs the CMD below.
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

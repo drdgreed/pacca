@@ -34,6 +34,7 @@ from ..config.tracing import configure_tracing
 
 # Production async database session — all route handlers use this
 from ..db.session import AsyncSession, get_session, init_database
+from ..utils import audit_durability
 
 # Auth helpers — SECRET_KEY, ALGORITHM, and token expiry come from environment
 from .auth import (
@@ -335,5 +336,28 @@ async def health():
 
     Returns 200 OK when the service is running.
     Used by Docker healthcheck and load balancers.
+
+    Audit durability (iter-29) is reported here because this is the only health
+    surface that exists at runtime: api/routes/health.py defines a richer
+    /health, /health/live, /health/ready and /api/v1/metrics, and its router is
+    never included in this app, so none of those paths resolve.
+
+    `status` deliberately stays "ok" when audit durability is degraded, and the
+    response deliberately stays 200. This endpoint is wired to a Docker
+    healthcheck and load balancers, which decide whether to keep the container
+    in rotation. A failing audit write does not make the service unfit to serve
+    -- the clinical decisions it returns are correct, it is their trail that is
+    impaired -- so degrading this signal would trade a compliance gap for an
+    outage. The condition is reported in its own field, where an operator
+    dashboard can alert on it without a load balancer acting on it.
     """
-    return {"status": "ok", "version": app.version}
+    audit = audit_durability.snapshot()
+    return {
+        "status": "ok",
+        "version": app.version,
+        "audit_durability": "degraded" if audit.degraded else "healthy",
+        "audit_write_failures_total": audit.failures_total,
+        "audit_last_failure_at": (
+            audit.last_failure_at.isoformat() if audit.last_failure_at else None
+        ),
+    }
