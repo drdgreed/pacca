@@ -59,10 +59,30 @@ def _escape_for_python_string(s: str) -> str:
     Escape a string for safe embedding inside a Python double-quoted string
     literal.
 
-    Handles: backslash, double-quote, control characters. Does NOT handle
-    newlines — caller is responsible for chunking on word boundaries.
+    Handles backslash, double-quote, and C0 control characters — including
+    newline and carriage return, which the previous implementation did not,
+    despite this docstring already claiming control characters were covered.
+
+    That gap was not a code-injection hole, and it is worth being precise
+    about why: double-quotes ARE escaped, so a model-supplied value cannot
+    close the literal and append code. What an unescaped newline produced was
+    a broken literal — `"first part` / `rest"` across two source lines — which
+    `_validate_ast` caught, rolling the file back and raising FileSyntaxError.
+    The damage was a failed authoring run reported as a confusing syntax error
+    in generated code, not an executed payload.
+
+    The fix belongs here rather than in the caller because the caller chunks on
+    word boundaries for readability; correctness of the literal is this
+    function's job. Escaping backslash first is required — doing it later would
+    double-escape the backslashes this function itself introduces.
     """
-    return s.replace("\\", "\\\\").replace('"', '\\"')
+    out = s.replace("\\", "\\\\").replace('"', '\\"')
+    # Order matters: \n and \r have short forms; everything else in C0 that is
+    # not printable gets a \xNN escape. Tab is legal unescaped inside a string
+    # literal but is escaped anyway so round-tripping is exact and the emitted
+    # source does not depend on an editor preserving hard tabs.
+    out = out.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    return "".join(ch if ch.isprintable() or ch == " " else f"\\x{ord(ch):02x}" for ch in out)
 
 
 def _wrap_long_string(value: str, indent: str) -> str:

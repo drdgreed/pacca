@@ -64,7 +64,19 @@ class DecisionDraft(BaseModel):
     """
 
     status: AuthorizationStatus
-    confidence_score: float
+    # Bounded because the orchestrator routes on it: select_confidence_branch
+    # grants autonomy when confidence >= auto_approve_threshold, so any value
+    # above the threshold auto-approves and float("inf") auto-approves
+    # unconditionally. Unbounded, the field let a model widen its own autonomy
+    # by returning a number, which is the one thing the confidence gate exists
+    # to prevent. models/triage.py already bounded its confidence fields the
+    # same way; the decision models were the pair that did not.
+    #
+    # NaN is excluded too (allow_inf_nan=False). NaN compares False against
+    # every threshold, so it currently falls through to human_review -- safe by
+    # accident, not by design, and it would silently invert if a branch were
+    # ever written as `not (confidence < threshold)`.
+    confidence_score: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
     rationale: str
     cited_evidence_ids: list[str] = Field(default_factory=list)
 
@@ -75,7 +87,10 @@ class AuthorizationDecision(BaseModel):
     # (PREESC-… pre-flight escalations, SCOPE-… scope violations).
     decision_id: str = Field(default_factory=mint_decision_id)
     status: AuthorizationStatus
-    confidence_score: float
+    # Same bound as DecisionDraft.confidence_score -- see the note there. This
+    # is the persisted form, so it also stops an out-of-range value reaching the
+    # audit trail and the API response.
+    confidence_score: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
     rationale: str
     review_tier_used: ReviewTier
     timestamp: datetime = Field(default_factory=datetime.now)
