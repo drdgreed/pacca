@@ -43,7 +43,7 @@ Teaching note — runtime config vs. environment variables:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -513,9 +513,38 @@ class ProposalSummary(BaseModel):
 class ApprovalRequest(BaseModel):
     """Request body for approving or rejecting a proposal."""
 
+    # GOV-05: an approval is an accountability record before it is a workflow
+    # step. approve_proposal() writes reviewer_id into the immutable policy
+    # change log AND stamps it on the ChromaDB guideline it deploys, so a blank
+    # value produces a clinical policy amendment attributed to nobody -- exactly
+    # the artefact an auditor asks for by name.
+    #
+    # max_length=50 matches HumanReview.reviewer_id's String(50). Without it a
+    # longer id passes validation, then silently truncates on SQLite and raises
+    # DataError on PostgreSQL -- a SQLite-masked bug of the kind the Postgres CI
+    # job exists to catch, reaching production as a 500 on an approval.
     reviewer_id: str = Field(
-        description="Username or employee ID of the Medical Director approving this amendment"
+        min_length=1,
+        max_length=50,
+        description="Username or employee ID of the Medical Director approving this amendment",
     )
+
+    @field_validator("reviewer_id")
+    @classmethod
+    def _reviewer_id_identifies_someone(cls, v: str) -> str:
+        """Reject whitespace-only ids; store the stripped form.
+
+        min_length=1 alone accepts "   ", which is indistinguishable from blank
+        in the change log and in any report built from it.
+        """
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError(
+                "reviewer_id must identify the approving reviewer; "
+                "blank or whitespace-only values are not accepted."
+            )
+        return stripped
+
     review_notes: str | None = Field(
         default=None,
         description="Notes explaining the approval/rejection decision (recommended)",

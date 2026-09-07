@@ -1,0 +1,147 @@
+{
+  "iteration": 28,
+  "iteration_tag": "harness-iter-28",
+  "iso_date": "2026-09-07",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-27",
+  "summary": "Four adversarial findings closed at the mechanism rather than the call site: confidence_score bounded so a model cannot widen its own autonomy by returning inf; reviewer_id required to identify somebody before a policy amendment is attributed to it; SQLAlchemy bound parameters (clinical content) kept out of exception strings engine-wide; generated-case escaping made to handle the control characters its docstring claimed. Two reported findings did not survive verification.",
+  "changes": [
+    {
+      "id": "chg-1",
+      "type": "improvement",
+      "description": "Bound DecisionDraft.confidence_score and AuthorizationDecision.confidence_score to [0.0, 1.0] with allow_inf_nan=False.",
+      "files": [
+        "src/pacca/models/authorization.py",
+        "tests/unit/test_adversarial_hardening.py"
+      ],
+      "failure_pattern": "The Frontline agent returns confidence_score=Infinity (or any value above the auto-approve threshold) and the orchestrator grants autonomous approval, because select_confidence_branch routes on `confidence >= auto_approve_threshold` and nothing constrained the left operand.",
+      "root_cause": "DecisionDraft is the response_model handed to the structured-output call, so confidence_score is a model-supplied field. It was declared as a bare `float`. JSON admits Infinity (json.loads('{\"c\": Infinity}') succeeds) and Pydantic accepts inf and nan for an unconstrained float. models/triage.py had already bounded its two confidence fields with ge/le; the decision models were the pair that had not, so the convention existed and this was the gap in it. The confidence gate is the mechanism that limits autonomy, and its input domain was unbounded -- the model could widen its own authority by returning a number.",
+      "evidence": [
+        {
+          "source": "Reproduction against 3a076be: DecisionDraft(status=AUTO_APPROVED, confidence_score=float('inf'), rationale='x')",
+          "note": "Accepted. inf, nan, 1e9, -5.0 and 2.0 all validated."
+        },
+        {
+          "source": "select_confidence_branch(float('inf'), AUTO_APPROVED, 0.9, 0.6)",
+          "note": "Returns 'auto_approve'. 1e9 and 2.0 likewise. nan returns 'human_review' -- safe by accident, since nan compares False against every threshold, and it would invert if a branch were ever written as `not (confidence < threshold)`."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "audit_schema",
+      "why_this_component": "Bounding the schema rather than hardening the branch is deliberate. The branch is a correct pure comparison for every value in [0,1]; it was the domain that was wrong. A guard inside select_confidence_branch would leave the out-of-range value free to reach the persisted decision, the audit record and the API response, and would have to be restated at every future consumer. The schema is the mechanism that can refuse, so the refusal belongs there.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert. Reverting restores the unbounded field and re-opens autonomous approval on an arbitrary model-supplied number.",
+      "baseline": {
+        "claim": "DecisionDraft and AuthorizationDecision declared confidence_score as an unconstrained float, so out-of-range values including float('inf') validated, and select_confidence_branch returned 'auto_approve' for them.",
+        "verified_by": "At 3a076be: construct DecisionDraft(status=AUTO_APPROVED, confidence_score=v, rationale='x') for v in [inf, nan, 1e9, -5.0, 2.0], then call select_confidence_branch(v, AUTO_APPROVED, 0.9, 0.6).",
+        "result": "All five values validated. select_confidence_branch returned 'auto_approve' for inf, 1e9 and 2.0, and 'human_review' for nan. After the fix all five raise ValidationError and 0.0/0.5/1.0 still validate. Full suite 1173 passed, confirming nothing depended on the unbounded field."
+      }
+    },
+    {
+      "id": "chg-2",
+      "type": "improvement",
+      "description": "Require ApprovalRequest.reviewer_id to be non-blank after stripping and at most 50 characters, and store the stripped form.",
+      "files": [
+        "src/pacca/api/routes/admin.py",
+        "tests/unit/test_adversarial_hardening.py"
+      ],
+      "failure_pattern": "A policy amendment is approved with reviewer_id='' (or whitespace). approve_proposal writes that value into the immutable policy change log and rag.add_guideline stamps it as approved_by on the guideline deployed to ChromaDB, producing a clinical policy change attributed to nobody.",
+      "root_cause": "reviewer_id was declared `str` with only a description. Pydantic accepts the empty string for a bare `str`, and whitespace-only survives even min_length=1, so neither the change log nor the deployed guideline metadata could be relied on to name a human. Separately the field had no max_length while HumanReview.reviewer_id is String(50): a longer id silently truncates on SQLite and raises DataError on PostgreSQL, so it would pass CI and fail in production -- the SQLite-masked class the Postgres CI job exists to catch.",
+      "evidence": [
+        {
+          "source": "Reproduction against 3a076be: ApprovalRequest(reviewer_id=v) for v in ['', '   ', '\\t\\n', 'a'*200]",
+          "note": "All four accepted, including the 200-character id against a String(50) column."
+        },
+        {
+          "source": "src/pacca/api/routes/admin.py approve path",
+          "note": "request.reviewer_id flows to approve_proposal(approved_by=...), to rag.add_guideline metadata approved_by, and to the returned payload -- three records of an approval, none of which identifies a person when the value is blank."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "audit_schema",
+      "why_this_component": "GOV-05 treats the approval record as an accountability artefact, so the constraint belongs on the request model where it applies once and covers every downstream write. Validating inside approve_proposal would leave the ChromaDB metadata stamp -- written by the route, not the store -- unguarded.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert. Reverting re-allows unattributed policy amendments; there is no data migration, since the constraint is on new requests only.",
+      "baseline": {
+        "claim": "ApprovalRequest.reviewer_id was a bare `str` with no length or content constraint, so empty, whitespace-only, and over-length (>50 char) values all validated and flowed into the policy change log and the deployed guideline's approved_by metadata.",
+        "verified_by": "At 3a076be: construct ApprovalRequest(reviewer_id=v) for v in ['', '   ', '\\t\\n', 'a'*200] and read back .reviewer_id; compare against HumanReview.reviewer_id's column type in src/pacca/db/models.py.",
+        "result": "All four accepted and stored verbatim, including the 200-character value against a String(50) column. After the fix, blank and whitespace-only raise ValidationError, >50 chars raises ValidationError, and '  md.chen  ' is stored as 'md.chen'."
+      }
+    },
+    {
+      "id": "chg-3",
+      "type": "improvement",
+      "description": "Set hide_parameters=True on the application's async engine so SQLAlchemy exception strings no longer embed bound parameters.",
+      "files": [
+        "src/pacca/db/session.py",
+        "tests/unit/test_phi_not_in_error_strings.py"
+      ],
+      "failure_pattern": "An audit-log write fails; AuditRepository._persist_independently logs error=str(exc); the SQLAlchemy StatementError renders its bound parameters, which for audit_logs are input_summary, output_summary and details -- the clinical content of the decision -- so PHI is written to the application log.",
+      "root_cause": "SQLAlchemy renders StatementError as '(IntegrityError) ... [SQL: ...] [parameters: (...)]' unless hide_parameters=True, which get_engine never set. The PRD compliance matrix maps HIPAA 'Never log PHI' to 'structlog redaction in src/pacca/config/tracing.py', and that redaction does not exist: tracing.py implements THREAT-03 for OTel SPANS (record_span_error records the exception type only) and the structlog processor chain in config/logging.py has no redaction step. So the named control was absent and every error=str(exc) handler was unmitigated.",
+      "evidence": [
+        {
+          "source": "Reproduction against 3a076be: provoke a UNIQUE violation on a row holding 'Patient MRN 4417, stage IV NSCLC, EGFR+' and inspect str(exc)",
+          "note": "The clinical string appears verbatim: \"[parameters: ('Patient MRN 4417, stage IV NSCLC, EGFR+',)]\". With hide_parameters=True the same failure renders 'UNIQUE constraint failed' with no parameters."
+        },
+        {
+          "source": "src/pacca/config/logging.py shared_processors",
+          "note": "merge_contextvars, add_log_level, add_logger_name, PositionalArgumentsFormatter, TimeStamper, StackInfoRenderer, UnicodeDecoder, add_app_context, then a renderer. No redaction processor at any position."
+        },
+        {
+          "source": "src/pacca/db/repository.py _persist_independently",
+          "note": "logger.error('audit_write_failed', ..., error=str(exc)) -- the handler that receives the leaking exception on the one path whose parameters are always clinical."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "instrumentation",
+      "why_this_component": "Fixed at the engine because the leak is a property of the exception object, not of any handler. Rewriting the four current error=str(exc) sites would leave the next one to reintroduce it, and a regex scrubber in the structlog chain would have to recognise clinical text it has no way to identify. hide_parameters removes the PHI before any handler can see it, which is the only version of this fix that a future call site cannot undo by accident.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert. Reverting restores parameter rendering in exception strings and re-opens the leak. Operators lose no diagnosability from the fix: the SQL statement and the error class are still rendered, only the values are withheld.",
+      "baseline": {
+        "claim": "get_engine() did not set hide_parameters, so SQLAlchemy exception strings embedded bound parameters, and AuditRepository._persist_independently wrote them to the application log via error=str(exc). The structlog redaction the PRD names as the compensating control does not exist in the codebase.",
+        "verified_by": "At 3a076be: create_async_engine('sqlite+aiosqlite:///:memory:') with no hide_parameters, insert a row containing a synthetic clinical string, provoke a UNIQUE violation, assert the string appears in str(exc). Separately, read config/logging.py's shared_processors list and grep config/ for redact|scrub|sanitiz.",
+        "result": "The clinical string appeared in str(exc) verbatim inside a [parameters: ...] block. grep for redaction in src/pacca/config/*.py returned no matches; tracing.py's only PHI handling is record_span_error, which covers OTel spans, not logs. After the fix the same provocation yields 'UNIQUE constraint failed' with the parameters withheld."
+      }
+    },
+    {
+      "id": "chg-4",
+      "type": "improvement",
+      "description": "Escape C0 control characters -- newline and carriage return in particular -- in _escape_for_python_string, so generated golden-case files are syntactically valid whatever the drafting model returns.",
+      "files": [
+        "src/pacca/agents/sme_authoring/case_writer.py",
+        "tests/unit/test_adversarial_hardening.py"
+      ],
+      "failure_pattern": "The SME authoring agent drafts a case whose title or clinical_notes contains a newline. format_case_as_python emits a string literal broken across two source lines, _validate_ast raises SyntaxError, the file is rolled back and the SME sees FileSyntaxError blaming generated code rather than the input that caused it.",
+      "root_cause": "_escape_for_python_string handled backslash and double-quote only, while its own docstring claimed control characters were covered -- so the gap read as intentional to anyone auditing it. Newline and carriage return are line terminators in Python source, so an unescaped one terminates the literal.",
+      "evidence": [
+        {
+          "source": "Reproduction against 3a076be: ast.literal_eval('\"' + _escape_for_python_string('a\\nb') + '\"')",
+          "note": "SyntaxError. Same for carriage return. Tab, quote and backslash round-tripped, so the gap was exactly the line terminators the docstring implied were handled."
+        },
+        {
+          "source": "Reported originally as 'code injection with silently discarded cases'",
+          "note": "Neither half held. Double-quotes ARE escaped, so a hostile value cannot close the literal and append code -- verified by parsing an injected payload and asserting it yields a single ast.Constant, not a Call. And the case is not silently discarded: api/routes/sme_authoring.py raises HTTPException(409) on FileSyntaxError. The real defect is an availability and diagnosability one."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "evaluation_harness",
+      "why_this_component": "The escaping function owns the correctness of the literal it emits; the caller owns readability chunking. Fixing it in the caller would make every future caller responsible for a property only this function is positioned to guarantee.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert. Reverting restores the failure mode for control characters in model-drafted case fields. No generated file needs regeneration: the pre-fix code could not write an invalid file, it could only fail to write.",
+      "baseline": {
+        "claim": "_escape_for_python_string escaped only backslash and double-quote, so a newline or carriage return in a model-drafted field produced a Python string literal broken across two source lines -- despite the function's docstring stating that control characters were handled.",
+        "verified_by": "At 3a076be: ast.literal_eval('\"' + _escape_for_python_string(s) + '\"') for s in ['a\\nb', 'a\\rb', 'a\\tb', 'a\"b', 'a\\\\b'].",
+        "result": "Newline and carriage return raised SyntaxError; tab, quote and backslash round-tripped. After the fix all five round-trip, as do bell (\\x07), NUL (\\x00) and non-ASCII text. An injected payload containing quotes parses to a single ast.Constant, not a Call, confirming the 'code injection' label did not hold either before or after."
+      }
+    }
+  ]
+}

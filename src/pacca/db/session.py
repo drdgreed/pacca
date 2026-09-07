@@ -41,6 +41,20 @@ def get_engine() -> AsyncEngine:
 
         engine_kwargs = {
             "echo": settings.debug and settings.log_level == "DEBUG",
+            # PHI containment at the root. A SQLAlchemy StatementError renders as
+            # "(IntegrityError) ... [SQL: INSERT ...] [parameters: (...)]", and for
+            # this schema those parameters are input_summary, output_summary and
+            # details -- the clinical content of a decision. Any handler that does
+            # error=str(exc) therefore writes PHI to the application log, which is
+            # not a PHI-safe destination. hide_parameters=True makes SQLAlchemy
+            # render "[SQL parameters hidden due to hide_parameters=True]" instead.
+            #
+            # Fixed here rather than at each call site because the leak is a
+            # property of the exception object, not of any one handler: a new
+            # `except Exception as e: logger.error(..., error=str(e))` added later
+            # would reintroduce it. This closes it for every present and future
+            # handler at once.
+            "hide_parameters": True,
         }
 
         # PostgreSQL-specific settings
