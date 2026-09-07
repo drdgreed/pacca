@@ -1,0 +1,74 @@
+{
+  "iteration": 29,
+  "iteration_tag": "harness-iter-29",
+  "iso_date": "2026-09-07",
+  "author": "David Reed",
+  "base_model": "claude-sonnet-4-5-20250929",
+  "previous_iteration_tag": "harness-iter-28",
+  "summary": "Audit-write failures become visible in aggregate without changing the decision that they must not fail a request. A monotonic counter is incremented on both non-persisting branches and reported on /health. Implementing it surfaced that api/routes/health.py is dead code -- its router is never mounted -- and that the Dockerfile healthcheck probes /health/live from that unmounted router, so it 404s and every container is marked unhealthy after three retries.",
+  "changes": [
+    {
+      "id": "chg-1",
+      "type": "instrumentation",
+      "description": "Add utils/audit_durability.py, a process-local monotonic counter of audit writes that did not persist, incremented from both non-persisting branches of AuditRepository._persist_independently and reported on GET /health as audit_durability, audit_write_failures_total and audit_last_failure_at.",
+      "files": [
+        "src/pacca/utils/audit_durability.py",
+        "src/pacca/db/repository.py",
+        "src/pacca/api/main.py",
+        "tests/unit/test_audit_durability_visibility.py"
+      ],
+      "failure_pattern": "An audit write fails, the clinical decision is returned to the provider with a 200 and no audit row behind it, and the only trace is one logger.error line. Nobody learns the audit trail has holes unless they go looking in the logs for an event they had no reason to suspect.",
+      "root_cause": "Not a defect. AuditRepository.log's docstring states the decision explicitly: an audit-write problem must never turn a working request into a 500. That decision is sound and is NOT reversed here. What was missing is the other half -- the failure was undetectable in aggregate, so docs/HIPAA_COMPLIANCE.md's claim that failures touching PHI are auditable rested on log archaeology.",
+      "evidence": [
+        {
+          "source": "src/pacca/db/repository.py _persist_independently, both non-persisting branches",
+          "note": "The except-branch logs audit_write_failed and returns; the unsupported-bind branch logs and returns before attempting a write. Neither raised, neither counted, and from the caller's side both produce the same outcome: no audit row."
+        },
+        {
+          "source": "tests/unit/test_audit_durability_visibility.py TestTheCounterIsWiredToRealFailures",
+          "note": "Both branches driven through the real log() entry point, asserting the counter increments AND that log() still returns its value snapshot rather than raising."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "instrumentation",
+      "why_this_component": "A monotonic counter rather than a boolean flag because alerting takes the derivative: one transient failure at 03:00 must not leave the service reporting degraded forever. Process-local rather than persisted because the question is 'is audit durability failing', which any worker reporting a non-zero rate answers; persisting it would need a write to the same database whose unavailability is the failure being counted.",
+      "phi_impact": "none",
+      "audit_relevant": true,
+      "rollback_plan": "git revert. Reverting removes the counter and restores the previous behaviour exactly -- no request path changes in either direction, since the counter never affects control flow."
+    },
+    {
+      "id": "chg-2",
+      "type": "improvement",
+      "description": "Point the Dockerfile HEALTHCHECK at /health, which resolves, instead of /health/live, which does not.",
+      "files": [
+        "Dockerfile",
+        "tests/unit/test_audit_durability_visibility.py"
+      ],
+      "failure_pattern": "Every container built from this Dockerfile reports unhealthy 90 seconds after start, regardless of whether the service is working. An orchestrator configured to act on container health restarts or de-registers a healthy service.",
+      "root_cause": "The healthcheck curls /health/live. That path is defined in api/routes/health.py, whose router is never passed to app.include_router -- api/main.py mounts only authorizations, admin and sme_authoring. So /health/live, /health/ready and /api/v1/metrics all 404, and `curl -f` exits non-zero on a 404, which is what HEALTHCHECK reads as failure. docker-compose.yml probes /health instead, which is defined directly on the app, so compose deployments worked and the Dockerfile path did not -- which is why this survived.",
+      "evidence": [
+        {
+          "source": "Probe of the real app: GET /health -> 200, /health/live -> 404, /health/ready -> 404, /api/v1/metrics -> 404",
+          "note": "Only /health resolves. The other three belong to the unmounted router."
+        },
+        {
+          "source": "Dockerfile line 80 vs docker-compose.yml line 79",
+          "note": "The two healthchecks in this repository probe different paths, and only the compose one is reachable."
+        }
+      ],
+      "predicted_fixes": [],
+      "risk_cases": [],
+      "constraint_level": "instrumentation",
+      "why_this_component": "Repointing the probe is the minimal fix. Mounting api/routes/health.py would also resolve the path, but that router defines its own /health which would collide with the one in api/main.py, and it ships a /api/v1/metrics with no authentication -- both decisions worth making deliberately rather than as a side effect of fixing a healthcheck.",
+      "phi_impact": "none",
+      "audit_relevant": false,
+      "rollback_plan": "git revert. Reverting restores a healthcheck that can only fail.",
+      "baseline": {
+        "claim": "The Dockerfile HEALTHCHECK probed http://localhost:8000/health/live, a path that does not resolve on the application, so the healthcheck could only ever fail and every container would be marked unhealthy after its three retries.",
+        "verified_by": "At 6fe2ee0: start the real app under fastapi.testclient.TestClient and GET each of /health, /health/live, /health/ready, /api/v1/metrics; separately grep api/main.py for include_router to confirm routes/health.py is not among the mounted routers.",
+        "result": "/health returned 200; /health/live, /health/ready and /api/v1/metrics each returned 404. app.include_router is called for authorizations, admin and sme_authoring only. After the fix the probed path returns 200, asserted by a test that parses the probe URL out of the Dockerfile rather than hard-coding it, so the two cannot drift apart again."
+      }
+    }
+  ]
+}
